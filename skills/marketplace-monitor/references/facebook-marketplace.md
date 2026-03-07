@@ -4,6 +4,7 @@
 - User is logged in.
 - User opens the target Marketplace search page.
 - If browser relay is required, user attaches the tab first.
+- Mobile mode fallback: user can send screenshots + copied listing links for manual extraction.
 
 ## Practical search variants
 Try in order:

@@ -18,11 +18,13 @@ Collect, filter, and summarize marketplace listings from a user-provided, logged
 
 2. Use a compliant page source
 - Prefer user-opened Facebook Marketplace search pages in a logged-in browser tab.
-- If direct fetch fails due login/anti-bot, continue via interactive browser session only.
+- Mobile-compatible mode: accept user-provided screenshots, copied listing links, or pasted listing text from phone sessions.
+- If direct fetch fails due login/anti-bot, continue via interactive browser session or manual phone-assisted capture.
 - Never attempt CAPTCHA bypass, automated account abuse, or anti-bot evasion.
 
 3. Capture listings and normalize
 - Extract title, price, suburb/city, distance (if shown), posted time, URL.
+- In phone mode, parse from screenshots/OCR text and user-pasted links.
 - Normalize price to AUD numeric where possible.
 - Deduplicate by URL first, then title+price+suburb similarity.
 
