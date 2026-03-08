@@ -63,6 +63,9 @@
     .book-item { padding:12px 0; border-top:1px solid var(--line); }
     .book-item:first-child { border-top:0; padding-top:0; }
     .book-item h3 { margin:0 0 4px; font-size:16px; }
+    .chips { display:flex; flex-wrap:wrap; gap:8px; margin-top:12px; }
+    .chip { display:inline-flex; align-items:center; gap:6px; padding:8px 10px; border-radius:999px; background:#10193a; border:1px solid var(--line); color:#d7e0ff; font-size:13px; }
+    .subsection-title { margin:16px 0 8px; font-size:15px; color:#d7e0ff; }
     pre { margin:12px 0 0; padding:12px; border-radius:14px; background:#0a1128; color:#d7e0ff; white-space:pre-wrap; word-break:break-word; font-size:12px; }
     .bottom-nav {
       position:sticky; bottom:0; display:flex; gap:8px; margin-top:18px; padding:10px;
@@ -124,6 +127,10 @@
         <label>作者</label>
         <input id="author" placeholder="例如：Harold Abelson" />
       </div>
+      <div class="field">
+        <label>分类</label>
+        <input id="category" placeholder="例如：技术 / 小说 / 历史 / 设计" />
+      </div>
       <div class="actions">
         <button class="btn primary" id="saveBtn">保存图书</button>
         <button class="btn ghost" id="fillDemoBtn">填入示例</button>
@@ -139,6 +146,9 @@
         <div class="metric"><strong id="sortCount">0</strong><span class="muted">待整理</span></div>
         <div class="metric"><strong id="inCount">0</strong><span class="muted">已入库</span></div>
       </div>
+      <div class="subsection-title">分类分布</div>
+      <div class="chips" id="categoryChips"></div>
+      <div class="subsection-title">最近新增</div>
       <div class="book-list" id="bookList"></div>
     </div>
 
@@ -212,12 +222,14 @@
       isbn: document.getElementById('isbn'),
       title: document.getElementById('title'),
       author: document.getElementById('author'),
+      category: document.getElementById('category'),
       saveBtn: document.getElementById('saveBtn'),
       fillDemoBtn: document.getElementById('fillDemoBtn'),
       manualNotice: document.getElementById('manualNotice'),
       totalCount: document.getElementById('totalCount'),
       sortCount: document.getElementById('sortCount'),
       inCount: document.getElementById('inCount'),
+      categoryChips: document.getElementById('categoryChips'),
       bookList: document.getElementById('bookList'),
       exportJsonBtn: document.getElementById('exportJsonBtn'),
       exportCsvBtn: document.getElementById('exportCsvBtn'),
@@ -247,11 +259,22 @@
       els.totalCount.textContent = String(books.length);
       els.sortCount.textContent = String(books.filter(b => b.status === 'to_be_sorted').length);
       els.inCount.textContent = String(books.filter(b => b.status === 'in_library').length);
+
+      const categoryCounts = books.reduce((acc, book) => {
+        const key = (book.category || '未分类').trim() || '未分类';
+        acc[key] = (acc[key] || 0) + 1;
+        return acc;
+      }, {});
+      const sortedCategories = Object.entries(categoryCounts).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], 'zh-CN'));
+      els.categoryChips.innerHTML = sortedCategories.length
+        ? sortedCategories.map(([name, count]) => `<div class="chip">${escapeHtml(name)} · ${count}</div>`).join('')
+        : '<div class="muted">还没有分类数据，先录入几本书试试。</div>';
+
       els.bookList.innerHTML = books.length
-        ? books.slice().reverse().map(b => `
+        ? books.slice().sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || ''))).slice(0, 8).map(b => `
           <div class="book-item">
             <h3>${escapeHtml(b.title || '未命名图书')}</h3>
-            <div class="muted">${escapeHtml(b.author || '未知作者')} · ${escapeHtml(b.isbn || '无 ISBN')} · ${b.status === 'to_be_sorted' ? '待整理' : '已入库'}</div>
+            <div class="muted">${escapeHtml(b.author || '未知作者')} · ${escapeHtml(b.category || '未分类')} · ${escapeHtml(b.isbn || '无 ISBN')} · ${b.status === 'to_be_sorted' ? '待整理' : '已入库'}</div>
           </div>`).join('')
         : '<div class="muted" style="margin-top:12px">还没有图书，先录入一本试试。</div>';
     }
@@ -286,6 +309,7 @@
       els.isbn.value = '9787111128069';
       els.title.value = '计算机程序的构造和解释';
       els.author.value = 'Harold Abelson';
+      els.category.value = '技术';
     };
 
     els.saveBtn.onclick = () => {
@@ -293,6 +317,7 @@
         const isbn = els.isbn.value.trim();
         const title = els.title.value.trim();
         const author = els.author.value.trim();
+        const category = els.category.value.trim();
         if (!title) {
           els.manualNotice.innerHTML = makeNotice('err', '请至少填写书名。');
           return;
@@ -308,12 +333,12 @@
           return;
         }
         books.push({
-          id: makeId(), isbn, title, author,
+          id: makeId(), isbn, title, author, category,
           status: 'to_be_sorted', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString()
         });
         saveBooks(books);
         els.manualNotice.innerHTML = makeNotice('ok', `保存成功：${title}`);
-        els.isbn.value = ''; els.title.value = ''; els.author.value = '';
+        els.isbn.value = ''; els.title.value = ''; els.author.value = ''; els.category.value = '';
         render();
       } catch (e) {
         els.manualNotice.innerHTML = makeNotice('err', `保存失败：${e.message || '未知错误'}`);
