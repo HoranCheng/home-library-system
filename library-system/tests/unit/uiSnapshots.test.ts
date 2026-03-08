@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildHomeUiSnapshot, buildSettingsUiSnapshot, handleManualEntrySubmit, switchHomeMode } from "../../src/app/ui";
+import { buildHomeUiSnapshot, buildSettingsUiSnapshot, handleManualEntrySubmit, handleScanFailure, getHomeSummary, switchHomeMode } from "../../src/app/ui";
 import { loadState } from "../../src/store/storage";
 
 function mem() {
@@ -30,9 +30,10 @@ describe("handleManualEntrySubmit wiring", () => {
     const s = mem();
     const result = handleManualEntrySubmit({ title: "Design Patterns", author: "GoF", isbn: "9780201633610" }, s);
     expect(result.ok).toBe(true);
-    // verify persisted: re-reading storage should reflect the book
-    const snapshot = buildHomeUiSnapshot(s);
-    expect(snapshot.mode).toBe("scan"); // mode unaffected by submission
+    // verify persisted: book appears in loaded state
+    const loaded = loadState(s);
+    expect(loaded.books).toHaveLength(1);
+    expect(loaded.books[0]?.title).toBe("Design Patterns");
   });
 
   it("returns duplicate error when same isbn submitted twice", () => {
@@ -81,5 +82,48 @@ describe("buildSettingsUiSnapshot import wiring", () => {
     const csv = buildSettingsUiSnapshot(s).exportCsv();
     expect(csv.split("\n")[0]).toContain("id,title,authors");
     expect(csv).toContain("SICP");
+  });
+
+  it("validateImport returns ok=true for valid exported state", () => {
+    const s = mem();
+    handleManualEntrySubmit({ title: "The Pragmatic Programmer", author: "Hunt", isbn: "9780135957059" }, s);
+    const json = buildSettingsUiSnapshot(s).exportJson();
+    const result = buildSettingsUiSnapshot(s).validateImport(json);
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.bookCount).toBe(1);
+  });
+});
+
+describe("handleScanFailure interaction handler", () => {
+  it("returns a non-empty message when scan fails without partial isbn", () => {
+    const msg = handleScanFailure();
+    expect(typeof msg).toBe("string");
+    expect(msg.length).toBeGreaterThan(0);
+  });
+
+  it("returns a message when scan fails with partial isbn", () => {
+    const msg = handleScanFailure("97880");
+    expect(typeof msg).toBe("string");
+    expect(msg.length).toBeGreaterThan(0);
+  });
+});
+
+describe("getHomeSummary interaction handler", () => {
+  it("returns zero counts for empty library", () => {
+    const s = mem();
+    const summary = getHomeSummary(s);
+    expect(summary.total).toBe(0);
+    expect(summary.toBeSorted).toBe(0);
+    expect(summary.inLibrary).toBe(0);
+  });
+
+  it("counts books after manual entry submission", () => {
+    const s = mem();
+    handleManualEntrySubmit({ title: "The Mythical Man-Month", author: "Brooks", isbn: "9780201835953" }, s);
+    handleManualEntrySubmit({ title: "Code Complete", author: "McConnell", isbn: "9780735619678" }, s);
+    const summary = getHomeSummary(s);
+    expect(summary.total).toBe(2);
+    expect(summary.toBeSorted).toBe(2); // manual entry defaults to to_be_sorted
+    expect(summary.inLibrary).toBe(0);
   });
 });

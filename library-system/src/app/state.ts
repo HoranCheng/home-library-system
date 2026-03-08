@@ -15,8 +15,8 @@ export function createFromManual(
   return result;
 }
 
-export function getLibrarySummary() {
-  const state = loadState();
+export function getLibrarySummary(storage?: Pick<Storage, "getItem">) {
+  const state = loadState(storage);
   return {
     total: state.books.length,
     toBeSorted: state.books.filter((b) => b.status === "to_be_sorted").length,

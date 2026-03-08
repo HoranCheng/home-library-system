@@ -1,8 +1,9 @@
 import { getHomeMode, getBottomNavItems, setHomeMode, type HomeMode } from "../ui/home/mode";
 import { getHomeCard } from "../ui/home/viewModel";
+import { handleScanFailure as handleScanFailurePage } from "../ui/home/page";
 import { exportCsv, exportJson, validateImportJson } from "../services/data/backup";
 import { loadState } from "../store/storage";
-import { createFromManual, importState } from "./state";
+import { createFromManual, getLibrarySummary, importState } from "./state";
 
 export function buildHomeUiSnapshot(storage?: Pick<Storage, "getItem" | "setItem">) {
   const mode = getHomeMode(storage);
@@ -24,6 +25,14 @@ export function handleManualEntrySubmit(
   storage?: Pick<Storage, "getItem" | "setItem">
 ) {
   return createFromManual(data, storage);
+}
+
+export function handleScanFailure(partialIsbn?: string): string {
+  return handleScanFailurePage(partialIsbn);
+}
+
+export function getHomeSummary(storage?: Pick<Storage, "getItem">) {
+  return getLibrarySummary(storage);
 }
 
 export function buildSettingsUiSnapshot(storage?: Pick<Storage, "getItem" | "setItem">) {
