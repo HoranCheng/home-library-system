@@ -383,15 +383,16 @@
     let scannerAnimFrame = null;
     let scannerActive = false;
     let zxingReader = null;
+    let zxingScanControl = null;
 
     function stopScanner() {
       scannerActive = false;
       if (scannerAnimFrame) { cancelAnimationFrame(scannerAnimFrame); scannerAnimFrame = null; }
-      if (zxingReader) {
-        try { zxingReader.stopContinuousDecode(); } catch (_) {}
-        try { zxingReader.reset(); } catch (_) {}
-        zxingReader = null;
+      if (zxingScanControl) {
+        try { zxingScanControl.stop(); } catch (_) {}
+        zxingScanControl = null;
       }
+      zxingReader = null;
       if (scannerStream) { scannerStream.getTracks().forEach(t => t.stop()); scannerStream = null; }
       els.scannerVideo.srcObject = null;
       els.scannerBox.style.display = 'none';
@@ -418,21 +419,21 @@
       }
 
       els.scanNotice.innerHTML = makeNotice('warn', '正在申请摄像头权限…');
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } }
-        });
-        scannerStream = stream;
-        const video = els.scannerVideo;
-        video.srcObject = stream;
-        await video.play();
 
-        scannerActive = true;
-        els.scannerBox.style.display = 'block';
-        render();
-        els.scanNotice.innerHTML = makeNotice('warn', '将书背面条码对准框内…');
-
-        if ('BarcodeDetector' in window) {
+      // Path 1: Native BarcodeDetector (Chrome, iOS 17.4+)
+      if ('BarcodeDetector' in window) {
+        try {
+          const stream = await navigator.mediaDevices.getUserMedia({
+            video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } }
+          });
+          scannerStream = stream;
+          const video = els.scannerVideo;
+          video.srcObject = stream;
+          await video.play();
+          scannerActive = true;
+          els.scannerBox.style.display = 'block';
+          render();
+          els.scanNotice.innerHTML = makeNotice('warn', '将书背面条码对准框内…');
           const detector = new BarcodeDetector({ formats: ['ean_13', 'ean_8', 'code_128', 'qr_code'] });
           const scan = async () => {
             if (!scannerActive) return;
@@ -441,26 +442,38 @@
                 const barcodes = await detector.detect(video);
                 if (barcodes.length > 0) { handleScanResult(barcodes[0].rawValue); return; }
               }
-            } catch (_) { /* ignore single-frame errors */ }
+            } catch (_) {}
             scannerAnimFrame = requestAnimationFrame(scan);
           };
           scan();
           return;
-        }
-
-        if (window.ZXingBrowser && window.ZXingBrowser.BrowserMultiFormatReader) {
-          els.scanNotice.innerHTML = makeNotice('warn', '当前浏览器不支持原生扫码，已切换兼容扫码模式…');
-          zxingReader = new window.ZXingBrowser.BrowserMultiFormatReader();
-          zxingReader.decodeFromVideoElementContinuously(video, (result, error) => {
-            if (result && result.text) {
-              handleScanResult(result.text);
-            }
-          });
+        } catch (e) {
+          const msg = e.name === 'NotAllowedError' ? '摄像头权限被拒绝，请在浏览器设置中允许访问摄像头后重试。'
+            : e.name === 'NotFoundError' ? '未检测到摄像头设备。'
+            : `摄像头启动失败：${e.message || e.name}`;
+          els.scanNotice.innerHTML = makeNotice('err', msg + ' 请手动录入 ISBN。');
+          stopScanner();
           return;
         }
+      }
 
-        els.scanNotice.innerHTML = makeNotice('err', '扫码组件加载失败，请刷新页面后重试，或先手动录入 ISBN。');
-        stopScanner();
+      // Path 2: ZXing fallback (iPhone Safari iOS < 17.4, Firefox)
+      if (!window.ZXingBrowser || !window.ZXingBrowser.BrowserMultiFormatReader) {
+        els.scanNotice.innerHTML = makeNotice('err', '该设备浏览器暂不支持条码扫描，请手动录入 ISBN。');
+        return;
+      }
+
+      try {
+        zxingReader = new window.ZXingBrowser.BrowserMultiFormatReader();
+        scannerActive = true;
+        els.scannerBox.style.display = 'block';
+        render();
+        els.scanNotice.innerHTML = makeNotice('warn', '将书背面条码对准框内…');
+        // decodeFromVideoDevice manages camera lifecycle; null = prefer rear/environment camera
+        zxingScanControl = await zxingReader.decodeFromVideoDevice(
+          null, els.scannerVideo,
+          (result, err) => { if (result && result.text) handleScanResult(result.text); }
+        );
       } catch (e) {
         const msg = e.name === 'NotAllowedError' ? '摄像头权限被拒绝，请在浏览器设置中允许访问摄像头后重试。'
           : e.name === 'NotFoundError' ? '未检测到摄像头设备。'
