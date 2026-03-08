@@ -463,8 +463,28 @@
 
     els.isbnScanBtn.onclick = (event) => {
       event.preventDefault();
-      if (scannerActive) { stopScanner(); } else { startScanner(); }
+      if (scannerActive) { stopScanner(); }
+      else {
+        clearDraftFields({ keepIsbn: false });
+        render();
+        startScanner();
+      }
     };
+
+    function clearDraftFields(options = {}) {
+      const keepIsbn = options.keepIsbn === true;
+      if (!keepIsbn) els.isbn.value = '';
+      els.title.value = '';
+      els.author.value = '';
+      els.category.value = '';
+      els.publishedYear.value = '';
+      els.location.value = '';
+      if (els.description) els.description.value = '';
+      if (els.readingStatus) els.readingStatus.value = '';
+      if (els.readingProgress) els.readingProgress.value = '';
+      if (els.notes) els.notes.value = '';
+      lookupCompleted = false;
+    }
 
     async function lookupCurrentIsbn() {
       const isbn = els.isbn.value.trim();
@@ -473,8 +493,9 @@
         els.manualNotice.innerHTML = makeNotice('warn', '请先输入有效的 10 位或 13 位 ISBN。');
         return false;
       }
+      clearDraftFields({ keepIsbn: true });
       const result = await fillBookMetaByIsbn(isbn, 'manual', '已搜索 ISBN');
-      lookupCompleted = Boolean(result?.found || els.title.value.trim());
+      lookupCompleted = Boolean(result?.found || els.title.value.trim() || els.author.value.trim());
       render();
       return lookupCompleted;
     }
@@ -879,7 +900,8 @@
         }
 
         const titleFilled = Boolean(els.title.value);
-        if (!titleFilled) {
+        const anyFilled = Boolean(els.title.value || els.author.value || els.category.value || els.publishedYear.value || (els.description && els.description.value));
+        if (!titleFilled && !anyFilled) {
           setNotice('warn', `${sourceLabel}：${isbn}，但暂时没有查到完整书目信息，请手动补充后保存。`);
           return { found: false };
         }
@@ -890,8 +912,9 @@
         setNotice('ok', `${sourceLabel}：${isbn}${titleFilled ? ` · ${escapeHtml(els.title.value)}` : ''}${authorFilled ? ` · ${escapeHtml(els.author.value)}` : ''}${categoryFilled ? ` · ${escapeHtml(els.category.value)}` : ''}${yearFilled ? ` · ${escapeHtml(els.publishedYear.value)}` : ''} ${escapeHtml(sourceText)}`);
         return { found: true };
       } catch (e) {
-        setNotice('warn', `${sourceLabel}：${isbn}，但联网查询书目信息失败，请手动补充后保存。`);
-        return { found: false, error: e };
+        const partialFound = Boolean(els.title.value || els.author.value || els.category.value || els.publishedYear.value || (els.description && els.description.value));
+        setNotice('warn', `${sourceLabel}：${isbn}，${partialFound ? '已拿到部分书目信息，你可以继续审阅后导入。' : '但联网查询书目信息失败，请手动补充后保存。'}`);
+        return { found: partialFound, error: e };
       }
     }
 
