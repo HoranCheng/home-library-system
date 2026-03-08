@@ -75,6 +75,7 @@
     .scanner-aim-inner { width:220px; height:90px; border:2.5px solid var(--accent); border-radius:10px; box-shadow:0 0 0 9999px rgba(0,0,0,.45); }
     .scanner-cancel { position:absolute; top:10px; right:10px; background:rgba(0,0,0,.65); color:#fff; border:0; border-radius:10px; padding:7px 14px; font-size:14px; cursor:pointer; font-weight:600; }
   </style>
+  <script src="https://cdn.jsdelivr.net/npm/@zxing/browser@0.1.5/umd/index.min.js"></script>
 </head>
 <body>
   <div class="app">
@@ -381,10 +382,16 @@
     let scannerStream = null;
     let scannerAnimFrame = null;
     let scannerActive = false;
+    let zxingReader = null;
 
     function stopScanner() {
       scannerActive = false;
       if (scannerAnimFrame) { cancelAnimationFrame(scannerAnimFrame); scannerAnimFrame = null; }
+      if (zxingReader) {
+        try { zxingReader.stopContinuousDecode(); } catch (_) {}
+        try { zxingReader.reset(); } catch (_) {}
+        zxingReader = null;
+      }
       if (scannerStream) { scannerStream.getTracks().forEach(t => t.stop()); scannerStream = null; }
       els.scannerVideo.srcObject = null;
       els.scannerBox.style.display = 'none';
@@ -409,11 +416,6 @@
         els.scanNotice.innerHTML = makeNotice('err', '该浏览器不支持摄像头访问（需要 HTTPS 或本地环境）。请手动录入 ISBN。');
         return;
       }
-      if (!('BarcodeDetector' in window)) {
-        els.scanNotice.innerHTML = makeNotice('warn', '您的浏览器不支持原生扫码（需 iOS 17+ Safari 或 Chrome 83+）。请升级后重试，或直接手动录入 ISBN。');
-        setMode('manual');
-        return;
-      }
 
       els.scanNotice.innerHTML = makeNotice('warn', '正在申请摄像头权限…');
       try {
@@ -430,18 +432,35 @@
         render();
         els.scanNotice.innerHTML = makeNotice('warn', '将书背面条码对准框内…');
 
-        const detector = new BarcodeDetector({ formats: ['ean_13', 'ean_8', 'code_128', 'qr_code'] });
-        const scan = async () => {
-          if (!scannerActive) return;
-          try {
-            if (video.readyState >= 2) {
-              const barcodes = await detector.detect(video);
-              if (barcodes.length > 0) { handleScanResult(barcodes[0].rawValue); return; }
+        if ('BarcodeDetector' in window) {
+          const detector = new BarcodeDetector({ formats: ['ean_13', 'ean_8', 'code_128', 'qr_code'] });
+          const scan = async () => {
+            if (!scannerActive) return;
+            try {
+              if (video.readyState >= 2) {
+                const barcodes = await detector.detect(video);
+                if (barcodes.length > 0) { handleScanResult(barcodes[0].rawValue); return; }
+              }
+            } catch (_) { /* ignore single-frame errors */ }
+            scannerAnimFrame = requestAnimationFrame(scan);
+          };
+          scan();
+          return;
+        }
+
+        if (window.ZXingBrowser && window.ZXingBrowser.BrowserMultiFormatReader) {
+          els.scanNotice.innerHTML = makeNotice('warn', '当前浏览器不支持原生扫码，已切换兼容扫码模式…');
+          zxingReader = new window.ZXingBrowser.BrowserMultiFormatReader();
+          zxingReader.decodeFromVideoElementContinuously(video, (result, error) => {
+            if (result && result.text) {
+              handleScanResult(result.text);
             }
-          } catch (_) { /* ignore single-frame errors */ }
-          scannerAnimFrame = requestAnimationFrame(scan);
-        };
-        scan();
+          });
+          return;
+        }
+
+        els.scanNotice.innerHTML = makeNotice('err', '扫码组件加载失败，请刷新页面后重试，或先手动录入 ISBN。');
+        stopScanner();
       } catch (e) {
         const msg = e.name === 'NotAllowedError' ? '摄像头权限被拒绝，请在浏览器设置中允许访问摄像头后重试。'
           : e.name === 'NotFoundError' ? '未检测到摄像头设备。'
