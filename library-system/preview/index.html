@@ -50,6 +50,12 @@
       width:100%; border-radius:14px; border:1px solid var(--line); background:#0b1430; color:#eef2ff;
       padding:13px 14px; font-size:16px;
     }
+    .input-with-action { position:relative; }
+    .input-with-action input { padding-right:54px; }
+    .input-action-btn {
+      position:absolute; right:8px; top:50%; transform:translateY(-50%);
+      width:38px; height:38px; border-radius:12px; border:1px solid var(--line); background:#1a244d; color:#eef2ff; font-size:18px;
+    }
     .field textarea { min-height:120px; resize:vertical; }
     .hint { font-size:13px; color:var(--muted); margin-top:8px; line-height:1.45; }
     .notice { margin-top:12px; padding:12px 14px; border-radius:14px; font-size:14px; line-height:1.5; }
@@ -106,7 +112,7 @@
     <h1>毛毛图书管理系统</h1>
     <p class="muted">把家里的书一本本收进来，随手查、随手整理，手机上就能完成。</p>
 
-    <div class="card" id="scanSection">
+    <div class="card hidden" id="scanSection">
       <div class="hero" id="hero">
         <h2 id="heroTitle">扫码录入</h2>
         <p id="heroDesc">对准书背面的 ISBN 条码，系统会自动识别并补全书名、作者和分类。</p>
@@ -128,7 +134,10 @@
       <h2 class="section-title">手动录入</h2>
       <div class="field">
         <label>ISBN</label>
-        <input id="isbn" placeholder="9787111128069" />
+        <div class="input-with-action">
+          <input id="isbn" placeholder="9787111128069" />
+          <button class="input-action-btn" id="isbnScanBtn" title="扫码填入 ISBN">📷</button>
+        </div>
       </div>
       <div class="field">
         <label>书名</label>
@@ -299,6 +308,7 @@
       scanFailBtn: document.getElementById('scanFailBtn'),
       scanNotice: document.getElementById('scanNotice'),
       isbn: document.getElementById('isbn'),
+      isbnScanBtn: document.getElementById('isbnScanBtn'),
       title: document.getElementById('title'),
       author: document.getElementById('author'),
       category: document.getElementById('category'),
@@ -380,21 +390,18 @@
 
     function render() {
       const page = getPage();
-      const entryMode = getEntryMode();
-      els.modePill.textContent = `当前页面：${page === 'home' ? (entryMode === 'scan' ? '扫码录入' : '手动录入') : page === 'search' ? '搜索' : page === 'organize' ? '整理' : '设置'}`;
-      els.heroTitle.textContent = entryMode === 'scan' ? '扫码录入' : '手动录入';
-      els.heroDesc.textContent = entryMode === 'scan'
-        ? '对准书背面的 ISBN 条码，系统会自动识别并补全书名、作者和分类。'
-        : '适合旧书、无条码图书。填写 ISBN、书名、作者和分类后即可保存。';
-      els.scanBtn.textContent = entryMode === 'scan' ? (scannerActive ? '停止扫码' : '开始扫码') : '保存图书';
-      els.scanFailBtn.textContent = entryMode === 'scan' ? '切换到手动录入' : '切换到扫码录入';
+      els.modePill.textContent = `当前页面：${page === 'home' ? '首页' : page === 'search' ? '搜索' : page === 'organize' ? '整理' : '设置'}`;
+      els.heroTitle.textContent = '扫码录入';
+      els.heroDesc.textContent = '对准书背面的 ISBN 条码，系统会自动识别并补全书名、作者和分类。';
+      els.scanBtn.textContent = scannerActive ? '停止扫码' : '开始扫码';
+      els.scanFailBtn.textContent = '继续手动录入';
 
       els.navHome.classList.toggle('active', page === 'home');
       els.navSearch.classList.toggle('active', page === 'search');
       els.navOrganize.classList.toggle('active', page === 'organize');
       els.navSettings.classList.toggle('active', page === 'settings');
-      els.scanSection.classList.toggle('hidden', !(page === 'home' && entryMode === 'scan'));
-      els.manualCard.classList.toggle('hidden', !(page === 'home' && entryMode === 'manual'));
+      els.scanSection.classList.add('hidden');
+      els.manualCard.classList.toggle('hidden', page !== 'home');
       els.homeSection.classList.toggle('hidden', page !== 'home');
       els.searchSection.classList.toggle('hidden', page !== 'search');
       els.organizeSection.classList.toggle('hidden', page !== 'organize');
@@ -468,21 +475,16 @@
     els.navSettings.onclick = () => setPage('settings');
 
     els.scanBtn.onclick = () => {
-      if (getEntryMode() === 'scan') {
-        if (scannerActive) { stopScanner(); } else { startScanner(); }
-      } else {
-        els.saveBtn.click();
-      }
+      if (scannerActive) { stopScanner(); } else { startScanner(); }
+    };
+    els.isbnScanBtn.onclick = (event) => {
+      event.preventDefault();
+      if (scannerActive) { stopScanner(); } else { startScanner(); }
     };
 
     els.scanFailBtn.onclick = () => {
-      if (getEntryMode() === 'scan') {
-        stopScanner();
-        setEntryMode('manual');
-        els.scanNotice.innerHTML = makeNotice('warn', '已切换到手动录入。');
-      } else {
-        setEntryMode('scan');
-      }
+      stopScanner();
+      els.scanNotice.innerHTML = makeNotice('warn', '你也可以直接在 ISBN 输入框里手动输入。');
     };
 
     els.fillDemoBtn.onclick = () => {
@@ -841,7 +843,6 @@
       const isbn = rawValue.replace(/[^0-9Xx]/g, '');
       if (isbn.length === 10 || isbn.length === 13) {
         els.isbn.value = isbn;
-        setEntryMode('manual');
         fillBookMetaByIsbn(isbn, 'scan');
       } else {
         els.scanNotice.innerHTML = makeNotice('warn', `识别到条码但非 ISBN 格式（${escapeHtml(rawValue)}），请手动录入 ISBN。`);
