@@ -387,12 +387,13 @@
       const currentDraftCategory = String(els.category?.value || '').trim();
       const currentDraftYear = String(els.publishedYear?.value || '').trim();
       const currentDraftLocation = String(els.location?.value || '').trim();
-      els.reviewCard.innerHTML = lookupCompleted
+      const canImport = Boolean(currentDraftTitle && currentDraftAuthor);
+      els.reviewCard.innerHTML = (lookupCompleted || currentDraftTitle || currentDraftAuthor)
         ? `<div><strong>${escapeHtml(currentDraftTitle || '待补充书名')}</strong></div>
            <div class="muted" style="margin-top:6px">${escapeHtml(currentDraftAuthor || '待补充作者')} · ${escapeHtml(currentDraftCategory || '待补充分类')} ${currentDraftYear ? `· ${escapeHtml(currentDraftYear)}` : ''}</div>
-           <div class="muted" style="margin-top:6px">${currentDraftLocation ? `存放位置：${escapeHtml(currentDraftLocation)}` : '你可以继续补充存放位置、阅读状态等信息，然后导入库中。'}</div>`
+           <div class="muted" style="margin-top:6px">${currentDraftLocation ? `存放位置：${escapeHtml(currentDraftLocation)}` : '只要补齐书名和作者，就可以先导入库中；其他缺失信息后续可在整理里继续完善。'}</div>`
         : '<div class="muted">先输入或扫描 ISBN。系统识别到完整 ISBN 后会自动补全信息，你再审阅并导入库中。</div>';
-      els.saveBtn.disabled = !lookupCompleted && !editingBookId;
+      els.saveBtn.disabled = !(canImport || editingBookId);
 
       const books = loadBooks();
       els.totalCount.textContent = String(books.length);
@@ -527,8 +528,8 @@
         description = String(els.description?.value || '').trim();
       }
 
-      if (!title) {
-        els.manualNotice.innerHTML = makeNotice('err', '请至少填写书名。若已输入 ISBN 但未查到书名，请手动补充后保存。');
+      if (!title || !author) {
+        els.manualNotice.innerHTML = makeNotice('err', '请至少补齐书名和作者。其他缺失信息可以后续再完善。');
         return false;
       }
 
