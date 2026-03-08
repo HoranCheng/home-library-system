@@ -86,6 +86,13 @@
     .hidden { display:none !important; }
     .bottom-nav button { flex:1; text-align:center; padding:10px 8px; color:#c8d3ff; font-size:13px; background:transparent; border:0; border-radius:12px; }
     .bottom-nav button.active { background:#1a244d; color:#eef2ff; font-weight:700; }
+    .cover-card { display:flex; gap:14px; align-items:flex-start; }
+    .cover-thumb { width:86px; height:122px; border-radius:14px; object-fit:cover; background:#0b1430; border:1px solid var(--line); }
+    .progress-bar { height:8px; border-radius:999px; background:#0b1430; overflow:hidden; margin-top:10px; border:1px solid var(--line); }
+    .progress-fill { height:100%; background:linear-gradient(90deg,var(--accent),#8bd3ff); }
+    .link-btn { background:none; border:0; color:#9cc2ff; padding:0; font:inherit; cursor:pointer; }
+    .modal-backdrop { position:fixed; inset:0; background:rgba(3,7,18,.72); display:flex; align-items:flex-end; justify-content:center; padding:16px; z-index:30; }
+    .modal-card { width:100%; max-width:480px; max-height:90vh; overflow:auto; background:rgba(21,31,66,.98); border:1px solid var(--line); border-radius:20px; padding:16px; }
   </style>
   <script src="./vendor/zxing-browser.min.js"></script>
 </head>
@@ -135,6 +142,30 @@
         <label>分类</label>
         <input id="category" placeholder="例如：技术 / 小说 / 历史 / 设计" />
       </div>
+      <div class="field">
+        <label>阅读状态</label>
+        <input id="readingStatus" placeholder="想读 / 在读 / 读完" />
+      </div>
+      <div class="field">
+        <label>阅读进度（0-100）</label>
+        <input id="readingProgress" type="number" min="0" max="100" placeholder="例如：35" />
+      </div>
+      <div class="field">
+        <label>出版年份</label>
+        <input id="publishedYear" placeholder="例如：2021" />
+      </div>
+      <div class="field">
+        <label>存放位置</label>
+        <input id="location" placeholder="例如：客厅书架 / 书房左柜 / 床头" />
+      </div>
+      <div class="field">
+        <label>内容简介</label>
+        <textarea id="description" placeholder="这本书主要讲什么，可自动带出后再修改"></textarea>
+      </div>
+      <div class="field">
+        <label>阅读感受</label>
+        <textarea id="notes" placeholder="写一点自己的想法、感受、摘录"></textarea>
+      </div>
       <div class="actions">
         <button class="btn primary" id="saveBtn">保存图书</button>
         <button class="btn ghost" id="fillDemoBtn">填入示例</button>
@@ -144,7 +175,9 @@
     </div>
 
     <div class="card" id="homeSection">
-      <h2 class="section-title">图书概览</h2>
+      <h2 class="section-title">首页</h2>
+      <div id="currentReadingCard"></div>
+      <h2 class="section-title" style="margin-top:16px">图书概览</h2>
       <div class="summary">
         <div class="metric"><strong id="totalCount">0</strong><span class="muted">总图书</span></div>
         <div class="metric"><strong id="sortCount">0</strong><span class="muted">待整理</span></div>
@@ -201,6 +234,7 @@
       <button id="navOrganize">🧹 整理</button>
       <button id="navSettings">⚙️ 设置</button>
     </div>
+    <div id="detailModalRoot"></div>
   </div>
 
   <script>
@@ -256,9 +290,17 @@
       title: document.getElementById('title'),
       author: document.getElementById('author'),
       category: document.getElementById('category'),
+      readingStatus: document.getElementById('readingStatus'),
+      readingProgress: document.getElementById('readingProgress'),
+      publishedYear: document.getElementById('publishedYear'),
+      location: document.getElementById('location'),
+      description: document.getElementById('description'),
+      notes: document.getElementById('notes'),
       saveBtn: document.getElementById('saveBtn'),
       fillDemoBtn: document.getElementById('fillDemoBtn'),
       manualNotice: document.getElementById('manualNotice'),
+      currentReadingCard: document.getElementById('currentReadingCard'),
+      detailModalRoot: document.getElementById('detailModalRoot'),
       totalCount: document.getElementById('totalCount'),
       sortCount: document.getElementById('sortCount'),
       inCount: document.getElementById('inCount'),
@@ -293,15 +335,29 @@
       scannerCancelBtn: document.getElementById('scannerCancelBtn')
     };
 
+    function normalizeReadingStatus(v) {
+      const s = String(v || '').trim();
+      if (!s) return '想读';
+      if (['在读', '正在读'].includes(s)) return '在读';
+      if (['读完', '已读完', '已完成'].includes(s)) return '读完';
+      return s;
+    }
+
+    function coverUrl(book) {
+      const isbn = String(book?.isbn || '').replace(/[^0-9Xx]/g, '');
+      return isbn ? `https://covers.openlibrary.org/b/isbn/${encodeURIComponent(isbn)}-M.jpg` : '';
+    }
+
     function renderBookRow(b, options = {}) {
       const actionHtml = options.actionHtml || '';
       const showMenu = options.showMenu !== false;
+      const metaLine = [b.author || '未知作者', b.category || '未分类', b.isbn || '无 ISBN', normalizeReadingStatus(b.readingStatus || ''), b.status === 'to_be_sorted' ? '待整理' : '已入库'].join(' · ');
       return `
         <div class="book-item">
           <div class="book-head">
             <div>
-              <h3>${escapeHtml(b.title || '未命名图书')}</h3>
-              <div class="muted">${escapeHtml(b.author || '未知作者')} · ${escapeHtml(b.category || '未分类')} · ${escapeHtml(b.isbn || '无 ISBN')} · ${b.status === 'to_be_sorted' ? '待整理' : '已入库'}</div>
+              <h3><button class="link-btn book-detail-btn" data-id="${escapeHtml(b.id)}">${escapeHtml(b.title || '未命名图书')}</button></h3>
+              <div class="muted">${escapeHtml(metaLine)}</div>
             </div>
             ${showMenu ? `<div class="menu-wrap"><button class="menu-btn" data-menu-id="${escapeHtml(b.id)}">⋯</button></div>` : ''}
           </div>
@@ -335,6 +391,20 @@
       els.totalCount.textContent = String(books.length);
       els.sortCount.textContent = String(books.filter(b => b.status === 'to_be_sorted').length);
       els.inCount.textContent = String(books.filter(b => b.status === 'in_library').length);
+
+      const currentReading = books.find(b => normalizeReadingStatus(b.readingStatus) === '在读') || null;
+      els.currentReadingCard.innerHTML = currentReading
+        ? `<div class="cover-card">
+            <img class="cover-thumb" src="${escapeHtml(coverUrl(currentReading))}" alt="封面" onerror="this.style.display='none'" />
+            <div style="flex:1">
+              <div class="pill">📖 现在在读</div>
+              <h3 style="margin:10px 0 6px">${escapeHtml(currentReading.title || '未命名图书')}</h3>
+              <div class="muted">${escapeHtml(currentReading.author || '未知作者')} · ${escapeHtml(currentReading.category || '未分类')}</div>
+              <div class="progress-bar"><div class="progress-fill" style="width:${Math.max(0, Math.min(100, Number(currentReading.readingProgress || 0)))}%"></div></div>
+              <div class="muted" style="margin-top:8px">阅读进度：${Math.max(0, Math.min(100, Number(currentReading.readingProgress || 0)))}%</div>
+            </div>
+          </div>`
+        : '<div class="muted">还没有标记“在读”的书。你可以在编辑里把某本书设为在读，它就会显示在首页。</div>';
 
       const categoryCounts = books.reduce((acc, book) => {
         const key = (book.category || '未分类').trim() || '未分类';
@@ -402,6 +472,12 @@
       els.title.value = '计算机程序的构造和解释';
       els.author.value = 'Harold Abelson';
       els.category.value = '技术';
+      els.readingStatus.value = '在读';
+      els.readingProgress.value = '35';
+      els.publishedYear.value = '2004';
+      els.location.value = '书房右侧书架';
+      els.description.value = '一本经典的计算机科学入门与思想训练著作。';
+      els.notes.value = '解释器和抽象层次那几章值得反复读。';
     };
 
     async function saveCurrentBook() {
@@ -409,6 +485,12 @@
       let title = els.title.value.trim();
       let author = els.author.value.trim();
       let category = els.category.value.trim();
+      let readingStatus = normalizeReadingStatus(els.readingStatus.value.trim());
+      let readingProgress = Math.max(0, Math.min(100, Number(els.readingProgress.value || 0)));
+      let publishedYear = els.publishedYear.value.trim();
+      let location = els.location.value.trim();
+      let description = els.description.value.trim();
+      let notes = els.notes.value.trim();
 
       if (!validIsbn(isbn)) {
         els.manualNotice.innerHTML = makeNotice('err', 'ISBN 格式不合法，请输入 10 位或 13 位。');
@@ -420,6 +502,8 @@
         title = els.title.value.trim();
         author = els.author.value.trim();
         category = els.category.value.trim();
+        publishedYear = els.publishedYear.value.trim();
+        description = els.description.value.trim();
       }
 
       if (!title) {
@@ -441,6 +525,12 @@
         target.title = title;
         target.author = author;
         target.category = category;
+        target.readingStatus = readingStatus;
+        target.readingProgress = readingProgress;
+        target.publishedYear = publishedYear;
+        target.location = location;
+        target.description = description;
+        target.notes = notes;
         target.updatedAt = new Date().toISOString();
         saveBooks(books);
         els.manualNotice.innerHTML = makeNotice('ok', `已更新：${title}`);
@@ -448,13 +538,15 @@
         els.saveBtn.textContent = '保存图书';
       } else {
         books.push({
-          id: makeId(), isbn, title, author, category,
+          id: makeId(), isbn, title, author, category, readingStatus, readingProgress, publishedYear, location, description, notes,
           status: 'to_be_sorted', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString()
         });
         saveBooks(books);
         els.manualNotice.innerHTML = makeNotice('ok', `保存成功：${title}`);
       }
       els.isbn.value = ''; els.title.value = ''; els.author.value = ''; els.category.value = '';
+      els.readingStatus.value = ''; els.readingProgress.value = ''; els.publishedYear.value = ''; els.location.value = '';
+      els.description.value = ''; els.notes.value = '';
       render();
     }
 
@@ -483,6 +575,39 @@
     };
 
     document.addEventListener('click', (event) => {
+      const detailBtn = event.target.closest('.book-detail-btn');
+      if (detailBtn) {
+        const book = loadBooks().find(b => b.id === detailBtn.dataset.id);
+        if (!book) return;
+        els.detailModalRoot.innerHTML = `
+          <div class="modal-backdrop" id="detailBackdrop">
+            <div class="modal-card">
+              <div class="cover-card">
+                <img class="cover-thumb" src="${escapeHtml(coverUrl(book))}" alt="封面" onerror="this.style.display='none'" />
+                <div style="flex:1">
+                  <div class="pill">${escapeHtml(normalizeReadingStatus(book.readingStatus || '想读'))}</div>
+                  <h2 style="margin:10px 0 6px">${escapeHtml(book.title || '未命名图书')}</h2>
+                  <div class="muted">${escapeHtml(book.author || '未知作者')}</div>
+                  <div class="muted" style="margin-top:8px">分类：${escapeHtml(book.category || '未分类')} · 出版年份：${escapeHtml(book.publishedYear || '未知')} · 存放位置：${escapeHtml(book.location || '未填写')}</div>
+                  <div class="progress-bar"><div class="progress-fill" style="width:${Math.max(0, Math.min(100, Number(book.readingProgress || 0)))}%"></div></div>
+                  <div class="muted" style="margin-top:8px">阅读进度：${Math.max(0, Math.min(100, Number(book.readingProgress || 0)))}%</div>
+                </div>
+              </div>
+              <div class="subsection-title">内容简介</div>
+              <div class="muted">${escapeHtml(book.description || '暂时还没有内容简介。')}</div>
+              <div class="subsection-title">阅读感受</div>
+              <div class="muted">${escapeHtml(book.notes || '还没有写阅读感受。')}</div>
+              <div class="actions"><button class="btn ghost" id="closeDetailBtn">关闭</button></div>
+            </div>
+          </div>`;
+        return;
+      }
+
+      if (event.target.closest('#detailBackdrop') || event.target.closest('#closeDetailBtn')) {
+        els.detailModalRoot.innerHTML = '';
+        return;
+      }
+
       const menuBtn = event.target.closest('.menu-btn');
       if (menuBtn) {
         const id = menuBtn.dataset.menuId;
@@ -513,6 +638,12 @@
           els.title.value = book.title || '';
           els.author.value = book.author || '';
           els.category.value = book.category || '';
+          els.readingStatus.value = book.readingStatus || '';
+          els.readingProgress.value = book.readingProgress ?? '';
+          els.publishedYear.value = book.publishedYear || '';
+          els.location.value = book.location || '';
+          els.description.value = book.description || '';
+          els.notes.value = book.notes || '';
           els.saveBtn.textContent = '保存修改';
           setEntryMode('manual');
           setPage('home');
@@ -525,6 +656,8 @@
             editingBookId = null;
             els.saveBtn.textContent = '保存图书';
             els.isbn.value = ''; els.title.value = ''; els.author.value = ''; els.category.value = '';
+            els.readingStatus.value = ''; els.readingProgress.value = ''; els.publishedYear.value = ''; els.location.value = '';
+            els.description.value = ''; els.notes.value = '';
           }
           render();
         }
@@ -657,6 +790,14 @@
             ? (book.subjects[0]?.name || book.subjects[0])
             : '';
           if (subject) els.category.value = String(subject).split(' / ')[0].slice(0, 24);
+        }
+        if (!els.description.value && book.excerpts && book.excerpts.length) {
+          const excerpt = book.excerpts[0]?.text || '';
+          if (excerpt) els.description.value = String(excerpt).slice(0, 280);
+        }
+        if (!els.publishedYear.value && book.publish_date) {
+          const match = String(book.publish_date).match(/(19|20)\d{2}/);
+          if (match) els.publishedYear.value = match[0];
         }
         const titleFilled = Boolean(els.title.value);
         const authorFilled = Boolean(els.author.value);
