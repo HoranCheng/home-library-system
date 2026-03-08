@@ -797,26 +797,14 @@
         if (noticeTarget === 'scan') els.scanNotice.innerHTML = html;
         else els.manualNotice.innerHTML = html;
       };
-
-      setNotice('warn', `已识别 ISBN：${isbn}，正在查询书名、作者和分类…`);
-      try {
-        const resp = await fetch(`https://openlibrary.org/api/books?bibkeys=ISBN:${encodeURIComponent(isbn)}&format=json&jscmd=data`);
-        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-        const data = await resp.json();
-        const book = data[`ISBN:${isbn}`];
-        if (!book) {
-          setNotice('warn', `${sourceLabel}：${isbn}，但暂时没有查到书名/作者/分类，请手动补充后保存。`);
-          return { found: false };
-        }
-
+      const applyOpenLibrary = (book) => {
+        if (!book) return;
         if (!els.title.value && book.title) els.title.value = book.title;
         if (!els.author.value && Array.isArray(book.authors) && book.authors.length) {
           els.author.value = book.authors.map(a => a.name).filter(Boolean).join(', ');
         }
         if (!els.category.value) {
-          const subject = Array.isArray(book.subjects) && book.subjects.length
-            ? (book.subjects[0]?.name || book.subjects[0])
-            : '';
+          const subject = Array.isArray(book.subjects) && book.subjects.length ? (book.subjects[0]?.name || book.subjects[0]) : '';
           if (subject) els.category.value = String(subject).split(' / ')[0].slice(0, 24);
         }
         if (!els.description.value && book.excerpts && book.excerpts.length) {
@@ -827,10 +815,45 @@
           const match = String(book.publish_date).match(/(19|20)\d{2}/);
           if (match) els.publishedYear.value = match[0];
         }
+      };
+      const applyGoogleBooks = (item) => {
+        const info = item?.volumeInfo || {};
+        if (!els.title.value && info.title) els.title.value = info.title;
+        if (!els.author.value && Array.isArray(info.authors) && info.authors.length) els.author.value = info.authors.join(', ');
+        if (!els.category.value && Array.isArray(info.categories) && info.categories.length) els.category.value = String(info.categories[0]).slice(0, 24);
+        if (!els.description.value && info.description) els.description.value = String(info.description).slice(0, 280);
+        if (!els.publishedYear.value && info.publishedDate) {
+          const match = String(info.publishedDate).match(/(19|20)\d{2}/);
+          if (match) els.publishedYear.value = match[0];
+        }
+      };
+
+      setNotice('warn', `已识别 ISBN：${isbn}，正在查询书名、作者、分类和简介…`);
+      try {
+        const olResp = await fetch(`https://openlibrary.org/api/books?bibkeys=ISBN:${encodeURIComponent(isbn)}&format=json&jscmd=data`);
+        if (olResp.ok) {
+          const olData = await olResp.json();
+          applyOpenLibrary(olData[`ISBN:${isbn}`]);
+        }
+
+        const stillMissing = !els.title.value || !els.author.value || !els.category.value || !els.description.value || !els.publishedYear.value;
+        if (stillMissing) {
+          const gbResp = await fetch(`https://www.googleapis.com/books/v1/volumes?q=isbn:${encodeURIComponent(isbn)}`);
+          if (gbResp.ok) {
+            const gbData = await gbResp.json();
+            if (Array.isArray(gbData.items) && gbData.items.length) applyGoogleBooks(gbData.items[0]);
+          }
+        }
+
         const titleFilled = Boolean(els.title.value);
+        if (!titleFilled) {
+          setNotice('warn', `${sourceLabel}：${isbn}，但暂时没有查到完整书目信息，请手动补充后保存。`);
+          return { found: false };
+        }
         const authorFilled = Boolean(els.author.value);
         const categoryFilled = Boolean(els.category.value);
-        setNotice('ok', `${sourceLabel}：${isbn}${titleFilled ? ` · ${escapeHtml(els.title.value)}` : ''}${authorFilled ? ` · ${escapeHtml(els.author.value)}` : ''}${categoryFilled ? ` · ${escapeHtml(els.category.value)}` : ''}`);
+        const yearFilled = Boolean(els.publishedYear.value);
+        setNotice('ok', `${sourceLabel}：${isbn}${titleFilled ? ` · ${escapeHtml(els.title.value)}` : ''}${authorFilled ? ` · ${escapeHtml(els.author.value)}` : ''}${categoryFilled ? ` · ${escapeHtml(els.category.value)}` : ''}${yearFilled ? ` · ${escapeHtml(els.publishedYear.value)}` : ''}`);
         return { found: true };
       } catch (e) {
         setNotice('warn', `${sourceLabel}：${isbn}，但联网查询书目信息失败，请手动补充后保存。`);
