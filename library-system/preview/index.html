@@ -133,7 +133,7 @@
       </div>
       <div id="scanNotice"></div>
       <div class="review-card" id="reviewCard">
-        <div class="muted">先输入或扫描 ISBN，然后点“搜索 ISBN”。查到后你可以在这里审阅并补充信息，再导入库中。</div>
+        <div class="muted">先输入或扫描 ISBN。系统识别到完整 ISBN 后会自动补全信息，你再审阅并导入库中。</div>
       </div>
       <div class="field">
         <label>书名</label>
@@ -153,32 +153,17 @@
           <input id="publishedYear" placeholder="例如：2021" />
         </div>
       </div>
-      <div class="compact-grid">
-        <div class="field">
-          <label>阅读状态</label>
-          <input id="readingStatus" placeholder="想读 / 在读 / 读完" />
-        </div>
-        <div class="field">
-          <label>阅读进度</label>
-          <input id="readingProgress" type="number" min="0" max="100" placeholder="35" />
-        </div>
-      </div>
       <div class="field">
         <label>存放位置</label>
         <input id="location" placeholder="例如：客厅书架 / 书房左柜 / 床头" />
         <div class="chips" id="locationPresetChips"></div>
       </div>
-      <div class="field">
-        <label>更多信息（可选）</label>
-        <textarea id="description" placeholder="内容简介；阅读感受可点书名进入详情后再补"></textarea>
-      </div>
       <div class="sticky-actions">
         <div class="actions">
-          <button class="btn secondary" id="lookupBtn">搜索 ISBN</button>
           <button class="btn primary" id="saveBtn">导入库中</button>
         </div>
       </div>
-      <div class="hint">建议流程：输入或扫描 ISBN → 搜索并补全信息 → 审阅/补充 → 导入库中。</div>
+      <div class="hint">建议流程：输入或扫描 ISBN → 自动补全信息 → 审阅/补充 → 导入库中。</div>
       <div id="manualNotice"></div>
     </div>
 
@@ -306,14 +291,13 @@
       title: document.getElementById('title'),
       author: document.getElementById('author'),
       category: document.getElementById('category'),
-      readingStatus: document.getElementById('readingStatus'),
-      readingProgress: document.getElementById('readingProgress'),
+      readingStatus: null,
+      readingProgress: null,
       publishedYear: document.getElementById('publishedYear'),
       location: document.getElementById('location'),
       locationPresetChips: document.getElementById('locationPresetChips'),
-      description: document.getElementById('description'),
+      description: null,
       notes: null,
-      lookupBtn: document.getElementById('lookupBtn'),
       saveBtn: document.getElementById('saveBtn'),
       manualNotice: document.getElementById('manualNotice'),
       reviewCard: document.getElementById('reviewCard'),
@@ -407,7 +391,7 @@
         ? `<div><strong>${escapeHtml(currentDraftTitle || '待补充书名')}</strong></div>
            <div class="muted" style="margin-top:6px">${escapeHtml(currentDraftAuthor || '待补充作者')} · ${escapeHtml(currentDraftCategory || '待补充分类')} ${currentDraftYear ? `· ${escapeHtml(currentDraftYear)}` : ''}</div>
            <div class="muted" style="margin-top:6px">${currentDraftLocation ? `存放位置：${escapeHtml(currentDraftLocation)}` : '你可以继续补充存放位置、阅读状态等信息，然后导入库中。'}</div>`
-        : '<div class="muted">先输入或扫描 ISBN，然后点“搜索 ISBN”。查到后你可以在这里审阅并补充信息，再导入库中。</div>';
+        : '<div class="muted">先输入或扫描 ISBN。系统识别到完整 ISBN 后会自动补全信息，你再审阅并导入库中。</div>';
       els.saveBtn.disabled = !lookupCompleted && !editingBookId;
 
       const books = loadBooks();
@@ -500,11 +484,11 @@
       let title = els.title.value.trim();
       let author = els.author.value.trim();
       let category = els.category.value.trim();
-      let readingStatus = normalizeReadingStatus(els.readingStatus.value.trim());
-      let readingProgress = Math.max(0, Math.min(100, Number(els.readingProgress.value || 0)));
+      let readingStatus = normalizeReadingStatus(String(els.readingStatus?.value || '').trim());
+      let readingProgress = Math.max(0, Math.min(100, Number(els.readingProgress?.value || 0)));
       let publishedYear = els.publishedYear.value.trim();
       let location = els.location.value.trim();
-      let description = els.description.value.trim();
+      let description = String(els.description?.value || '').trim();
       let notes = String(els.notes?.value || '').trim();
 
       if (!validIsbn(isbn)) {
@@ -519,7 +503,7 @@
         author = els.author.value.trim();
         category = els.category.value.trim();
         publishedYear = els.publishedYear.value.trim();
-        description = els.description.value.trim();
+        description = String(els.description?.value || '').trim();
       }
 
       if (!title) {
@@ -563,8 +547,9 @@
         els.manualNotice.innerHTML = makeNotice('ok', `保存成功：${title}`);
       }
       els.isbn.value = ''; els.title.value = ''; els.author.value = ''; els.category.value = '';
-      els.readingStatus.value = ''; els.readingProgress.value = ''; els.publishedYear.value = ''; els.location.value = '';
-      els.description.value = ''; if (els.notes) els.notes.value = '';
+      if (els.readingStatus) els.readingStatus.value = ''; if (els.readingProgress) els.readingProgress.value = '';
+      els.publishedYear.value = ''; els.location.value = '';
+      if (els.description) els.description.value = ''; if (els.notes) els.notes.value = '';
       lookupCompleted = false;
       if (options.next) {
         els.manualNotice.innerHTML = makeNotice('ok', '已加入图书，继续下一本。');
@@ -574,22 +559,15 @@
       return true;
     }
 
-    els.lookupBtn.onclick = async () => {
-      try {
-        await lookupCurrentIsbn();
-      } catch (e) {
-        els.manualNotice.innerHTML = makeNotice('err', `搜索失败：${e.message || '未知错误'}`);
-      }
-    };
-
     els.isbn.addEventListener('input', () => {
       lookupCompleted = false;
+      if (isbnLookupTimer) clearTimeout(isbnLookupTimer);
       render();
-    });
-    els.isbn.addEventListener('change', async () => {
       const compact = String(els.isbn.value || '').replace(/[^0-9Xx]/g, '');
       if ((compact.length === 10 || compact.length === 13) && !els.title.value) {
-        try { await lookupCurrentIsbn(); } catch {}
+        isbnLookupTimer = setTimeout(() => {
+          lookupCurrentIsbn().catch(() => {});
+        }, 300);
       }
     });
 
@@ -687,11 +665,11 @@
           els.title.value = book.title || '';
           els.author.value = book.author || '';
           els.category.value = book.category || '';
-          els.readingStatus.value = book.readingStatus || '';
-          els.readingProgress.value = book.readingProgress ?? '';
+          if (els.readingStatus) els.readingStatus.value = book.readingStatus || '';
+          if (els.readingProgress) els.readingProgress.value = book.readingProgress ?? '';
           els.publishedYear.value = book.publishedYear || '';
           els.location.value = book.location || '';
-          els.description.value = book.description || '';
+          if (els.description) els.description.value = book.description || '';
           if (els.notes) els.notes.value = book.notes || '';
           els.saveBtn.textContent = '保存修改';
           lookupCompleted = true;
@@ -706,8 +684,9 @@
             editingBookId = null;
             els.saveBtn.textContent = '保存图书';
             els.isbn.value = ''; els.title.value = ''; els.author.value = ''; els.category.value = '';
-            els.readingStatus.value = ''; els.readingProgress.value = ''; els.publishedYear.value = ''; els.location.value = '';
-            els.description.value = ''; if (els.notes) els.notes.value = '';
+            if (els.readingStatus) els.readingStatus.value = ''; if (els.readingProgress) els.readingProgress.value = '';
+            els.publishedYear.value = ''; els.location.value = '';
+            if (els.description) els.description.value = ''; if (els.notes) els.notes.value = '';
           }
           render();
         }
@@ -799,6 +778,7 @@
     let openMenuBookId = null;
     let editingBookId = null;
     let lookupCompleted = false;
+    let isbnLookupTimer = null;
 
     function stopScanner() {
       scannerActive = false;
