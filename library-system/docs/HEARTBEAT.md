@@ -4,6 +4,36 @@ Use machine-readable heartbeat entries (append newest first):
 
 ```json
 {
+  "agent": "Worker-Claude",
+  "task_id": "T-016",
+  "status": "In Progress",
+  "progress": 10,
+  "last_update": "2026-03-09T04:49:00+11:00",
+  "last_artifact": "session:agent:claude:acp:1db8f83f-0062-4ecc-9e4d-7ee09da41ef3; run:0f80db24-c1df-4a94-8343-07fe5fe43ec9",
+  "blocker": "none",
+  "next_eta_min": 30,
+  "lease_expires_at": "2026-03-09T05:20:00+11:00",
+  "retry_count_same_error": 0
+}
+```
+
+```json
+{
+  "agent": "Tech-Lead",
+  "task_id": "T-016",
+  "status": "In Progress",
+  "progress": 15,
+  "last_update": "2026-03-09T04:49:00+11:00",
+  "last_artifact": "next-version kickoff; GitHub Pages live path retained as rollback",
+  "blocker": "none",
+  "next_eta_min": 30,
+  "lease_expires_at": "2026-03-09T05:20:00+11:00",
+  "retry_count_same_error": 0
+}
+```
+
+```json
+{
   "agent": "Tech-Lead",
   "task_id": "T-013",
   "status": "In Progress",
