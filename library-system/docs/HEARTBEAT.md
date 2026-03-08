@@ -1,12 +1,25 @@
 # Agent Activity Heartbeat
 
-| Agent Name | Current Task | Last Update (AEST) | Progress | Status |
-|---|---|---|---|---|
-| Tech-Lead | v0.1.1 stabilization + release prep | TBD | 0% | Active |
-| Worker-Claude | UI interaction chain + polish | TBD | 0% | Active |
-| Worker-Gemini | QA edge-case review | TBD | 0% | Active |
+Use machine-readable heartbeat entries (append newest first):
+
+```json
+{
+  "agent": "Worker-Claude",
+  "task_id": "T-011",
+  "status": "In Progress",
+  "progress": 92,
+  "last_update": "2026-03-08T21:15:00+11:00",
+  "last_artifact": "commit:8b4815f",
+  "blocker": "none",
+  "next_eta_min": 20,
+  "lease_expires_at": "2026-03-08T21:45:00+11:00",
+  "retry_count_same_error": 0
+}
+```
 
 ## Rules
 - Worker updates every 5 minutes or after each meaningful sub-step.
-- Tech Lead checks for stale updates before every status report.
-- If `Last Update` > 30 minutes while Status is `Active`, raise alert in `tech-lead-alerts`.
+- Lease TTL default: 30 minutes. Must renew before expiry.
+- Tech Lead checks stale lease and stale artifact signal before each status report.
+- If stale >30m while status is active, trigger escalation in `tech-lead-alerts`.
+- If same error retries reach 3, force pause + re-plan.
