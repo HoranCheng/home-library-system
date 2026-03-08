@@ -60,12 +60,18 @@
     .metric { background:#10193a; border:1px solid var(--line); border-radius:16px; padding:12px; text-align:center; }
     .metric strong { display:block; font-size:22px; }
     .book-list { margin-top:12px; }
-    .book-item { padding:12px 0; border-top:1px solid var(--line); }
+    .book-item { padding:12px 0; border-top:1px solid var(--line); position:relative; }
     .book-item:first-child { border-top:0; padding-top:0; }
     .book-item h3 { margin:0 0 4px; font-size:16px; }
     .chips { display:flex; flex-wrap:wrap; gap:8px; margin-top:12px; }
     .chip { display:inline-flex; align-items:center; gap:6px; padding:8px 10px; border-radius:999px; background:#10193a; border:1px solid var(--line); color:#d7e0ff; font-size:13px; }
     .subsection-title { margin:16px 0 8px; font-size:15px; color:#d7e0ff; }
+    .book-head { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; }
+    .menu-wrap { position:relative; }
+    .menu-btn { width:auto !important; padding:8px 10px !important; border-radius:10px !important; background:#10193a; color:#eef2ff; border:1px solid var(--line); font-size:18px; line-height:1; }
+    .menu-panel { position:absolute; top:42px; right:0; min-width:132px; background:#10193a; border:1px solid var(--line); border-radius:14px; padding:6px; z-index:10; box-shadow:0 12px 24px rgba(0,0,0,.35); }
+    .menu-panel button { width:100%; text-align:left; background:transparent; color:#eef2ff; border:0; border-radius:10px; padding:10px 12px; font-size:14px; }
+    .menu-panel button:hover { background:#1a244d; }
     pre { margin:12px 0 0; padding:12px; border-radius:14px; background:#0a1128; color:#d7e0ff; white-space:pre-wrap; word-break:break-word; font-size:12px; }
     .bottom-nav {
       position:sticky; bottom:0; display:flex; gap:8px; margin-top:18px; padding:10px;
@@ -289,10 +295,16 @@
 
     function renderBookRow(b, options = {}) {
       const actionHtml = options.actionHtml || '';
+      const showMenu = options.showMenu !== false;
       return `
         <div class="book-item">
-          <h3>${escapeHtml(b.title || '未命名图书')}</h3>
-          <div class="muted">${escapeHtml(b.author || '未知作者')} · ${escapeHtml(b.category || '未分类')} · ${escapeHtml(b.isbn || '无 ISBN')} · ${b.status === 'to_be_sorted' ? '待整理' : '已入库'}</div>
+          <div class="book-head">
+            <div>
+              <h3>${escapeHtml(b.title || '未命名图书')}</h3>
+              <div class="muted">${escapeHtml(b.author || '未知作者')} · ${escapeHtml(b.category || '未分类')} · ${escapeHtml(b.isbn || '无 ISBN')} · ${b.status === 'to_be_sorted' ? '待整理' : '已入库'}</div>
+            </div>
+            ${showMenu ? `<div class="menu-wrap"><button class="menu-btn" data-menu-id="${escapeHtml(b.id)}">⋯</button></div>` : ''}
+          </div>
           ${actionHtml}
         </div>`;
     }
@@ -412,12 +424,26 @@
           els.manualNotice.innerHTML = makeNotice('warn', '疑似重复：系统发现相同 ISBN 或书名+作者组合。');
           return;
         }
-        books.push({
-          id: makeId(), isbn, title, author, category,
-          status: 'to_be_sorted', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString()
-        });
-        saveBooks(books);
-        els.manualNotice.innerHTML = makeNotice('ok', `保存成功：${title}`);
+        if (editingBookId) {
+          const target = books.find(b => b.id === editingBookId);
+          if (!target) throw new Error('未找到要编辑的图书');
+          target.isbn = isbn;
+          target.title = title;
+          target.author = author;
+          target.category = category;
+          target.updatedAt = new Date().toISOString();
+          saveBooks(books);
+          els.manualNotice.innerHTML = makeNotice('ok', `已更新：${title}`);
+          editingBookId = null;
+          els.saveBtn.textContent = '保存图书';
+        } else {
+          books.push({
+            id: makeId(), isbn, title, author, category,
+            status: 'to_be_sorted', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString()
+          });
+          saveBooks(books);
+          els.manualNotice.innerHTML = makeNotice('ok', `保存成功：${title}`);
+        }
         els.isbn.value = ''; els.title.value = ''; els.author.value = ''; els.category.value = '';
         render();
       } catch (e) {
@@ -442,15 +468,70 @@
     };
 
     document.addEventListener('click', (event) => {
+      const menuBtn = event.target.closest('.menu-btn');
+      if (menuBtn) {
+        const id = menuBtn.dataset.menuId;
+        const wrap = menuBtn.closest('.menu-wrap');
+        const existing = wrap.querySelector('.menu-panel');
+        document.querySelectorAll('.menu-panel').forEach(el => el.remove());
+        if (existing || openMenuBookId === id) {
+          openMenuBookId = null;
+          return;
+        }
+        openMenuBookId = id;
+        const panel = document.createElement('div');
+        panel.className = 'menu-panel';
+        panel.innerHTML = `<button data-action="edit" data-id="${id}">编辑</button><button data-action="delete" data-id="${id}">删除图书</button>`;
+        wrap.appendChild(panel);
+        return;
+      }
+
+      const menuAction = event.target.closest('.menu-panel button');
+      if (menuAction) {
+        const id = menuAction.dataset.id;
+        const books = loadBooks();
+        const book = books.find(b => b.id === id);
+        if (!book) return;
+        if (menuAction.dataset.action === 'edit') {
+          editingBookId = id;
+          els.isbn.value = book.isbn || '';
+          els.title.value = book.title || '';
+          els.author.value = book.author || '';
+          els.category.value = book.category || '';
+          els.saveBtn.textContent = '保存修改';
+          setMode('manual');
+          setPage('home');
+          els.manualNotice.innerHTML = makeNotice('warn', `正在编辑：${escapeHtml(book.title || '未命名图书')}`);
+        } else if (menuAction.dataset.action === 'delete') {
+          if (!confirm(`确定删除《${book.title || '未命名图书'}》吗？`)) return;
+          saveBooks(books.filter(b => b.id !== id));
+          els.manualNotice.innerHTML = makeNotice('ok', `已删除：${escapeHtml(book.title || '未命名图书')}`);
+          if (editingBookId === id) {
+            editingBookId = null;
+            els.saveBtn.textContent = '保存图书';
+            els.isbn.value = ''; els.title.value = ''; els.author.value = ''; els.category.value = '';
+          }
+          render();
+        }
+        document.querySelectorAll('.menu-panel').forEach(el => el.remove());
+        openMenuBookId = null;
+        return;
+      }
+
       const btn = event.target.closest('.organize-done-btn');
-      if (!btn) return;
-      const todoBooks = loadBooks().filter(b => b.status === 'to_be_sorted');
-      const picked = todoBooks[Number(btn.dataset.index)];
-      if (!picked) return;
-      const books = loadBooks().map(b => b.id === picked.id ? { ...b, status: 'in_library', updatedAt: new Date().toISOString() } : b);
-      saveBooks(books);
-      els.organizeNotice.innerHTML = makeNotice('ok', `已整理入库：${escapeHtml(picked.title || '未命名图书')}`);
-      render();
+      if (btn) {
+        const todoBooks = loadBooks().filter(b => b.status === 'to_be_sorted');
+        const picked = todoBooks[Number(btn.dataset.index)];
+        if (!picked) return;
+        const books = loadBooks().map(b => b.id === picked.id ? { ...b, status: 'in_library', updatedAt: new Date().toISOString() } : b);
+        saveBooks(books);
+        els.organizeNotice.innerHTML = makeNotice('ok', `已整理入库：${escapeHtml(picked.title || '未命名图书')}`);
+        render();
+        return;
+      }
+
+      document.querySelectorAll('.menu-panel').forEach(el => el.remove());
+      openMenuBookId = null;
     });
 
     els.exportJsonBtn.onclick = () => {
@@ -517,6 +598,8 @@
     let scannerActive = false;
     let zxingReader = null;
     let zxingScanControl = null;
+    let openMenuBookId = null;
+    let editingBookId = null;
 
     function stopScanner() {
       scannerActive = false;
@@ -554,9 +637,16 @@
         if (!els.author.value && Array.isArray(book.authors) && book.authors.length) {
           els.author.value = book.authors.map(a => a.name).filter(Boolean).join(', ');
         }
+        if (!els.category.value) {
+          const subject = Array.isArray(book.subjects) && book.subjects.length
+            ? (book.subjects[0]?.name || book.subjects[0])
+            : '';
+          if (subject) els.category.value = String(subject).split(' / ')[0].slice(0, 24);
+        }
         const titleFilled = Boolean(els.title.value);
         const authorFilled = Boolean(els.author.value);
-        setNotice('ok', `扫码成功：${isbn}${titleFilled ? ` · ${escapeHtml(els.title.value)}` : ''}${authorFilled ? ` · ${escapeHtml(els.author.value)}` : ''}`);
+        const categoryFilled = Boolean(els.category.value);
+        setNotice('ok', `扫码成功：${isbn}${titleFilled ? ` · ${escapeHtml(els.title.value)}` : ''}${authorFilled ? ` · ${escapeHtml(els.author.value)}` : ''}${categoryFilled ? ` · ${escapeHtml(els.category.value)}` : ''}`);
       } catch (e) {
         setNotice('warn', `扫码成功：${isbn}，但联网查询书目信息失败，请手动补充后保存。`);
       }
