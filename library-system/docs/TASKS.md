@@ -7,43 +7,30 @@
 - Done
 - Stale (lease expired)
 
-## In Progress
-- [T-013] Release candidate checklist + final smoke
-  - Owner: Tech-Lead
-  - Status: In Progress
-  - ETA: 30m
-  - Lease TTL: 30m
-  - Budget: 45 min / low token budget
-  - Rollback: 仅发布文档与流程变更，可回滚提交
-  - Last artifact: test run `52/52` passed
-
 ## Done
 - [T-015] QA edge-case matrix update and prioritization（重派）
   - Owner: Worker-Claude
   - Status: Done（Tech Lead 已验收）
   - Evidence: commit `59cc32b`, tests `52/52`
 
-## Stale
 - [T-011] UI interaction final polish (home/manual/settings)
-  - Owner: Worker-Claude
-  - Status: Stale（lease 超时）
-  - ETA: overdue
-  - Lease TTL: expired at 21:45
-  - Budget: 120 min / medium token budget
-  - Rollback: revert UI handlers + restore previous snapshot wiring
-  - Last artifact: commit `8b4815f`
+  - Owner: Worker-Claude → 收口并入 T-013 RC
+  - Status: Done（stale 会话内容已验证存在于 commit `8b4815f`，全部功能在 v0.1.1 中覆盖）
+  - Evidence: home dual-mode, manual entry, settings snapshot 全部可测；52/52 通过
 
 - [T-012] QA edge-case matrix update and prioritization
-  - Owner: Worker-Gemini
-  - Status: Stale（ACP 会话不稳定，follow-up 失败 code 4）
-  - ETA: overdue
-  - Lease TTL: expired
-  - Budget: 60 min / low token budget
-  - Rollback: drop added QA-only docs/tests if noisy
-  - Last artifact: none（仅 pending 描述，无可验证产出）
+  - Owner: Worker-Gemini → 收口关闭
+  - Status: Done（无可验证产出；T-015 已覆盖相同 QA 目标，本任务作废关闭）
 
-## Queue
 - [T-014] iPhone usage guide + launch notes
+  - Owner: Tech-Lead → 并入 RC 收尾
+  - Status: Done（iPhone/PWA 使用说明已写入 README.md v0.1.1 章节）
+  - Evidence: README.md 更新于 2026-03-08 RC commit
+
+- [T-013] Release candidate checklist + final smoke
+  - Owner: Tech-Lead
+  - Status: Done
+  - Evidence: CHANGELOG.md v0.1.1, README.md iPhone/PWA 段落, tests `52/52`, final RC commit
 
 ## Escalation policy
 - L1: >30m stale heartbeat or no artifact delta → ping worker
