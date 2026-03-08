@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <title>家用图书管理系统 v0.1.1</title>
+  <title>毛毛图书管理系统</title>
   <style>
     :root {
       --bg:#0b1020; --bg2:#111935; --card:#151f42; --line:rgba(255,255,255,.09);
@@ -92,27 +92,22 @@
 <body>
   <div class="app">
     <div class="topbar">
-      <div class="pill">📚 v0.1.1 可测试预览</div>
+      <div class="pill">📚 毛毛图书管理系统</div>
       <div class="pill" id="modePill">当前模式：扫码</div>
     </div>
 
-    <h1>家用图书管理系统</h1>
-    <p class="muted">这就是给你测试的真实产品页风格预览版。手机上直接点流程即可。</p>
+    <h1>毛毛图书管理系统</h1>
+    <p class="muted">把家里的书一本本收进来，随手查、随手整理，手机上就能完成。</p>
 
-    <div class="card">
-      <div class="segmented">
-        <button id="scanTab" class="active">扫码入库</button>
-        <button id="manualTab">手动录入</button>
-      </div>
-
+    <div class="card" id="scanSection">
       <div class="hero" id="hero">
-        <h2 id="heroTitle">扫码入库</h2>
-        <p id="heroDesc">适合手边有条码的新书。当前预览版用“模拟扫码失败”来走兜底流程。</p>
+        <h2 id="heroTitle">扫码录入</h2>
+        <p id="heroDesc">对准书背面的 ISBN 条码，系统会自动识别并补全书名、作者和分类。</p>
       </div>
 
       <div class="actions" id="scanActions">
-        <button class="btn primary" id="scanBtn">开始扫描</button>
-        <button class="btn secondary" id="scanFailBtn">无条码？去手动录入</button>
+        <button class="btn primary" id="scanBtn">开始扫码</button>
+        <button class="btn secondary" id="scanFailBtn">切换到手动录入</button>
       </div>
       <div class="scanner-box" id="scannerBox">
         <video id="scannerVideo" autoplay playsinline muted class="scanner-video"></video>
@@ -122,7 +117,7 @@
       <div id="scanNotice"></div>
     </div>
 
-    <div class="card" id="manualCard">
+    <div class="card hidden" id="manualCard">
       <h2 class="section-title">手动录入</h2>
       <div class="field">
         <label>ISBN</label>
@@ -182,8 +177,8 @@
       <div id="organizeNotice"></div>
     </div>
 
-    <div class="card" id="settingsSection">
-      <h2 class="section-title">设置 / 导出导入</h2>
+    <div class="card hidden" id="settingsSection">
+      <h2 class="section-title">设置与数据管理</h2>
       <div class="actions">
         <button class="btn secondary" id="exportJsonBtn">导出 JSON</button>
         <button class="btn secondary" id="exportCsvBtn">导出 CSV</button>
@@ -204,6 +199,7 @@
       <button id="navHome" class="active">🏠 首页</button>
       <button id="navSearch">🔎 搜索</button>
       <button id="navOrganize">🧹 整理</button>
+      <button id="navSettings">⚙️ 设置</button>
     </div>
   </div>
 
@@ -212,6 +208,7 @@
     const META_KEY = 'lib:meta:v1';
     const MODE_KEY = 'lib:home:mode:v1';
     const PAGE_KEY = 'lib:page:v1';
+    const ENTRY_KEY = 'lib:entry:v1';
 
     function makeId() {
       try {
@@ -236,9 +233,11 @@
     }
     function getMode() { return localStorage.getItem(MODE_KEY) === 'manual' ? 'manual' : 'scan'; }
     function setMode(mode) { localStorage.setItem(MODE_KEY, mode); render(); }
+    function getEntryMode() { return localStorage.getItem(ENTRY_KEY) === 'manual' ? 'manual' : 'scan'; }
+    function setEntryMode(mode) { localStorage.setItem(ENTRY_KEY, mode); render(); }
     function getPage() {
       const page = localStorage.getItem(PAGE_KEY);
-      return ['home', 'search', 'organize'].includes(page) ? page : 'home';
+      return ['home', 'search', 'organize', 'settings'].includes(page) ? page : 'home';
     }
     function setPage(page) { localStorage.setItem(PAGE_KEY, page); render(); }
     function makeNotice(kind, text) { return `<div class="notice ${kind}">${text}</div>`; }
@@ -248,8 +247,6 @@
 
     const els = {
       modePill: document.getElementById('modePill'),
-      scanTab: document.getElementById('scanTab'),
-      manualTab: document.getElementById('manualTab'),
       heroTitle: document.getElementById('heroTitle'),
       heroDesc: document.getElementById('heroDesc'),
       scanBtn: document.getElementById('scanBtn'),
@@ -267,6 +264,8 @@
       inCount: document.getElementById('inCount'),
       categoryChips: document.getElementById('categoryChips'),
       bookList: document.getElementById('bookList'),
+      scanSection: document.getElementById('scanSection'),
+      manualCard: document.getElementById('manualCard'),
       homeSection: document.getElementById('homeSection'),
       searchSection: document.getElementById('searchSection'),
       organizeSection: document.getElementById('organizeSection'),
@@ -281,6 +280,7 @@
       navHome: document.getElementById('navHome'),
       navSearch: document.getElementById('navSearch'),
       navOrganize: document.getElementById('navOrganize'),
+      navSettings: document.getElementById('navSettings'),
       exportJsonBtn: document.getElementById('exportJsonBtn'),
       exportCsvBtn: document.getElementById('exportCsvBtn'),
       importText: document.getElementById('importText'),
@@ -310,25 +310,26 @@
     }
 
     function render() {
-      const mode = getMode();
       const page = getPage();
-      els.modePill.textContent = `当前模式：${mode === 'scan' ? '扫码' : '手动'}`;
-      els.scanTab.classList.toggle('active', mode === 'scan');
-      els.manualTab.classList.toggle('active', mode === 'manual');
-      els.heroTitle.textContent = mode === 'scan' ? '扫码入库' : '手动录入';
-      els.heroDesc.textContent = mode === 'scan'
-        ? '对准书背面的 ISBN 条码，点击”开始扫描”启动摄像头。无条码可手动录入。'
-        : '适合旧书、无条码图书。填写 ISBN / 书名 / 作者后即可保存。';
-      els.scanBtn.textContent = mode === 'scan' ? (scannerActive ? '停止扫描' : '开始扫描') : '保存图书';
-      els.scanFailBtn.textContent = mode === 'scan' ? '无条码？去手动录入' : '切换到扫码入库';
+      const entryMode = getEntryMode();
+      els.modePill.textContent = `当前页面：${page === 'home' ? (entryMode === 'scan' ? '扫码录入' : '手动录入') : page === 'search' ? '搜索' : page === 'organize' ? '整理' : '设置'}`;
+      els.heroTitle.textContent = entryMode === 'scan' ? '扫码录入' : '手动录入';
+      els.heroDesc.textContent = entryMode === 'scan'
+        ? '对准书背面的 ISBN 条码，系统会自动识别并补全书名、作者和分类。'
+        : '适合旧书、无条码图书。填写 ISBN、书名、作者和分类后即可保存。';
+      els.scanBtn.textContent = entryMode === 'scan' ? (scannerActive ? '停止扫码' : '开始扫码') : '保存图书';
+      els.scanFailBtn.textContent = entryMode === 'scan' ? '切换到手动录入' : '切换到扫码录入';
 
       els.navHome.classList.toggle('active', page === 'home');
       els.navSearch.classList.toggle('active', page === 'search');
       els.navOrganize.classList.toggle('active', page === 'organize');
+      els.navSettings.classList.toggle('active', page === 'settings');
+      els.scanSection.classList.toggle('hidden', !(page === 'home' && entryMode === 'scan'));
+      els.manualCard.classList.toggle('hidden', !(page === 'home' && entryMode === 'manual'));
       els.homeSection.classList.toggle('hidden', page !== 'home');
       els.searchSection.classList.toggle('hidden', page !== 'search');
       els.organizeSection.classList.toggle('hidden', page !== 'organize');
-      els.settingsSection.classList.toggle('hidden', page !== 'home');
+      els.settingsSection.classList.toggle('hidden', page !== 'settings');
 
       const books = loadBooks();
       els.totalCount.textContent = String(books.length);
@@ -373,14 +374,13 @@
       return s.length === 0 || s.length === 10 || s.length === 13;
     }
 
-    els.scanTab.onclick = () => setMode('scan');
-    els.manualTab.onclick = () => setMode('manual');
     els.navHome.onclick = () => setPage('home');
     els.navSearch.onclick = () => setPage('search');
     els.navOrganize.onclick = () => setPage('organize');
+    els.navSettings.onclick = () => setPage('settings');
 
     els.scanBtn.onclick = () => {
-      if (getMode() === 'scan') {
+      if (getEntryMode() === 'scan') {
         if (scannerActive) { stopScanner(); } else { startScanner(); }
       } else {
         els.saveBtn.click();
@@ -388,12 +388,12 @@
     };
 
     els.scanFailBtn.onclick = () => {
-      if (getMode() === 'scan') {
+      if (getEntryMode() === 'scan') {
         stopScanner();
-        setMode('manual');
-        els.scanNotice.innerHTML = makeNotice('warn', '已切换到手动录入。请填写 ISBN / 书名 / 作者。');
+        setEntryMode('manual');
+        els.scanNotice.innerHTML = makeNotice('warn', '已切换到手动录入。');
       } else {
-        setMode('scan');
+        setEntryMode('scan');
       }
     };
 
@@ -514,7 +514,7 @@
           els.author.value = book.author || '';
           els.category.value = book.category || '';
           els.saveBtn.textContent = '保存修改';
-          setMode('manual');
+          setEntryMode('manual');
           setPage('home');
           els.manualNotice.innerHTML = makeNotice('warn', `正在编辑：${escapeHtml(book.title || '未命名图书')}`);
         } else if (menuAction.dataset.action === 'delete') {
@@ -674,11 +674,11 @@
       const isbn = rawValue.replace(/[^0-9Xx]/g, '');
       if (isbn.length === 10 || isbn.length === 13) {
         els.isbn.value = isbn;
-        setMode('manual');
+        setEntryMode('manual');
         fillBookMetaByIsbn(isbn, 'scan');
       } else {
         els.scanNotice.innerHTML = makeNotice('warn', `识别到条码但非 ISBN 格式（${escapeHtml(rawValue)}），请手动录入 ISBN。`);
-        setMode('manual');
+        setEntryMode('manual');
       }
     }
 
