@@ -399,13 +399,43 @@
       render();
     }
 
+    async function fillBookMetaByIsbn(isbn, noticeTarget = 'scan') {
+      const setNotice = (kind, text) => {
+        const html = makeNotice(kind, text);
+        if (noticeTarget === 'scan') els.scanNotice.innerHTML = html;
+        else els.manualNotice.innerHTML = html;
+      };
+
+      setNotice('warn', `已识别 ISBN：${isbn}，正在查询书名和作者…`);
+      try {
+        const resp = await fetch(`https://openlibrary.org/api/books?bibkeys=ISBN:${encodeURIComponent(isbn)}&format=json&jscmd=data`);
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+        const data = await resp.json();
+        const book = data[`ISBN:${isbn}`];
+        if (!book) {
+          setNotice('warn', `扫码成功：${isbn}，但暂时没有查到书名/作者，请手动补充后保存。`);
+          return;
+        }
+
+        if (!els.title.value && book.title) els.title.value = book.title;
+        if (!els.author.value && Array.isArray(book.authors) && book.authors.length) {
+          els.author.value = book.authors.map(a => a.name).filter(Boolean).join(', ');
+        }
+        const titleFilled = Boolean(els.title.value);
+        const authorFilled = Boolean(els.author.value);
+        setNotice('ok', `扫码成功：${isbn}${titleFilled ? ` · ${escapeHtml(els.title.value)}` : ''}${authorFilled ? ` · ${escapeHtml(els.author.value)}` : ''}`);
+      } catch (e) {
+        setNotice('warn', `扫码成功：${isbn}，但联网查询书目信息失败，请手动补充后保存。`);
+      }
+    }
+
     function handleScanResult(rawValue) {
       stopScanner();
       const isbn = rawValue.replace(/[^0-9Xx]/g, '');
       if (isbn.length === 10 || isbn.length === 13) {
         els.isbn.value = isbn;
         setMode('manual');
-        els.scanNotice.innerHTML = makeNotice('ok', `扫码成功：${isbn}，请确认书名后保存。`);
+        fillBookMetaByIsbn(isbn, 'scan');
       } else {
         els.scanNotice.innerHTML = makeNotice('warn', `识别到条码但非 ISBN 格式（${escapeHtml(rawValue)}），请手动录入 ISBN。`);
         setMode('manual');
@@ -485,6 +515,13 @@
 
     els.scannerCancelBtn.onclick = stopScanner;
     // ── End Scanner ───────────────────────────────────────────────────────────
+
+    els.isbn.addEventListener('change', () => {
+      const isbn = String(els.isbn.value || '').replace(/[^0-9Xx]/g, '');
+      if ((isbn.length === 10 || isbn.length === 13) && (!els.title.value || !els.author.value)) {
+        fillBookMetaByIsbn(isbn, 'manual');
+      }
+    });
 
     render();
   </script>
