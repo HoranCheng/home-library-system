@@ -99,6 +99,8 @@
     .link-btn { background:none; border:0; color:#9cc2ff; padding:0; font:inherit; cursor:pointer; }
     .modal-backdrop { position:fixed; inset:0; background:rgba(3,7,18,.72); display:flex; align-items:flex-end; justify-content:center; padding:16px; z-index:30; }
     .modal-card { width:100%; max-width:480px; max-height:90vh; overflow:auto; background:rgba(21,31,66,.98); border:1px solid var(--line); border-radius:20px; padding:16px; }
+    .compact-grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+    .sticky-actions { position:sticky; bottom:0; background:rgba(21,31,66,.98); padding-top:12px; margin-top:14px; }
   </style>
   <script src="./vendor/zxing-browser.min.js"></script>
 </head>
@@ -137,21 +139,25 @@
         <label>作者</label>
         <input id="author" placeholder="例如：Harold Abelson" />
       </div>
-      <div class="field">
-        <label>分类</label>
-        <input id="category" placeholder="例如：技术 / 小说 / 历史 / 设计" />
+      <div class="compact-grid">
+        <div class="field">
+          <label>分类</label>
+          <input id="category" placeholder="例如：技术 / 小说" />
+        </div>
+        <div class="field">
+          <label>出版年份</label>
+          <input id="publishedYear" placeholder="例如：2021" />
+        </div>
       </div>
-      <div class="field">
-        <label>阅读状态</label>
-        <input id="readingStatus" placeholder="想读 / 在读 / 读完" />
-      </div>
-      <div class="field">
-        <label>阅读进度（0-100）</label>
-        <input id="readingProgress" type="number" min="0" max="100" placeholder="例如：35" />
-      </div>
-      <div class="field">
-        <label>出版年份</label>
-        <input id="publishedYear" placeholder="例如：2021" />
+      <div class="compact-grid">
+        <div class="field">
+          <label>阅读状态</label>
+          <input id="readingStatus" placeholder="想读 / 在读 / 读完" />
+        </div>
+        <div class="field">
+          <label>阅读进度</label>
+          <input id="readingProgress" type="number" min="0" max="100" placeholder="35" />
+        </div>
       </div>
       <div class="field">
         <label>存放位置</label>
@@ -159,18 +165,17 @@
         <div class="chips" id="locationPresetChips"></div>
       </div>
       <div class="field">
-        <label>内容简介</label>
-        <textarea id="description" placeholder="这本书主要讲什么，可自动带出后再修改"></textarea>
+        <label>更多信息（可选）</label>
+        <textarea id="description" placeholder="内容简介；阅读感受可点书名进入详情后再补"></textarea>
       </div>
-      <div class="field">
-        <label>阅读感受</label>
-        <textarea id="notes" placeholder="写一点自己的想法、感受、摘录"></textarea>
+      <div class="sticky-actions">
+        <div class="actions">
+          <button class="btn primary" id="saveBtn">加入图书</button>
+          <button class="btn secondary" id="saveNextBtn">加入并下一本</button>
+          <button class="btn ghost" id="fillDemoBtn">填入示例</button>
+        </div>
       </div>
-      <div class="actions">
-        <button class="btn primary" id="saveBtn">保存图书</button>
-        <button class="btn ghost" id="fillDemoBtn">填入示例</button>
-      </div>
-      <div class="hint">保存后会进入下方图书列表。若 ISBN 非法或疑似重复，会在这里给出提示。</div>
+      <div class="hint">建议流程：扫 ISBN → 审阅自动带出的信息 → 直接“加入图书”或“加入并下一本”。</div>
       <div id="manualNotice"></div>
     </div>
 
@@ -304,8 +309,9 @@
       location: document.getElementById('location'),
       locationPresetChips: document.getElementById('locationPresetChips'),
       description: document.getElementById('description'),
-      notes: document.getElementById('notes'),
+      notes: null,
       saveBtn: document.getElementById('saveBtn'),
+      saveNextBtn: document.getElementById('saveNextBtn'),
       fillDemoBtn: document.getElementById('fillDemoBtn'),
       manualNotice: document.getElementById('manualNotice'),
       currentReadingCard: document.getElementById('currentReadingCard'),
@@ -474,7 +480,7 @@
       els.notes.value = '解释器和抽象层次那几章值得反复读。';
     };
 
-    async function saveCurrentBook() {
+    async function saveCurrentBook(options = {}) {
       const isbn = els.isbn.value.trim();
       let title = els.title.value.trim();
       let author = els.author.value.trim();
@@ -484,11 +490,11 @@
       let publishedYear = els.publishedYear.value.trim();
       let location = els.location.value.trim();
       let description = els.description.value.trim();
-      let notes = els.notes.value.trim();
+      let notes = String(els.notes?.value || '').trim();
 
       if (!validIsbn(isbn)) {
         els.manualNotice.innerHTML = makeNotice('err', 'ISBN 格式不合法，请输入 10 位或 13 位。');
-        return;
+        return false;
       }
 
       if (!title && (isbn.replace(/[^0-9Xx]/g, '').length === 10 || isbn.replace(/[^0-9Xx]/g, '').length === 13)) {
@@ -502,14 +508,14 @@
 
       if (!title) {
         els.manualNotice.innerHTML = makeNotice('err', '请至少填写书名。若已输入 ISBN 但未查到书名，请手动补充后保存。');
-        return;
+        return false;
       }
 
       const books = loadBooks();
       const duplicate = books.find(b => b.id !== editingBookId && ((isbn && b.isbn === isbn) || (b.title === title && b.author === author)));
       if (duplicate) {
         els.manualNotice.innerHTML = makeNotice('warn', '疑似重复：系统发现相同 ISBN 或书名+作者组合。');
-        return;
+        return false;
       }
 
       rememberLocationPreset(location);
@@ -542,13 +548,25 @@
       }
       els.isbn.value = ''; els.title.value = ''; els.author.value = ''; els.category.value = '';
       els.readingStatus.value = ''; els.readingProgress.value = ''; els.publishedYear.value = ''; els.location.value = '';
-      els.description.value = ''; els.notes.value = '';
+      els.description.value = ''; if (els.notes) els.notes.value = '';
+      if (options.next) {
+        els.manualNotice.innerHTML = makeNotice('ok', '已加入图书，继续下一本。');
+        els.isbn.focus();
+      }
       render();
+      return true;
     }
 
     els.saveBtn.onclick = async () => {
       try {
         await saveCurrentBook();
+      } catch (e) {
+        els.manualNotice.innerHTML = makeNotice('err', `保存失败：${e.message || '未知错误'}`);
+      }
+    };
+    els.saveNextBtn.onclick = async () => {
+      try {
+        await saveCurrentBook({ next: true });
       } catch (e) {
         els.manualNotice.innerHTML = makeNotice('err', `保存失败：${e.message || '未知错误'}`);
       }
@@ -645,7 +663,7 @@
           els.publishedYear.value = book.publishedYear || '';
           els.location.value = book.location || '';
           els.description.value = book.description || '';
-          els.notes.value = book.notes || '';
+          if (els.notes) els.notes.value = book.notes || '';
           els.saveBtn.textContent = '保存修改';
           setEntryMode('manual');
           setPage('home');
@@ -659,7 +677,7 @@
             els.saveBtn.textContent = '保存图书';
             els.isbn.value = ''; els.title.value = ''; els.author.value = ''; els.category.value = '';
             els.readingStatus.value = ''; els.readingProgress.value = ''; els.publishedYear.value = ''; els.location.value = '';
-            els.description.value = ''; els.notes.value = '';
+            els.description.value = ''; if (els.notes) els.notes.value = '';
           }
           render();
         }
