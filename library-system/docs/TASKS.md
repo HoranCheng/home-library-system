@@ -7,33 +7,34 @@
 - Done
 - Stale (lease expired)
 
-## In Progress
+## Review
+- [T-015] QA edge-case matrix update and prioritization（重派）
+  - Owner: Worker-Claude
+  - Status: Review（产出已到，等待 Tech Lead 验收）
+  - ETA: done
+  - Lease TTL: 30m
+  - Budget: 60 min / low token budget
+  - Rollback: 仅文档/测试改动，可整组回滚
+  - Last artifact: commit `59cc32b`
+
+## Stale
 - [T-011] UI interaction final polish (home/manual/settings)
   - Owner: Worker-Claude
-  - Status: In Progress
-  - ETA: 2h
-  - Lease TTL: 30m (renew required)
+  - Status: Stale（lease 超时）
+  - ETA: overdue
+  - Lease TTL: expired at 21:45
   - Budget: 120 min / medium token budget
   - Rollback: revert UI handlers + restore previous snapshot wiring
   - Last artifact: commit `8b4815f`
 
 - [T-012] QA edge-case matrix update and prioritization
   - Owner: Worker-Gemini
-  - Status: Stale (ACP 会话不稳定，follow-up失败 code 4)
-  - ETA: 1h (expired)
-  - Lease TTL: 30m (expired)
+  - Status: Stale（ACP 会话不稳定，follow-up 失败 code 4）
+  - ETA: overdue
+  - Lease TTL: expired
   - Budget: 60 min / low token budget
   - Rollback: drop added QA-only docs/tests if noisy
-  - Last artifact: none (仅 pending 描述，无可验证产出)
-
-- [T-015] QA edge-case matrix update and prioritization（重派）
-  - Owner: Worker-Claude
-  - Status: In Progress
-  - ETA: 45m
-  - Lease TTL: 30m (renew required)
-  - Budget: 60 min / low token budget
-  - Rollback: 仅文档/测试改动，可整组回滚
-  - Last artifact: reassignment initiated by Tech Lead
+  - Last artifact: none（仅 pending 描述，无可验证产出）
 
 ## Queue
 - [T-013] Release candidate checklist + final smoke
