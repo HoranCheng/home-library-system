@@ -77,6 +77,9 @@
     .scanner-aim { position:absolute; inset:0; pointer-events:none; display:flex; align-items:center; justify-content:center; }
     .scanner-aim-inner { width:220px; height:90px; border:2.5px solid var(--accent); border-radius:10px; box-shadow:0 0 0 9999px rgba(0,0,0,.45); }
     .scanner-cancel { position:absolute; top:10px; right:10px; background:rgba(0,0,0,.65); color:#fff; border:0; border-radius:10px; padding:7px 14px; font-size:14px; cursor:pointer; font-weight:600; }
+    .hidden { display:none !important; }
+    .bottom-nav button { flex:1; text-align:center; padding:10px 8px; color:#c8d3ff; font-size:13px; background:transparent; border:0; border-radius:12px; }
+    .bottom-nav button.active { background:#1a244d; color:#eef2ff; font-weight:700; }
   </style>
   <script src="./vendor/zxing-browser.min.js"></script>
 </head>
@@ -139,7 +142,7 @@
       <div id="manualNotice"></div>
     </div>
 
-    <div class="card">
+    <div class="card" id="homeSection">
       <h2 class="section-title">图书概览</h2>
       <div class="summary">
         <div class="metric"><strong id="totalCount">0</strong><span class="muted">总图书</span></div>
@@ -152,7 +155,28 @@
       <div class="book-list" id="bookList"></div>
     </div>
 
-    <div class="card">
+    <div class="card hidden" id="searchSection">
+      <h2 class="section-title">搜索图书</h2>
+      <div class="field">
+        <label>关键词</label>
+        <input id="searchInput" placeholder="搜书名 / 作者 / ISBN / 分类" />
+      </div>
+      <div class="chips" id="searchSummary"></div>
+      <div class="book-list" id="searchResults"></div>
+    </div>
+
+    <div class="card hidden" id="organizeSection">
+      <h2 class="section-title">整理图书</h2>
+      <div class="actions">
+        <button class="btn secondary" id="markAllSortedBtn">全部标记为已入库</button>
+        <button class="btn ghost" id="markAllTodoBtn">全部恢复待整理</button>
+      </div>
+      <div class="subsection-title">待整理列表</div>
+      <div class="book-list" id="organizeList"></div>
+      <div id="organizeNotice"></div>
+    </div>
+
+    <div class="card" id="settingsSection">
       <h2 class="section-title">设置 / 导出导入</h2>
       <div class="actions">
         <button class="btn secondary" id="exportJsonBtn">导出 JSON</button>
@@ -171,9 +195,9 @@
     </div>
 
     <div class="bottom-nav">
-      <div>🏠 首页</div>
-      <div>🔎 搜索</div>
-      <div>🧹 整理</div>
+      <button id="navHome" class="active">🏠 首页</button>
+      <button id="navSearch">🔎 搜索</button>
+      <button id="navOrganize">🧹 整理</button>
     </div>
   </div>
 
@@ -181,6 +205,7 @@
     const BOOKS_KEY = 'lib:books:v1';
     const META_KEY = 'lib:meta:v1';
     const MODE_KEY = 'lib:home:mode:v1';
+    const PAGE_KEY = 'lib:page:v1';
 
     function makeId() {
       try {
@@ -205,6 +230,11 @@
     }
     function getMode() { return localStorage.getItem(MODE_KEY) === 'manual' ? 'manual' : 'scan'; }
     function setMode(mode) { localStorage.setItem(MODE_KEY, mode); render(); }
+    function getPage() {
+      const page = localStorage.getItem(PAGE_KEY);
+      return ['home', 'search', 'organize'].includes(page) ? page : 'home';
+    }
+    function setPage(page) { localStorage.setItem(PAGE_KEY, page); render(); }
     function makeNotice(kind, text) { return `<div class="notice ${kind}">${text}</div>`; }
     function escapeHtml(v) {
       return String(v ?? '').replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;').replaceAll("'", '&#39;');
@@ -231,6 +261,20 @@
       inCount: document.getElementById('inCount'),
       categoryChips: document.getElementById('categoryChips'),
       bookList: document.getElementById('bookList'),
+      homeSection: document.getElementById('homeSection'),
+      searchSection: document.getElementById('searchSection'),
+      organizeSection: document.getElementById('organizeSection'),
+      settingsSection: document.getElementById('settingsSection'),
+      searchInput: document.getElementById('searchInput'),
+      searchSummary: document.getElementById('searchSummary'),
+      searchResults: document.getElementById('searchResults'),
+      markAllSortedBtn: document.getElementById('markAllSortedBtn'),
+      markAllTodoBtn: document.getElementById('markAllTodoBtn'),
+      organizeList: document.getElementById('organizeList'),
+      organizeNotice: document.getElementById('organizeNotice'),
+      navHome: document.getElementById('navHome'),
+      navSearch: document.getElementById('navSearch'),
+      navOrganize: document.getElementById('navOrganize'),
       exportJsonBtn: document.getElementById('exportJsonBtn'),
       exportCsvBtn: document.getElementById('exportCsvBtn'),
       importText: document.getElementById('importText'),
@@ -243,8 +287,19 @@
       scannerCancelBtn: document.getElementById('scannerCancelBtn')
     };
 
+    function renderBookRow(b, options = {}) {
+      const actionHtml = options.actionHtml || '';
+      return `
+        <div class="book-item">
+          <h3>${escapeHtml(b.title || '未命名图书')}</h3>
+          <div class="muted">${escapeHtml(b.author || '未知作者')} · ${escapeHtml(b.category || '未分类')} · ${escapeHtml(b.isbn || '无 ISBN')} · ${b.status === 'to_be_sorted' ? '待整理' : '已入库'}</div>
+          ${actionHtml}
+        </div>`;
+    }
+
     function render() {
       const mode = getMode();
+      const page = getPage();
       els.modePill.textContent = `当前模式：${mode === 'scan' ? '扫码' : '手动'}`;
       els.scanTab.classList.toggle('active', mode === 'scan');
       els.manualTab.classList.toggle('active', mode === 'manual');
@@ -254,6 +309,14 @@
         : '适合旧书、无条码图书。填写 ISBN / 书名 / 作者后即可保存。';
       els.scanBtn.textContent = mode === 'scan' ? (scannerActive ? '停止扫描' : '开始扫描') : '保存图书';
       els.scanFailBtn.textContent = mode === 'scan' ? '无条码？去手动录入' : '切换到扫码入库';
+
+      els.navHome.classList.toggle('active', page === 'home');
+      els.navSearch.classList.toggle('active', page === 'search');
+      els.navOrganize.classList.toggle('active', page === 'organize');
+      els.homeSection.classList.toggle('hidden', page !== 'home');
+      els.searchSection.classList.toggle('hidden', page !== 'search');
+      els.organizeSection.classList.toggle('hidden', page !== 'organize');
+      els.settingsSection.classList.toggle('hidden', page !== 'home');
 
       const books = loadBooks();
       els.totalCount.textContent = String(books.length);
@@ -271,12 +334,26 @@
         : '<div class="muted">还没有分类数据，先录入几本书试试。</div>';
 
       els.bookList.innerHTML = books.length
-        ? books.slice().sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || ''))).slice(0, 8).map(b => `
-          <div class="book-item">
-            <h3>${escapeHtml(b.title || '未命名图书')}</h3>
-            <div class="muted">${escapeHtml(b.author || '未知作者')} · ${escapeHtml(b.category || '未分类')} · ${escapeHtml(b.isbn || '无 ISBN')} · ${b.status === 'to_be_sorted' ? '待整理' : '已入库'}</div>
-          </div>`).join('')
+        ? books.slice().sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || ''))).slice(0, 8).map(b => renderBookRow(b)).join('')
         : '<div class="muted" style="margin-top:12px">还没有图书，先录入一本试试。</div>';
+
+      const query = String(els.searchInput?.value || '').trim().toLowerCase();
+      const matchedBooks = query
+        ? books.filter(b => [b.title, b.author, b.isbn, b.category].some(v => String(v || '').toLowerCase().includes(query)))
+        : books;
+      els.searchSummary.innerHTML = books.length
+        ? `<div class="chip">共 ${books.length} 本</div><div class="chip">匹配 ${matchedBooks.length} 本</div>`
+        : '<div class="muted">当前还没有图书数据。</div>';
+      els.searchResults.innerHTML = matchedBooks.length
+        ? matchedBooks.map(b => renderBookRow(b)).join('')
+        : '<div class="muted" style="margin-top:12px">没有找到匹配的图书。</div>';
+
+      const todoBooks = books.filter(b => b.status === 'to_be_sorted');
+      els.organizeList.innerHTML = todoBooks.length
+        ? todoBooks.map((b, index) => renderBookRow(b, {
+            actionHtml: `<div class="actions"><button class="btn secondary organize-done-btn" data-index="${index}">标记为已入库</button></div>`
+          })).join('')
+        : '<div class="muted" style="margin-top:12px">当前没有待整理图书。</div>';
     }
 
     function validIsbn(v) {
@@ -286,6 +363,9 @@
 
     els.scanTab.onclick = () => setMode('scan');
     els.manualTab.onclick = () => setMode('manual');
+    els.navHome.onclick = () => setPage('home');
+    els.navSearch.onclick = () => setPage('search');
+    els.navOrganize.onclick = () => setPage('organize');
 
     els.scanBtn.onclick = () => {
       if (getMode() === 'scan') {
@@ -344,6 +424,34 @@
         els.manualNotice.innerHTML = makeNotice('err', `保存失败：${e.message || '未知错误'}`);
       }
     };
+
+    els.searchInput.addEventListener('input', render);
+
+    els.markAllSortedBtn.onclick = () => {
+      const books = loadBooks().map(b => ({ ...b, status: 'in_library', updatedAt: new Date().toISOString() }));
+      saveBooks(books);
+      els.organizeNotice.innerHTML = makeNotice('ok', '已将全部图书标记为已入库。');
+      render();
+    };
+
+    els.markAllTodoBtn.onclick = () => {
+      const books = loadBooks().map(b => ({ ...b, status: 'to_be_sorted', updatedAt: new Date().toISOString() }));
+      saveBooks(books);
+      els.organizeNotice.innerHTML = makeNotice('warn', '已将全部图书恢复为待整理。');
+      render();
+    };
+
+    document.addEventListener('click', (event) => {
+      const btn = event.target.closest('.organize-done-btn');
+      if (!btn) return;
+      const todoBooks = loadBooks().filter(b => b.status === 'to_be_sorted');
+      const picked = todoBooks[Number(btn.dataset.index)];
+      if (!picked) return;
+      const books = loadBooks().map(b => b.id === picked.id ? { ...b, status: 'in_library', updatedAt: new Date().toISOString() } : b);
+      saveBooks(books);
+      els.organizeNotice.innerHTML = makeNotice('ok', `已整理入库：${escapeHtml(picked.title || '未命名图书')}`);
+      render();
+    });
 
     els.exportJsonBtn.onclick = () => {
       const payload = { books: loadBooks(), meta: loadMeta() };
