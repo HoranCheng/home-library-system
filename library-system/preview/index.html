@@ -602,6 +602,9 @@
     };
 
     els.searchInput.addEventListener('input', render);
+    ['title', 'author', 'category', 'publishedYear', 'location'].forEach((key) => {
+      els[key]?.addEventListener('input', render);
+    });
 
     els.markAllSortedBtn.onclick = () => {
       const books = loadBooks().map(b => ({ ...b, status: 'in_library', updatedAt: new Date().toISOString() }));
