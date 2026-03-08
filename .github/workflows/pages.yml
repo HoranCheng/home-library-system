@@ -27,7 +27,9 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Sync preview to docs
-        run: cp library-system/preview/index.html docs/index.html
+        run: |
+          cp library-system/preview/index.html docs/index.html
+          cp -r library-system/preview/vendor docs/vendor
 
       - uses: actions/configure-pages@v5
         with:
