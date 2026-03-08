@@ -112,26 +112,10 @@
     <h1>毛毛图书管理系统</h1>
     <p class="muted">把家里的书一本本收进来，随手查、随手整理，手机上就能完成。</p>
 
-    <div class="card hidden" id="scanSection">
-      <div class="hero" id="hero">
-        <h2 id="heroTitle">扫码录入</h2>
-        <p id="heroDesc">对准书背面的 ISBN 条码，系统会自动识别并补全书名、作者和分类。</p>
-      </div>
-
-      <div class="actions" id="scanActions">
-        <button class="btn primary" id="scanBtn">开始扫码</button>
-        <button class="btn secondary" id="scanFailBtn">切换到手动录入</button>
-      </div>
-      <div class="scanner-box" id="scannerBox">
-        <video id="scannerVideo" autoplay playsinline muted class="scanner-video"></video>
-        <div class="scanner-aim"><div class="scanner-aim-inner"></div></div>
-        <button class="scanner-cancel" id="scannerCancelBtn">取消</button>
-      </div>
-      <div id="scanNotice"></div>
-    </div>
+    <div class="card hidden" id="scanSection"></div>
 
     <div class="card hidden" id="manualCard">
-      <h2 class="section-title">手动录入</h2>
+      <h2 class="section-title">录入图书</h2>
       <div class="field">
         <label>ISBN</label>
         <div class="input-with-action">
@@ -139,6 +123,12 @@
           <button class="input-action-btn" id="isbnScanBtn" title="扫码填入 ISBN">📷</button>
         </div>
       </div>
+      <div class="scanner-box" id="scannerBox">
+        <video id="scannerVideo" autoplay playsinline muted class="scanner-video"></video>
+        <div class="scanner-aim"><div class="scanner-aim-inner"></div></div>
+        <button class="scanner-cancel" id="scannerCancelBtn">取消</button>
+      </div>
+      <div id="scanNotice"></div>
       <div class="field">
         <label>书名</label>
         <input id="title" placeholder="例如：计算机程序的构造和解释" />
@@ -302,10 +292,6 @@
 
     const els = {
       modePill: document.getElementById('modePill'),
-      heroTitle: document.getElementById('heroTitle'),
-      heroDesc: document.getElementById('heroDesc'),
-      scanBtn: document.getElementById('scanBtn'),
-      scanFailBtn: document.getElementById('scanFailBtn'),
       scanNotice: document.getElementById('scanNotice'),
       isbn: document.getElementById('isbn'),
       isbnScanBtn: document.getElementById('isbnScanBtn'),
@@ -391,10 +377,6 @@
     function render() {
       const page = getPage();
       els.modePill.textContent = `当前页面：${page === 'home' ? '首页' : page === 'search' ? '搜索' : page === 'organize' ? '整理' : '设置'}`;
-      els.heroTitle.textContent = '扫码录入';
-      els.heroDesc.textContent = '对准书背面的 ISBN 条码，系统会自动识别并补全书名、作者和分类。';
-      els.scanBtn.textContent = scannerActive ? '停止扫码' : '开始扫码';
-      els.scanFailBtn.textContent = '继续手动录入';
 
       els.navHome.classList.toggle('active', page === 'home');
       els.navSearch.classList.toggle('active', page === 'search');
@@ -474,17 +456,9 @@
     els.navOrganize.onclick = () => setPage('organize');
     els.navSettings.onclick = () => setPage('settings');
 
-    els.scanBtn.onclick = () => {
-      if (scannerActive) { stopScanner(); } else { startScanner(); }
-    };
     els.isbnScanBtn.onclick = (event) => {
       event.preventDefault();
       if (scannerActive) { stopScanner(); } else { startScanner(); }
-    };
-
-    els.scanFailBtn.onclick = () => {
-      stopScanner();
-      els.scanNotice.innerHTML = makeNotice('warn', '你也可以直接在 ISBN 输入框里手动输入。');
     };
 
     els.fillDemoBtn.onclick = () => {
