@@ -157,6 +157,7 @@
       <div class="field">
         <label>存放位置</label>
         <input id="location" placeholder="例如：客厅书架 / 书房左柜 / 床头" />
+        <div class="chips" id="locationPresetChips"></div>
       </div>
       <div class="field">
         <label>内容简介</label>
@@ -243,6 +244,7 @@
     const MODE_KEY = 'lib:home:mode:v1';
     const PAGE_KEY = 'lib:page:v1';
     const ENTRY_KEY = 'lib:entry:v1';
+    const LOCATION_PRESETS_KEY = 'lib:location-presets:v1';
 
     function makeId() {
       try {
@@ -264,6 +266,16 @@
       const meta = { ...loadMeta(), schemaVersion: 1, updatedAt: new Date().toISOString() };
       localStorage.setItem(BOOKS_KEY, JSON.stringify(books));
       localStorage.setItem(META_KEY, JSON.stringify(meta));
+    }
+    function loadLocationPresets() {
+      try { return JSON.parse(localStorage.getItem(LOCATION_PRESETS_KEY) || '[]'); }
+      catch { return []; }
+    }
+    function rememberLocationPreset(value) {
+      const v = String(value || '').trim();
+      if (!v) return;
+      const next = [v, ...loadLocationPresets().filter(item => item !== v)].slice(0, 8);
+      localStorage.setItem(LOCATION_PRESETS_KEY, JSON.stringify(next));
     }
     function getMode() { return localStorage.getItem(MODE_KEY) === 'manual' ? 'manual' : 'scan'; }
     function setMode(mode) { localStorage.setItem(MODE_KEY, mode); render(); }
@@ -294,6 +306,7 @@
       readingProgress: document.getElementById('readingProgress'),
       publishedYear: document.getElementById('publishedYear'),
       location: document.getElementById('location'),
+      locationPresetChips: document.getElementById('locationPresetChips'),
       description: document.getElementById('description'),
       notes: document.getElementById('notes'),
       saveBtn: document.getElementById('saveBtn'),
@@ -420,6 +433,11 @@
         ? books.slice().sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || ''))).slice(0, 8).map(b => renderBookRow(b)).join('')
         : '<div class="muted" style="margin-top:12px">还没有图书，先录入一本试试。</div>';
 
+      const locationPresets = loadLocationPresets();
+      els.locationPresetChips.innerHTML = locationPresets.length
+        ? locationPresets.map(v => `<button class="chip location-preset-btn" data-value="${escapeHtml(v)}">${escapeHtml(v)}</button>`).join('')
+        : '<div class="muted">先填写一次存放位置，后面这里就会自动记住。</div>';
+
       const query = String(els.searchInput?.value || '').trim().toLowerCase();
       const matchedBooks = query
         ? books.filter(b => [b.title, b.author, b.isbn, b.category].some(v => String(v || '').toLowerCase().includes(query)))
@@ -518,6 +536,8 @@
         return;
       }
 
+      rememberLocationPreset(location);
+
       if (editingBookId) {
         const target = books.find(b => b.id === editingBookId);
         if (!target) throw new Error('未找到要编辑的图书');
@@ -605,6 +625,12 @@
 
       if (event.target.closest('#detailBackdrop') || event.target.closest('#closeDetailBtn')) {
         els.detailModalRoot.innerHTML = '';
+        return;
+      }
+
+      const locationPresetBtn = event.target.closest('.location-preset-btn');
+      if (locationPresetBtn) {
+        els.location.value = locationPresetBtn.dataset.value || '';
         return;
       }
 
