@@ -101,6 +101,7 @@
     .modal-card { width:100%; max-width:480px; max-height:90vh; overflow:auto; background:rgba(21,31,66,.98); border:1px solid var(--line); border-radius:20px; padding:16px; }
     .compact-grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
     .sticky-actions { position:sticky; bottom:0; background:rgba(21,31,66,.98); padding-top:12px; margin-top:14px; }
+    .review-card { margin-top:12px; padding:14px; border-radius:16px; background:#10193a; border:1px solid var(--line); }
   </style>
   <script src="./vendor/zxing-browser.min.js"></script>
 </head>
@@ -131,6 +132,9 @@
         <button class="scanner-cancel" id="scannerCancelBtn">取消</button>
       </div>
       <div id="scanNotice"></div>
+      <div class="review-card" id="reviewCard">
+        <div class="muted">先输入或扫描 ISBN，然后点“搜索 ISBN”。查到后你可以在这里审阅并补充信息，再导入库中。</div>
+      </div>
       <div class="field">
         <label>书名</label>
         <input id="title" placeholder="例如：计算机程序的构造和解释" />
@@ -312,6 +316,7 @@
       lookupBtn: document.getElementById('lookupBtn'),
       saveBtn: document.getElementById('saveBtn'),
       manualNotice: document.getElementById('manualNotice'),
+      reviewCard: document.getElementById('reviewCard'),
       currentReadingCard: document.getElementById('currentReadingCard'),
       detailModalRoot: document.getElementById('detailModalRoot'),
       totalCount: document.getElementById('totalCount'),
@@ -393,6 +398,18 @@
       els.organizeSection.classList.toggle('hidden', page !== 'organize');
       els.settingsSection.classList.toggle('hidden', page !== 'settings');
 
+      const currentDraftTitle = String(els.title?.value || '').trim();
+      const currentDraftAuthor = String(els.author?.value || '').trim();
+      const currentDraftCategory = String(els.category?.value || '').trim();
+      const currentDraftYear = String(els.publishedYear?.value || '').trim();
+      const currentDraftLocation = String(els.location?.value || '').trim();
+      els.reviewCard.innerHTML = lookupCompleted
+        ? `<div><strong>${escapeHtml(currentDraftTitle || '待补充书名')}</strong></div>
+           <div class="muted" style="margin-top:6px">${escapeHtml(currentDraftAuthor || '待补充作者')} · ${escapeHtml(currentDraftCategory || '待补充分类')} ${currentDraftYear ? `· ${escapeHtml(currentDraftYear)}` : ''}</div>
+           <div class="muted" style="margin-top:6px">${currentDraftLocation ? `存放位置：${escapeHtml(currentDraftLocation)}` : '你可以继续补充存放位置、阅读状态等信息，然后导入库中。'}</div>`
+        : '<div class="muted">先输入或扫描 ISBN，然后点“搜索 ISBN”。查到后你可以在这里审阅并补充信息，再导入库中。</div>';
+      els.saveBtn.disabled = !lookupCompleted && !editingBookId;
+
       const books = loadBooks();
       els.totalCount.textContent = String(books.length);
       els.sortCount.textContent = String(books.filter(b => b.status === 'to_be_sorted').length);
@@ -473,7 +490,9 @@
         return false;
       }
       const result = await fillBookMetaByIsbn(isbn, 'manual', '已搜索 ISBN');
-      return Boolean(result?.found);
+      lookupCompleted = Boolean(result?.found || els.title.value.trim());
+      render();
+      return lookupCompleted;
     }
 
     async function saveCurrentBook(options = {}) {
@@ -495,6 +514,7 @@
 
       if (!title && (isbn.replace(/[^0-9Xx]/g, '').length === 10 || isbn.replace(/[^0-9Xx]/g, '').length === 13)) {
         await fillBookMetaByIsbn(isbn, 'manual', '已识别 ISBN');
+        lookupCompleted = true;
         title = els.title.value.trim();
         author = els.author.value.trim();
         category = els.category.value.trim();
@@ -545,6 +565,7 @@
       els.isbn.value = ''; els.title.value = ''; els.author.value = ''; els.category.value = '';
       els.readingStatus.value = ''; els.readingProgress.value = ''; els.publishedYear.value = ''; els.location.value = '';
       els.description.value = ''; if (els.notes) els.notes.value = '';
+      lookupCompleted = false;
       if (options.next) {
         els.manualNotice.innerHTML = makeNotice('ok', '已加入图书，继续下一本。');
         els.isbn.focus();
@@ -561,6 +582,10 @@
       }
     };
 
+    els.isbn.addEventListener('input', () => {
+      lookupCompleted = false;
+      render();
+    });
     els.isbn.addEventListener('change', async () => {
       const compact = String(els.isbn.value || '').replace(/[^0-9Xx]/g, '');
       if ((compact.length === 10 || compact.length === 13) && !els.title.value) {
@@ -669,6 +694,7 @@
           els.description.value = book.description || '';
           if (els.notes) els.notes.value = book.notes || '';
           els.saveBtn.textContent = '保存修改';
+          lookupCompleted = true;
           setEntryMode('manual');
           setPage('home');
           els.manualNotice.innerHTML = makeNotice('warn', `正在编辑：${escapeHtml(book.title || '未命名图书')}`);
@@ -772,6 +798,7 @@
     let zxingScanControl = null;
     let openMenuBookId = null;
     let editingBookId = null;
+    let lookupCompleted = false;
 
     function stopScanner() {
       scannerActive = false;
