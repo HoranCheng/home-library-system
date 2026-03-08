@@ -69,6 +69,11 @@
       background:rgba(8,12,28,.86); border:1px solid var(--line); border-radius:18px; backdrop-filter:blur(10px);
     }
     .bottom-nav div { flex:1; text-align:center; padding:10px 8px; color:#c8d3ff; font-size:13px; }
+    .scanner-box { display:none; margin-top:14px; border-radius:18px; overflow:hidden; position:relative; background:#000; }
+    .scanner-video { width:100%; display:block; max-height:300px; object-fit:cover; }
+    .scanner-aim { position:absolute; inset:0; pointer-events:none; display:flex; align-items:center; justify-content:center; }
+    .scanner-aim-inner { width:220px; height:90px; border:2.5px solid var(--accent); border-radius:10px; box-shadow:0 0 0 9999px rgba(0,0,0,.45); }
+    .scanner-cancel { position:absolute; top:10px; right:10px; background:rgba(0,0,0,.65); color:#fff; border:0; border-radius:10px; padding:7px 14px; font-size:14px; cursor:pointer; font-weight:600; }
   </style>
 </head>
 <body>
@@ -95,6 +100,11 @@
       <div class="actions" id="scanActions">
         <button class="btn primary" id="scanBtn">开始扫描</button>
         <button class="btn secondary" id="scanFailBtn">无条码？去手动录入</button>
+      </div>
+      <div class="scanner-box" id="scannerBox">
+        <video id="scannerVideo" autoplay playsinline muted class="scanner-video"></video>
+        <div class="scanner-aim"><div class="scanner-aim-inner"></div></div>
+        <button class="scanner-cancel" id="scannerCancelBtn">取消</button>
       </div>
       <div id="scanNotice"></div>
     </div>
@@ -214,7 +224,10 @@
       validateBtn: document.getElementById('validateBtn'),
       importBtn: document.getElementById('importBtn'),
       settingsNotice: document.getElementById('settingsNotice'),
-      exportOutput: document.getElementById('exportOutput')
+      exportOutput: document.getElementById('exportOutput'),
+      scannerBox: document.getElementById('scannerBox'),
+      scannerVideo: document.getElementById('scannerVideo'),
+      scannerCancelBtn: document.getElementById('scannerCancelBtn')
     };
 
     function render() {
@@ -224,9 +237,9 @@
       els.manualTab.classList.toggle('active', mode === 'manual');
       els.heroTitle.textContent = mode === 'scan' ? '扫码入库' : '手动录入';
       els.heroDesc.textContent = mode === 'scan'
-        ? '适合手边有条码的新书。当前预览版用“模拟扫码失败”来走兜底流程。'
+        ? '对准书背面的 ISBN 条码，点击”开始扫描”启动摄像头。无条码可手动录入。'
         : '适合旧书、无条码图书。填写 ISBN / 书名 / 作者后即可保存。';
-      els.scanBtn.textContent = mode === 'scan' ? '开始扫描' : '保存图书';
+      els.scanBtn.textContent = mode === 'scan' ? (scannerActive ? '停止扫描' : '开始扫描') : '保存图书';
       els.scanFailBtn.textContent = mode === 'scan' ? '无条码？去手动录入' : '切换到扫码入库';
 
       const books = loadBooks();
@@ -252,7 +265,7 @@
 
     els.scanBtn.onclick = () => {
       if (getMode() === 'scan') {
-        els.scanNotice.innerHTML = makeNotice('warn', '预览版暂未接真实摄像头扫描，这里先走失败兜底流程。你可以点“无条码？去手动录入”。');
+        if (scannerActive) { stopScanner(); } else { startScanner(); }
       } else {
         els.saveBtn.click();
       }
@@ -260,8 +273,9 @@
 
     els.scanFailBtn.onclick = () => {
       if (getMode() === 'scan') {
+        stopScanner();
         setMode('manual');
-        els.scanNotice.innerHTML = makeNotice('warn', '没识别到条码，已切换到手动录入。你可以继续填写 ISBN / 书名 / 作者。');
+        els.scanNotice.innerHTML = makeNotice('warn', '已切换到手动录入。请填写 ISBN / 书名 / 作者。');
       } else {
         setMode('scan');
       }
@@ -362,6 +376,83 @@
         els.settingsNotice.innerHTML = makeNotice('err', `导入失败：${e.message}`);
       }
     };
+
+    // ── Scanner ──────────────────────────────────────────────────────────────
+    let scannerStream = null;
+    let scannerAnimFrame = null;
+    let scannerActive = false;
+
+    function stopScanner() {
+      scannerActive = false;
+      if (scannerAnimFrame) { cancelAnimationFrame(scannerAnimFrame); scannerAnimFrame = null; }
+      if (scannerStream) { scannerStream.getTracks().forEach(t => t.stop()); scannerStream = null; }
+      els.scannerVideo.srcObject = null;
+      els.scannerBox.style.display = 'none';
+      render();
+    }
+
+    function handleScanResult(rawValue) {
+      stopScanner();
+      const isbn = rawValue.replace(/[^0-9Xx]/g, '');
+      if (isbn.length === 10 || isbn.length === 13) {
+        els.isbn.value = isbn;
+        setMode('manual');
+        els.scanNotice.innerHTML = makeNotice('ok', `扫码成功：${isbn}，请确认书名后保存。`);
+      } else {
+        els.scanNotice.innerHTML = makeNotice('warn', `识别到条码但非 ISBN 格式（${escapeHtml(rawValue)}），请手动录入 ISBN。`);
+        setMode('manual');
+      }
+    }
+
+    async function startScanner() {
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        els.scanNotice.innerHTML = makeNotice('err', '该浏览器不支持摄像头访问（需要 HTTPS 或本地环境）。请手动录入 ISBN。');
+        return;
+      }
+      if (!('BarcodeDetector' in window)) {
+        els.scanNotice.innerHTML = makeNotice('warn', '您的浏览器不支持原生扫码（需 iOS 17+ Safari 或 Chrome 83+）。请升级后重试，或直接手动录入 ISBN。');
+        setMode('manual');
+        return;
+      }
+
+      els.scanNotice.innerHTML = makeNotice('warn', '正在申请摄像头权限…');
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } }
+        });
+        scannerStream = stream;
+        const video = els.scannerVideo;
+        video.srcObject = stream;
+        await video.play();
+
+        scannerActive = true;
+        els.scannerBox.style.display = 'block';
+        render();
+        els.scanNotice.innerHTML = makeNotice('warn', '将书背面条码对准框内…');
+
+        const detector = new BarcodeDetector({ formats: ['ean_13', 'ean_8', 'code_128', 'qr_code'] });
+        const scan = async () => {
+          if (!scannerActive) return;
+          try {
+            if (video.readyState >= 2) {
+              const barcodes = await detector.detect(video);
+              if (barcodes.length > 0) { handleScanResult(barcodes[0].rawValue); return; }
+            }
+          } catch (_) { /* ignore single-frame errors */ }
+          scannerAnimFrame = requestAnimationFrame(scan);
+        };
+        scan();
+      } catch (e) {
+        const msg = e.name === 'NotAllowedError' ? '摄像头权限被拒绝，请在浏览器设置中允许访问摄像头后重试。'
+          : e.name === 'NotFoundError' ? '未检测到摄像头设备。'
+          : `摄像头启动失败：${e.message || e.name}`;
+        els.scanNotice.innerHTML = makeNotice('err', msg + ' 请手动录入 ISBN。');
+        stopScanner();
+      }
+    }
+
+    els.scannerCancelBtn.onclick = stopScanner;
+    // ── End Scanner ───────────────────────────────────────────────────────────
 
     render();
   </script>

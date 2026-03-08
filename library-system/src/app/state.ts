@@ -15,7 +15,7 @@ export function createFromManual(
   return result;
 }
 
-export function getLibrarySummary(storage?: Pick<Storage, "getItem">) {
+export function getLibrarySummary(storage?: Pick<Storage, "getItem" | "setItem">) {
   const state = loadState(storage);
   return {
     total: state.books.length,

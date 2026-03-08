@@ -31,7 +31,7 @@ export function handleScanFailure(partialIsbn?: string): string {
   return handleScanFailurePage(partialIsbn);
 }
 
-export function getHomeSummary(storage?: Pick<Storage, "getItem">) {
+export function getHomeSummary(storage?: Pick<Storage, "getItem" | "setItem">) {
   return getLibrarySummary(storage);
 }
 
