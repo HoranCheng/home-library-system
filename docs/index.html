@@ -1,0 +1,369 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>家用图书管理系统 v0.1.1</title>
+  <style>
+    :root {
+      --bg:#0b1020; --bg2:#111935; --card:#151f42; --line:rgba(255,255,255,.09);
+      --text:#eef2ff; --muted:#97a3cc; --accent:#6ea8fe; --accent2:#89b9ff;
+      --ok:#39d98a; --warn:#ffcc66; --danger:#ff7a7a;
+      --safe-bottom: env(safe-area-inset-bottom, 12px);
+    }
+    * { box-sizing:border-box; }
+    body {
+      margin:0; color:var(--text);
+      font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","PingFang SC",sans-serif;
+      background:linear-gradient(180deg,var(--bg),var(--bg2));
+    }
+    .app { max-width:480px; margin:0 auto; min-height:100vh; padding:16px 16px calc(var(--safe-bottom) + 24px); }
+    .topbar { display:flex; align-items:center; justify-content:space-between; }
+    .pill { display:inline-flex; align-items:center; gap:6px; padding:6px 10px; background:#1a244d; border-radius:999px; color:#c7d5ff; font-size:12px; }
+    h1 { margin:12px 0 6px; font-size:28px; }
+    .muted { color:var(--muted); }
+    .card {
+      margin-top:16px; background:rgba(21,31,66,.94); border:1px solid var(--line);
+      border-radius:20px; padding:16px; box-shadow:0 12px 36px rgba(0,0,0,.25);
+    }
+    .segmented { display:flex; gap:8px; background:#0d1533; border-radius:16px; padding:6px; margin-top:14px; }
+    .segmented button {
+      flex:1; border:0; border-radius:12px; padding:12px; font-size:15px; font-weight:700;
+      background:transparent; color:#c8d3ff;
+    }
+    .segmented button.active { background:var(--accent); color:#091122; }
+    .hero { margin-top:14px; padding:16px; border-radius:18px; background:linear-gradient(180deg,#1a2754,#131c3e); border:1px solid var(--line); }
+    .hero h2 { margin:0 0 8px; font-size:22px; }
+    .hero p { margin:0; color:#c8d3ff; line-height:1.45; }
+    .actions { display:flex; gap:10px; margin-top:14px; }
+    button.btn {
+      width:100%; border:0; border-radius:14px; padding:14px 16px; font-size:16px; font-weight:700;
+      cursor:pointer;
+    }
+    .primary { background:var(--accent); color:#081120; }
+    .secondary { background:#26335f; color:#eef2ff; }
+    .ghost { background:transparent; color:#eef2ff; border:1px solid var(--line); }
+    .section-title { font-size:18px; margin:0 0 10px; }
+    .field { margin-top:12px; }
+    .field label { display:block; margin-bottom:6px; font-size:14px; color:#d7e0ff; }
+    .field input, .field textarea {
+      width:100%; border-radius:14px; border:1px solid var(--line); background:#0b1430; color:#eef2ff;
+      padding:13px 14px; font-size:16px;
+    }
+    .field textarea { min-height:120px; resize:vertical; }
+    .hint { font-size:13px; color:var(--muted); margin-top:8px; line-height:1.45; }
+    .notice { margin-top:12px; padding:12px 14px; border-radius:14px; font-size:14px; line-height:1.5; }
+    .notice.ok { background:rgba(57,217,138,.14); color:#baf5da; }
+    .notice.warn { background:rgba(255,204,102,.14); color:#ffe4a6; }
+    .notice.err { background:rgba(255,122,122,.14); color:#ffd0d0; }
+    .summary { display:grid; grid-template-columns:repeat(3,1fr); gap:10px; margin-top:12px; }
+    .metric { background:#10193a; border:1px solid var(--line); border-radius:16px; padding:12px; text-align:center; }
+    .metric strong { display:block; font-size:22px; }
+    .book-list { margin-top:12px; }
+    .book-item { padding:12px 0; border-top:1px solid var(--line); }
+    .book-item:first-child { border-top:0; padding-top:0; }
+    .book-item h3 { margin:0 0 4px; font-size:16px; }
+    pre { margin:12px 0 0; padding:12px; border-radius:14px; background:#0a1128; color:#d7e0ff; white-space:pre-wrap; word-break:break-word; font-size:12px; }
+    .bottom-nav {
+      position:sticky; bottom:0; display:flex; gap:8px; margin-top:18px; padding:10px;
+      background:rgba(8,12,28,.86); border:1px solid var(--line); border-radius:18px; backdrop-filter:blur(10px);
+    }
+    .bottom-nav div { flex:1; text-align:center; padding:10px 8px; color:#c8d3ff; font-size:13px; }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <div class="topbar">
+      <div class="pill">📚 v0.1.1 可测试预览</div>
+      <div class="pill" id="modePill">当前模式：扫码</div>
+    </div>
+
+    <h1>家用图书管理系统</h1>
+    <p class="muted">这就是给你测试的真实产品页风格预览版。手机上直接点流程即可。</p>
+
+    <div class="card">
+      <div class="segmented">
+        <button id="scanTab" class="active">扫码入库</button>
+        <button id="manualTab">手动录入</button>
+      </div>
+
+      <div class="hero" id="hero">
+        <h2 id="heroTitle">扫码入库</h2>
+        <p id="heroDesc">适合手边有条码的新书。当前预览版用“模拟扫码失败”来走兜底流程。</p>
+      </div>
+
+      <div class="actions" id="scanActions">
+        <button class="btn primary" id="scanBtn">开始扫描</button>
+        <button class="btn secondary" id="scanFailBtn">无条码？去手动录入</button>
+      </div>
+      <div id="scanNotice"></div>
+    </div>
+
+    <div class="card" id="manualCard">
+      <h2 class="section-title">手动录入</h2>
+      <div class="field">
+        <label>ISBN</label>
+        <input id="isbn" placeholder="9787111128069" />
+      </div>
+      <div class="field">
+        <label>书名</label>
+        <input id="title" placeholder="例如：计算机程序的构造和解释" />
+      </div>
+      <div class="field">
+        <label>作者</label>
+        <input id="author" placeholder="例如：Harold Abelson" />
+      </div>
+      <div class="actions">
+        <button class="btn primary" id="saveBtn">保存图书</button>
+        <button class="btn ghost" id="fillDemoBtn">填入示例</button>
+      </div>
+      <div class="hint">保存后会进入下方图书列表。若 ISBN 非法或疑似重复，会在这里给出提示。</div>
+      <div id="manualNotice"></div>
+    </div>
+
+    <div class="card">
+      <h2 class="section-title">图书概览</h2>
+      <div class="summary">
+        <div class="metric"><strong id="totalCount">0</strong><span class="muted">总图书</span></div>
+        <div class="metric"><strong id="sortCount">0</strong><span class="muted">待整理</span></div>
+        <div class="metric"><strong id="inCount">0</strong><span class="muted">已入库</span></div>
+      </div>
+      <div class="book-list" id="bookList"></div>
+    </div>
+
+    <div class="card">
+      <h2 class="section-title">设置 / 导出导入</h2>
+      <div class="actions">
+        <button class="btn secondary" id="exportJsonBtn">导出 JSON</button>
+        <button class="btn secondary" id="exportCsvBtn">导出 CSV</button>
+      </div>
+      <div class="field">
+        <label>导入 JSON（把之前导出的内容贴进来）</label>
+        <textarea id="importText" placeholder="粘贴 JSON 后，先点“校验导入”，再点“执行导入”"></textarea>
+      </div>
+      <div class="actions">
+        <button class="btn primary" id="validateBtn">校验导入</button>
+        <button class="btn ghost" id="importBtn">执行导入</button>
+      </div>
+      <div id="settingsNotice"></div>
+      <pre id="exportOutput">这里会显示导出内容预览…</pre>
+    </div>
+
+    <div class="bottom-nav">
+      <div>🏠 首页</div>
+      <div>🔎 搜索</div>
+      <div>🧹 整理</div>
+    </div>
+  </div>
+
+  <script>
+    const BOOKS_KEY = 'lib:books:v1';
+    const META_KEY = 'lib:meta:v1';
+    const MODE_KEY = 'lib:home:mode:v1';
+
+    function makeId() {
+      try {
+        if (globalThis.crypto && typeof globalThis.crypto.randomUUID === 'function') {
+          return globalThis.crypto.randomUUID();
+        }
+      } catch {}
+      return `book-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    }
+    function loadBooks() {
+      try { return JSON.parse(localStorage.getItem(BOOKS_KEY) || '[]'); }
+      catch { return []; }
+    }
+    function loadMeta() {
+      try { return JSON.parse(localStorage.getItem(META_KEY) || '{"schemaVersion":1,"updatedAt":"1970-01-01T00:00:00.000Z"}'); }
+      catch { return { schemaVersion: 1, updatedAt: new Date(0).toISOString() }; }
+    }
+    function saveBooks(books) {
+      const meta = { ...loadMeta(), schemaVersion: 1, updatedAt: new Date().toISOString() };
+      localStorage.setItem(BOOKS_KEY, JSON.stringify(books));
+      localStorage.setItem(META_KEY, JSON.stringify(meta));
+    }
+    function getMode() { return localStorage.getItem(MODE_KEY) === 'manual' ? 'manual' : 'scan'; }
+    function setMode(mode) { localStorage.setItem(MODE_KEY, mode); render(); }
+    function makeNotice(kind, text) { return `<div class="notice ${kind}">${text}</div>`; }
+    function escapeHtml(v) {
+      return String(v ?? '').replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;').replaceAll("'", '&#39;');
+    }
+
+    const els = {
+      modePill: document.getElementById('modePill'),
+      scanTab: document.getElementById('scanTab'),
+      manualTab: document.getElementById('manualTab'),
+      heroTitle: document.getElementById('heroTitle'),
+      heroDesc: document.getElementById('heroDesc'),
+      scanBtn: document.getElementById('scanBtn'),
+      scanFailBtn: document.getElementById('scanFailBtn'),
+      scanNotice: document.getElementById('scanNotice'),
+      isbn: document.getElementById('isbn'),
+      title: document.getElementById('title'),
+      author: document.getElementById('author'),
+      saveBtn: document.getElementById('saveBtn'),
+      fillDemoBtn: document.getElementById('fillDemoBtn'),
+      manualNotice: document.getElementById('manualNotice'),
+      totalCount: document.getElementById('totalCount'),
+      sortCount: document.getElementById('sortCount'),
+      inCount: document.getElementById('inCount'),
+      bookList: document.getElementById('bookList'),
+      exportJsonBtn: document.getElementById('exportJsonBtn'),
+      exportCsvBtn: document.getElementById('exportCsvBtn'),
+      importText: document.getElementById('importText'),
+      validateBtn: document.getElementById('validateBtn'),
+      importBtn: document.getElementById('importBtn'),
+      settingsNotice: document.getElementById('settingsNotice'),
+      exportOutput: document.getElementById('exportOutput')
+    };
+
+    function render() {
+      const mode = getMode();
+      els.modePill.textContent = `当前模式：${mode === 'scan' ? '扫码' : '手动'}`;
+      els.scanTab.classList.toggle('active', mode === 'scan');
+      els.manualTab.classList.toggle('active', mode === 'manual');
+      els.heroTitle.textContent = mode === 'scan' ? '扫码入库' : '手动录入';
+      els.heroDesc.textContent = mode === 'scan'
+        ? '适合手边有条码的新书。当前预览版用“模拟扫码失败”来走兜底流程。'
+        : '适合旧书、无条码图书。填写 ISBN / 书名 / 作者后即可保存。';
+      els.scanBtn.textContent = mode === 'scan' ? '开始扫描' : '保存图书';
+      els.scanFailBtn.textContent = mode === 'scan' ? '无条码？去手动录入' : '切换到扫码入库';
+
+      const books = loadBooks();
+      els.totalCount.textContent = String(books.length);
+      els.sortCount.textContent = String(books.filter(b => b.status === 'to_be_sorted').length);
+      els.inCount.textContent = String(books.filter(b => b.status === 'in_library').length);
+      els.bookList.innerHTML = books.length
+        ? books.slice().reverse().map(b => `
+          <div class="book-item">
+            <h3>${escapeHtml(b.title || '未命名图书')}</h3>
+            <div class="muted">${escapeHtml(b.author || '未知作者')} · ${escapeHtml(b.isbn || '无 ISBN')} · ${b.status === 'to_be_sorted' ? '待整理' : '已入库'}</div>
+          </div>`).join('')
+        : '<div class="muted" style="margin-top:12px">还没有图书，先录入一本试试。</div>';
+    }
+
+    function validIsbn(v) {
+      const s = (v || '').replace(/[^0-9Xx]/g, '');
+      return s.length === 0 || s.length === 10 || s.length === 13;
+    }
+
+    els.scanTab.onclick = () => setMode('scan');
+    els.manualTab.onclick = () => setMode('manual');
+
+    els.scanBtn.onclick = () => {
+      if (getMode() === 'scan') {
+        els.scanNotice.innerHTML = makeNotice('warn', '预览版暂未接真实摄像头扫描，这里先走失败兜底流程。你可以点“无条码？去手动录入”。');
+      } else {
+        els.saveBtn.click();
+      }
+    };
+
+    els.scanFailBtn.onclick = () => {
+      if (getMode() === 'scan') {
+        setMode('manual');
+        els.scanNotice.innerHTML = makeNotice('warn', '没识别到条码，已切换到手动录入。你可以继续填写 ISBN / 书名 / 作者。');
+      } else {
+        setMode('scan');
+      }
+    };
+
+    els.fillDemoBtn.onclick = () => {
+      els.isbn.value = '9787111128069';
+      els.title.value = '计算机程序的构造和解释';
+      els.author.value = 'Harold Abelson';
+    };
+
+    els.saveBtn.onclick = () => {
+      try {
+        const isbn = els.isbn.value.trim();
+        const title = els.title.value.trim();
+        const author = els.author.value.trim();
+        if (!title) {
+          els.manualNotice.innerHTML = makeNotice('err', '请至少填写书名。');
+          return;
+        }
+        if (!validIsbn(isbn)) {
+          els.manualNotice.innerHTML = makeNotice('err', 'ISBN 格式不合法，请输入 10 位或 13 位。');
+          return;
+        }
+        const books = loadBooks();
+        const duplicate = books.find(b => (isbn && b.isbn === isbn) || (b.title === title && b.author === author));
+        if (duplicate) {
+          els.manualNotice.innerHTML = makeNotice('warn', '疑似重复：系统发现相同 ISBN 或书名+作者组合。');
+          return;
+        }
+        books.push({
+          id: makeId(), isbn, title, author,
+          status: 'to_be_sorted', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString()
+        });
+        saveBooks(books);
+        els.manualNotice.innerHTML = makeNotice('ok', `保存成功：${title}`);
+        els.isbn.value = ''; els.title.value = ''; els.author.value = '';
+        render();
+      } catch (e) {
+        els.manualNotice.innerHTML = makeNotice('err', `保存失败：${e.message || '未知错误'}`);
+      }
+    };
+
+    els.exportJsonBtn.onclick = () => {
+      const payload = { books: loadBooks(), meta: loadMeta() };
+      els.exportOutput.textContent = JSON.stringify(payload, null, 2);
+      els.settingsNotice.innerHTML = makeNotice('ok', 'JSON 导出已生成，可直接复制。');
+    };
+
+    els.exportCsvBtn.onclick = () => {
+      const books = loadBooks();
+      const rows = ['id,title,authors,isbn13,isbn10,edition,status,createdAt,updatedAt'];
+      for (const b of books) {
+        const isbnRaw = String(b.isbn || '').replace(/[^0-9Xx]/g, '');
+        const isbn13 = isbnRaw.length === 13 ? isbnRaw : '';
+        const isbn10 = isbnRaw.length === 10 ? isbnRaw.toUpperCase() : '';
+        rows.push([
+          b.id,
+          b.title,
+          b.author || '',
+          isbn13,
+          isbn10,
+          '',
+          b.status,
+          b.createdAt,
+          b.updatedAt
+        ].map(v => `"${String(v||'').replaceAll('"','""')}"`).join(','));
+      }
+      els.exportOutput.textContent = rows.join('\n');
+      els.settingsNotice.innerHTML = makeNotice('ok', 'CSV 导出已生成，可直接复制。');
+    };
+
+    els.validateBtn.onclick = () => {
+      try {
+        const parsed = JSON.parse(els.importText.value || '{}');
+        if (!Array.isArray(parsed.books)) throw new Error('缺少 books 数组');
+        if (!parsed.meta) throw new Error('缺少 meta 字段');
+        els.settingsNotice.innerHTML = makeNotice('ok', `校验通过：共 ${parsed.books.length} 本图书。`);
+      } catch (e) {
+        els.settingsNotice.innerHTML = makeNotice('err', `校验失败：${e.message}`);
+      }
+    };
+
+    els.importBtn.onclick = () => {
+      try {
+        const parsed = JSON.parse(els.importText.value || '{}');
+        if (!Array.isArray(parsed.books)) throw new Error('缺少 books 数组');
+        if (!parsed.meta) throw new Error('缺少 meta 字段');
+        if (!confirm(`即将用导入数据覆盖当前本地数据（共 ${parsed.books.length} 本）。确定继续吗？`)) {
+          els.settingsNotice.innerHTML = makeNotice('warn', '已取消导入。');
+          return;
+        }
+        localStorage.setItem(BOOKS_KEY, JSON.stringify(parsed.books));
+        localStorage.setItem(META_KEY, JSON.stringify(parsed.meta));
+        els.settingsNotice.innerHTML = makeNotice('ok', `导入成功：共 ${parsed.books.length} 本图书。`);
+        render();
+      } catch (e) {
+        els.settingsNotice.innerHTML = makeNotice('err', `导入失败：${e.message}`);
+      }
+    };
+
+    render();
+  </script>
+</body>
+</html>
