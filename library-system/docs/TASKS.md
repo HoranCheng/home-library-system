@@ -19,12 +19,21 @@
 
 - [T-012] QA edge-case matrix update and prioritization
   - Owner: Worker-Gemini
-  - Status: In Progress
-  - ETA: 1h
-  - Lease TTL: 30m (renew required)
+  - Status: Stale (ACP 会话不稳定，follow-up失败 code 4)
+  - ETA: 1h (expired)
+  - Lease TTL: 30m (expired)
   - Budget: 60 min / low token budget
   - Rollback: drop added QA-only docs/tests if noisy
-  - Last artifact: QA checklist pending
+  - Last artifact: none (仅 pending 描述，无可验证产出)
+
+- [T-015] QA edge-case matrix update and prioritization（重派）
+  - Owner: Worker-Claude
+  - Status: In Progress
+  - ETA: 45m
+  - Lease TTL: 30m (renew required)
+  - Budget: 60 min / low token budget
+  - Rollback: 仅文档/测试改动，可整组回滚
+  - Last artifact: reassignment initiated by Tech Lead
 
 ## Queue
 - [T-013] Release candidate checklist + final smoke
