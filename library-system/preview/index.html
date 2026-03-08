@@ -824,10 +824,21 @@
         if (!els.title.value && info.title) els.title.value = info.title;
         if (!els.author.value && Array.isArray(info.authors) && info.authors.length) els.author.value = info.authors.join(', ');
         if (!els.category.value && Array.isArray(info.categories) && info.categories.length) els.category.value = String(info.categories[0]).slice(0, 24);
-        if (!els.description.value && info.description) els.description.value = String(info.description).slice(0, 280);
+        if (!els.description.value && info.description) els.description.value = String(info.description).replace(/<[^>]+>/g, '').slice(0, 280);
         if (!els.publishedYear.value && info.publishedDate) {
           const match = String(info.publishedDate).match(/(19|20)\d{2}/);
           if (match) els.publishedYear.value = match[0];
+        }
+      };
+      const applyCrossref = (item) => {
+        if (!item) return;
+        if (!els.title.value && Array.isArray(item.title) && item.title[0]) els.title.value = item.title[0];
+        if (!els.author.value && Array.isArray(item.author) && item.author.length) {
+          els.author.value = item.author.map(a => [a.given, a.family].filter(Boolean).join(' ')).filter(Boolean).join(', ');
+        }
+        if (!els.publishedYear.value) {
+          const year = item.published?.['date-parts']?.[0]?.[0] || item.published_print?.['date-parts']?.[0]?.[0];
+          if (year) els.publishedYear.value = String(year);
         }
       };
 
@@ -839,12 +850,31 @@
           applyOpenLibrary(olData[`ISBN:${isbn}`]);
         }
 
-        const stillMissing = !els.title.value || !els.author.value || !els.category.value || !els.description.value || !els.publishedYear.value;
+        let sourceHits = [];
+        if (els.title.value || els.author.value || els.category.value || els.description.value || els.publishedYear.value) sourceHits.push('Open Library');
+
+        let stillMissing = !els.title.value || !els.author.value || !els.category.value || !els.description.value || !els.publishedYear.value;
         if (stillMissing) {
           const gbResp = await fetch(`https://www.googleapis.com/books/v1/volumes?q=isbn:${encodeURIComponent(isbn)}`);
           if (gbResp.ok) {
             const gbData = await gbResp.json();
-            if (Array.isArray(gbData.items) && gbData.items.length) applyGoogleBooks(gbData.items[0]);
+            if (Array.isArray(gbData.items) && gbData.items.length) {
+              applyGoogleBooks(gbData.items[0]);
+              sourceHits.push('Google Books');
+            }
+          }
+        }
+
+        stillMissing = !els.title.value || !els.author.value || !els.publishedYear.value;
+        if (stillMissing) {
+          const crResp = await fetch(`https://api.crossref.org/works?filter=isbn:${encodeURIComponent(isbn)}&rows=1`);
+          if (crResp.ok) {
+            const crData = await crResp.json();
+            const item = crData?.message?.items?.[0];
+            if (item) {
+              applyCrossref(item);
+              sourceHits.push('Crossref');
+            }
           }
         }
 
@@ -856,7 +886,8 @@
         const authorFilled = Boolean(els.author.value);
         const categoryFilled = Boolean(els.category.value);
         const yearFilled = Boolean(els.publishedYear.value);
-        setNotice('ok', `${sourceLabel}：${isbn}${titleFilled ? ` · ${escapeHtml(els.title.value)}` : ''}${authorFilled ? ` · ${escapeHtml(els.author.value)}` : ''}${categoryFilled ? ` · ${escapeHtml(els.category.value)}` : ''}${yearFilled ? ` · ${escapeHtml(els.publishedYear.value)}` : ''}`);
+        const sourceText = sourceHits.length ? `（来源：${sourceHits.join(' / ')}）` : '';
+        setNotice('ok', `${sourceLabel}：${isbn}${titleFilled ? ` · ${escapeHtml(els.title.value)}` : ''}${authorFilled ? ` · ${escapeHtml(els.author.value)}` : ''}${categoryFilled ? ` · ${escapeHtml(els.category.value)}` : ''}${yearFilled ? ` · ${escapeHtml(els.publishedYear.value)}` : ''} ${escapeHtml(sourceText)}`);
         return { found: true };
       } catch (e) {
         setNotice('warn', `${sourceLabel}：${isbn}，但联网查询书目信息失败，请手动补充后保存。`);
