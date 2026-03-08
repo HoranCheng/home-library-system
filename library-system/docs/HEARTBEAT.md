@@ -5,13 +5,28 @@ Use machine-readable heartbeat entries (append newest first):
 ```json
 {
   "agent": "Tech-Lead",
+  "task_id": "T-013",
+  "status": "In Progress",
+  "progress": 20,
+  "last_update": "2026-03-08T22:25:00+11:00",
+  "last_artifact": "tests:52/52; T-015 accepted",
+  "blocker": "none",
+  "next_eta_min": 30,
+  "lease_expires_at": "2026-03-08T22:55:00+11:00",
+  "retry_count_same_error": 0
+}
+```
+
+```json
+{
+  "agent": "Tech-Lead",
   "task_id": "T-015",
-  "status": "Review",
+  "status": "Done",
   "progress": 100,
-  "last_update": "2026-03-08T22:02:00+11:00",
+  "last_update": "2026-03-08T22:25:00+11:00",
   "last_artifact": "commit:59cc32b; tests:52/52",
   "blocker": "none",
-  "next_eta_min": 10,
+  "next_eta_min": 0,
   "lease_expires_at": "2026-03-08T22:32:00+11:00",
   "retry_count_same_error": 0
 }

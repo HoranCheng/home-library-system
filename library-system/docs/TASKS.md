@@ -7,15 +7,21 @@
 - Done
 - Stale (lease expired)
 
-## Review
+## In Progress
+- [T-013] Release candidate checklist + final smoke
+  - Owner: Tech-Lead
+  - Status: In Progress
+  - ETA: 30m
+  - Lease TTL: 30m
+  - Budget: 45 min / low token budget
+  - Rollback: 仅发布文档与流程变更，可回滚提交
+  - Last artifact: test run `52/52` passed
+
+## Done
 - [T-015] QA edge-case matrix update and prioritization（重派）
   - Owner: Worker-Claude
-  - Status: Review（产出已到，等待 Tech Lead 验收）
-  - ETA: done
-  - Lease TTL: 30m
-  - Budget: 60 min / low token budget
-  - Rollback: 仅文档/测试改动，可整组回滚
-  - Last artifact: commit `59cc32b`
+  - Status: Done（Tech Lead 已验收）
+  - Evidence: commit `59cc32b`, tests `52/52`
 
 ## Stale
 - [T-011] UI interaction final polish (home/manual/settings)
@@ -37,7 +43,6 @@
   - Last artifact: none（仅 pending 描述，无可验证产出）
 
 ## Queue
-- [T-013] Release candidate checklist + final smoke
 - [T-014] iPhone usage guide + launch notes
 
 ## Escalation policy
