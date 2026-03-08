@@ -170,12 +170,11 @@
       </div>
       <div class="sticky-actions">
         <div class="actions">
-          <button class="btn primary" id="saveBtn">加入图书</button>
-          <button class="btn secondary" id="saveNextBtn">加入并下一本</button>
-          <button class="btn ghost" id="fillDemoBtn">填入示例</button>
+          <button class="btn secondary" id="lookupBtn">搜索 ISBN</button>
+          <button class="btn primary" id="saveBtn">导入库中</button>
         </div>
       </div>
-      <div class="hint">建议流程：扫 ISBN → 审阅自动带出的信息 → 直接“加入图书”或“加入并下一本”。</div>
+      <div class="hint">建议流程：输入或扫描 ISBN → 搜索并补全信息 → 审阅/补充 → 导入库中。</div>
       <div id="manualNotice"></div>
     </div>
 
@@ -310,9 +309,8 @@
       locationPresetChips: document.getElementById('locationPresetChips'),
       description: document.getElementById('description'),
       notes: null,
+      lookupBtn: document.getElementById('lookupBtn'),
       saveBtn: document.getElementById('saveBtn'),
-      saveNextBtn: document.getElementById('saveNextBtn'),
-      fillDemoBtn: document.getElementById('fillDemoBtn'),
       manualNotice: document.getElementById('manualNotice'),
       currentReadingCard: document.getElementById('currentReadingCard'),
       detailModalRoot: document.getElementById('detailModalRoot'),
@@ -467,18 +465,16 @@
       if (scannerActive) { stopScanner(); } else { startScanner(); }
     };
 
-    els.fillDemoBtn.onclick = () => {
-      els.isbn.value = '9787111128069';
-      els.title.value = '计算机程序的构造和解释';
-      els.author.value = 'Harold Abelson';
-      els.category.value = '技术';
-      els.readingStatus.value = '在读';
-      els.readingProgress.value = '35';
-      els.publishedYear.value = '2004';
-      els.location.value = '书房右侧书架';
-      els.description.value = '一本经典的计算机科学入门与思想训练著作。';
-      els.notes.value = '解释器和抽象层次那几章值得反复读。';
-    };
+    async function lookupCurrentIsbn() {
+      const isbn = els.isbn.value.trim();
+      const compact = isbn.replace(/[^0-9Xx]/g, '');
+      if (!(compact.length === 10 || compact.length === 13)) {
+        els.manualNotice.innerHTML = makeNotice('warn', '请先输入有效的 10 位或 13 位 ISBN。');
+        return false;
+      }
+      const result = await fillBookMetaByIsbn(isbn, 'manual', '已搜索 ISBN');
+      return Boolean(result?.found);
+    }
 
     async function saveCurrentBook(options = {}) {
       const isbn = els.isbn.value.trim();
@@ -557,16 +553,24 @@
       return true;
     }
 
+    els.lookupBtn.onclick = async () => {
+      try {
+        await lookupCurrentIsbn();
+      } catch (e) {
+        els.manualNotice.innerHTML = makeNotice('err', `搜索失败：${e.message || '未知错误'}`);
+      }
+    };
+
+    els.isbn.addEventListener('change', async () => {
+      const compact = String(els.isbn.value || '').replace(/[^0-9Xx]/g, '');
+      if ((compact.length === 10 || compact.length === 13) && !els.title.value) {
+        try { await lookupCurrentIsbn(); } catch {}
+      }
+    });
+
     els.saveBtn.onclick = async () => {
       try {
         await saveCurrentBook();
-      } catch (e) {
-        els.manualNotice.innerHTML = makeNotice('err', `保存失败：${e.message || '未知错误'}`);
-      }
-    };
-    els.saveNextBtn.onclick = async () => {
-      try {
-        await saveCurrentBook({ next: true });
       } catch (e) {
         els.manualNotice.innerHTML = makeNotice('err', `保存失败：${e.message || '未知错误'}`);
       }
