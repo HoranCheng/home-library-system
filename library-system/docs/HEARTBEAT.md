@@ -6,6 +6,22 @@ Use machine-readable heartbeat entries (append newest first):
 {
   "agent": "Tech-Lead",
   "task_id": "T-017",
+  "status": "Done",
+  "progress": 100,
+  "last_update": "2026-03-10T06:09:00+11:00",
+  "last_artifact": "commits: 3cf80e7, 7a44009, f517fc5, d1b2f70, 18248de",
+  "blocker": "none",
+  "next_eta_min": 0,
+  "lease_expires_at": null,
+  "retry_count_same_error": 0,
+  "note": "Tech Lead 手动收口，迭代任务完成"
+}
+```
+
+```json
+{
+  "agent": "Tech-Lead",
+  "task_id": "T-017",
   "status": "Stale",
   "progress": 86,
   "last_update": "2026-03-09T15:31:34+11:00",

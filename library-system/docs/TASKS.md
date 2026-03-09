@@ -11,16 +11,15 @@
 - None
 
 ## Stale
-- [T-017] 连续迭代收口（录入流 / 元数据语言 / UI 体验）
-  - Owner: Tech-Lead
-  - Status: Stale（15:25–15:31 +11:00 虽有连续新 artifact，一度解除旧 lease 告警；但截至 17:00 +11:00 仍无新的 heartbeat / lease 续租，现重新进入 stale 流程）
-  - Last known artifact: commits `3cf80e7`, `7a44009`, `f517fc5`, `d1b2f70`, `18248de`
-  - Latest delta: `18248de` — remove legacy dark sticky action bar
-  - Lease expired: 2026-03-09 15:30 +11:00
-  - Blocker: 缺少 fresh heartbeat / lease renewal；需要 Tech Lead 重新确认 owner、续租或重排
-  - Next action: 按 L2 介入，补一条新 heartbeat 并决定继续推进、重拆或重派
+- None
 
 ## Done
+- [T-017] 连续迭代收口（录入流 / 元数据语言 / UI 体验）
+  - Owner: Tech-Lead
+  - Status: Done（Tech Lead 手动收口，2026-03-10）
+  - Evidence: commits `3cf80e7`, `7a44009`, `f517fc5`, `d1b2f70`, `18248de`
+  - Latest delta: `18248de` — remove legacy dark sticky action bar
+
 - [T-016] 真扫码网页版（下一版）
   - Owner: Worker-Claude → Tech Lead 收口
   - Status: Done（按用户当前产品方向收口，后续能力拆入新迭代）
