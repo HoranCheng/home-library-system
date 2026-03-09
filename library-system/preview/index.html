@@ -71,6 +71,8 @@
     .book-item h3 { margin:0 0 4px; font-size:16px; }
     .chips { display:flex; flex-wrap:wrap; gap:8px; margin-top:12px; }
     .chip { display:inline-flex; align-items:center; gap:6px; padding:8px 10px; border-radius:999px; background:#10193a; border:1px solid var(--line); color:#d7e0ff; font-size:13px; }
+    button.chip { cursor:pointer; }
+    .chip.active { background:var(--accent); color:#081120; border-color:transparent; font-weight:700; }
     .subsection-title { margin:16px 0 8px; font-size:15px; color:#d7e0ff; }
     .book-head { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; }
     .menu-wrap { position:relative; }
@@ -90,7 +92,7 @@
     .scanner-aim-inner { width:220px; height:90px; border:2.5px solid var(--accent); border-radius:10px; box-shadow:0 0 0 9999px rgba(0,0,0,.45); }
     .scanner-cancel { position:absolute; top:10px; right:10px; background:rgba(0,0,0,.65); color:#fff; border:0; border-radius:10px; padding:7px 14px; font-size:14px; cursor:pointer; font-weight:600; }
     .hidden { display:none !important; }
-    .bottom-nav button { flex:1; text-align:center; padding:10px 8px; color:#c8d3ff; font-size:13px; background:transparent; border:0; border-radius:12px; }
+    .bottom-nav button { flex:1; text-align:center; padding:10px 8px; color:#c8d3ff; font-size:13px; background:transparent; border:0; border-radius:12px; min-height:44px; transition:background-color .15s ease,color .15s ease; -webkit-tap-highlight-color: transparent; appearance:none; }
     .bottom-nav button.active { background:#1a244d; color:#eef2ff; font-weight:700; }
     .cover-card { display:flex; gap:14px; align-items:flex-start; }
     .cover-thumb { width:86px; height:122px; border-radius:14px; object-fit:cover; background:#0b1430; border:1px solid var(--line); }
@@ -202,8 +204,12 @@
       <h2 class="section-title">搜索图书</h2>
       <div class="field">
         <label>关键词</label>
-        <input id="searchInput" placeholder="搜书名 / 作者 / ISBN / 分类" />
+        <div class="input-with-action">
+          <input id="searchInput" placeholder="搜书名 / 作者 / ISBN / 分类" />
+          <button class="input-action-btn" id="searchScanBtn" title="扫码搜索 ISBN">📷</button>
+        </div>
       </div>
+      <div class="hint">也可以直接扫码 ISBN，快速确认库里有没有同一本书。</div>
       <div class="chips" id="searchSummary"></div>
       <div class="book-list" id="searchResults"></div>
     </div>
@@ -296,7 +302,11 @@
       const page = localStorage.getItem(PAGE_KEY);
       return ['home', 'search', 'organize', 'settings'].includes(page) ? page : 'home';
     }
-    function setPage(page) { localStorage.setItem(PAGE_KEY, page); render(); }
+    function setPage(page, options = {}) {
+      localStorage.setItem(PAGE_KEY, page);
+      if (options.mode) localStorage.setItem(MODE_KEY, options.mode);
+      render();
+    }
     function makeNotice(kind, text) { return `<div class="notice ${kind}">${text}</div>`; }
     function escapeHtml(v) {
       return String(v ?? '').replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;').replaceAll("'", '&#39;');
@@ -307,6 +317,7 @@
       scanNotice: document.getElementById('scanNotice'),
       isbn: document.getElementById('isbn'),
       isbnScanBtn: document.getElementById('isbnScanBtn'),
+      searchScanBtn: document.getElementById('searchScanBtn'),
       title: document.getElementById('title'),
       author: document.getElementById('author'),
       category: document.getElementById('category'),
@@ -463,7 +474,7 @@
       }, {});
       const sortedCategories = Object.entries(categoryCounts).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], 'zh-CN'));
       els.categoryChips.innerHTML = sortedCategories.length
-        ? sortedCategories.map(([name, count]) => `<div class="chip">${escapeHtml(name)} · ${count}</div>`).join('')
+        ? sortedCategories.map(([name, count]) => `<button class="chip category-filter-chip ${selectedCategoryFilter === name ? 'active' : ''}" data-category="${escapeHtml(name)}">${escapeHtml(name)} · ${count}</button>`).join('') + (selectedCategoryFilter ? `<button class="chip category-filter-chip" data-category="">清除筛选</button>` : '')
         : '<div class="muted">还没有分类数据，先录入几本书试试。</div>';
 
       els.bookList.innerHTML = books.length
@@ -476,11 +487,13 @@
         : '<div class="muted">先填写一次存放位置，后面这里就会自动记住。</div>';
 
       const query = String(els.searchInput?.value || '').trim().toLowerCase();
-      const matchedBooks = query
-        ? books.filter(b => [b.title, b.author, b.isbn, b.category].some(v => String(v || '').toLowerCase().includes(query)))
-        : books;
+      const matchedBooks = books.filter(b => {
+        const queryMatched = !query || [b.title, b.author, b.isbn, b.category].some(v => String(v || '').toLowerCase().includes(query));
+        const categoryMatched = !selectedCategoryFilter || String(b.category || '').trim() === selectedCategoryFilter;
+        return queryMatched && categoryMatched;
+      });
       els.searchSummary.innerHTML = books.length
-        ? `<div class="chip">共 ${books.length} 本</div><div class="chip">匹配 ${matchedBooks.length} 本</div>`
+        ? `<div class="chip">共 ${books.length} 本</div><div class="chip">匹配 ${matchedBooks.length} 本</div>${selectedCategoryFilter ? `<button class="chip category-filter-chip active" data-category="">分类：${escapeHtml(selectedCategoryFilter)} ×</button>` : ''}`
         : '<div class="muted">当前还没有图书数据。</div>';
       els.searchResults.innerHTML = matchedBooks.length
         ? matchedBooks.map(b => renderBookRow(b)).join('')
@@ -499,21 +512,29 @@
       return s.length === 0 || s.length === 10 || s.length === 13;
     }
 
-    els.navHome.onclick = () => { setPage('home'); setMode('dashboard'); };
+    els.navHome.onclick = () => setPage('home', { mode: 'dashboard' });
     els.navSearch.onclick = () => setPage('search');
     els.navOrganize.onclick = () => setPage('organize');
     els.navSettings.onclick = () => setPage('settings');
-    els.openEntryBtn.onclick = () => { setPage('home'); setMode('entry'); window.scrollTo({ top: 0, behavior: 'smooth' }); };
+    els.openEntryBtn.onclick = () => { setPage('home', { mode: 'entry' }); window.scrollTo({ top: 0, behavior: 'smooth' }); };
     els.jumpOrganizeBtn.onclick = () => setPage('organize');
 
     els.isbnScanBtn.onclick = (event) => {
       event.preventDefault();
+      scannerIntent = 'entry';
       if (scannerActive) { stopScanner(); }
       else {
         clearDraftFields({ keepIsbn: false });
         render();
         startScanner();
       }
+    };
+    els.searchScanBtn.onclick = (event) => {
+      event.preventDefault();
+      scannerIntent = 'search';
+      setPage('search');
+      if (scannerActive) stopScanner();
+      startScanner();
     };
 
     function clearDraftFields(options = {}) {
@@ -767,10 +788,18 @@
       const quickActionBtn = event.target.closest('.quick-action-btn');
       if (quickActionBtn) {
         const action = quickActionBtn.dataset.action;
-        if (action === 'entry') { setPage('home'); setMode('entry'); window.scrollTo({ top: 0, behavior: 'smooth' }); }
+        if (action === 'entry') { setPage('home', { mode: 'entry' }); window.scrollTo({ top: 0, behavior: 'smooth' }); }
         if (action === 'search') setPage('search');
         if (action === 'organize') setPage('organize');
         if (action === 'settings') setPage('settings');
+        return;
+      }
+
+      const categoryFilterChip = event.target.closest('.category-filter-chip');
+      if (categoryFilterChip) {
+        selectedCategoryFilter = categoryFilterChip.dataset.category || '';
+        setPage('search');
+        render();
         return;
       }
 
@@ -813,8 +842,7 @@
           els.saveBtn.textContent = '保存修改';
           lookupCompleted = true;
           setEntryMode('manual');
-          setPage('home');
-          setMode('entry');
+          setPage('home', { mode: 'entry' });
           els.manualNotice.innerHTML = makeNotice('warn', `正在编辑：${escapeHtml(book.title || '未命名图书')}`);
         } else if (menuAction.dataset.action === 'delete') {
           if (!confirm(`确定删除《${book.title || '未命名图书'}》吗？`)) return;
@@ -919,6 +947,8 @@
     let editingBookId = null;
     let lookupCompleted = false;
     let isbnLookupTimer = null;
+    let selectedCategoryFilter = '';
+    let scannerIntent = 'entry';
 
     function stopScanner() {
       scannerActive = false;
@@ -1061,6 +1091,14 @@
       stopScanner();
       const isbn = rawValue.replace(/[^0-9Xx]/g, '');
       if (isbn.length === 10 || isbn.length === 13) {
+        if (scannerIntent === 'search') {
+          selectedCategoryFilter = '';
+          els.searchInput.value = isbn;
+          setPage('search');
+          render();
+          els.scanNotice.innerHTML = makeNotice('ok', `已扫码搜索 ISBN：${escapeHtml(isbn)}`);
+          return;
+        }
         els.isbn.value = isbn;
         fillBookMetaByIsbn(isbn, 'scan');
       } else {
