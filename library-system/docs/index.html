@@ -499,16 +499,10 @@
     const PAGE_KEY = 'lib:page:v1';
     const ENTRY_KEY = 'lib:entry:v1';
     const LOCATION_PRESETS_KEY = 'lib:location-presets:v1';
-    const GBOOKS_KEY = 'lib:gbooks-api-key:v1';
-
-    // ── Google Books API Key ──────────────────────────────
-    // 把你的 key 粘贴到下面引号里，部署后所有用户自动生效。
-    // 申请地址：https://console.cloud.google.com/apis/credentials
-    const GBOOKS_BUILTIN_KEY = '';  // ← 在这里填入你的 API Key
+    // ── Google Books API 代理 ─────────────────────────────
+    // API Key 安全存在 Cloudflare Worker 里，前端不暴露任何 key
+    const GBOOKS_PROXY = 'https://maomao-books-proxy.henrycdev26.workers.dev';
     // ────────────────────────────────────────────────────────
-    function getGBooksApiKey() { return GBOOKS_BUILTIN_KEY || (localStorage.getItem(GBOOKS_KEY) || '').trim(); }
-    function setGBooksApiKey(v) { localStorage.setItem(GBOOKS_KEY, (v || '').trim()); }
-    function gbooksParam() { const k = getGBooksApiKey(); return k ? `&key=${encodeURIComponent(k)}` : ''; }
 
     function makeId() {
       try {
@@ -1007,28 +1001,7 @@
         <span class="setting-icon">${item.icon}</span>
         <div class="setting-info"><div class="setting-label">${item.label}</div><div class="setting-sub">${item.sub}</div></div>
         <span class="setting-arrow">›</span>
-      </div>`).join('') + (GBOOKS_BUILTIN_KEY ? '' : `
-        <div class="card" style="margin-top:18px;padding:16px">
-          <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px">
-            <div style="width:44px;height:44px;border-radius:12px;background:var(--accent-light);display:flex;align-items:center;justify-content:center;font-size:22px">🔑</div>
-            <div>
-              <div style="font-size:16px;font-weight:700">Google Books API</div>
-              <div style="font-size:12px;color:var(--muted);margin-top:2px">填入 API Key 可大幅提升识别成功率</div>
-            </div>
-          </div>
-          <div style="display:flex;gap:8px;align-items:center">
-            <input type="password" id="gbooksKeyInput" placeholder="填入你的 Google Books API Key"
-              value="${escapeHtml(getGBooksApiKey())}"
-              style="flex:1;padding:10px 12px;border:1.5px solid var(--border);border-radius:10px;font-size:14px;background:var(--surface);color:var(--text);outline:none">
-            <button id="gbooksKeySaveBtn" style="padding:10px 16px;border:none;border-radius:10px;background:var(--accent);color:#fff;font-size:14px;font-weight:600;cursor:pointer;white-space:nowrap">保存</button>
-          </div>
-          <div id="gbooksKeyStatus" style="font-size:12px;color:var(--muted);margin-top:8px">
-            ${getGBooksApiKey() ? '✅ 已配置，ISBN 查询将使用此 Key' : '未配置时使用公共额度，可能遇到限流'}
-          </div>
-          <div style="font-size:11px;color:var(--muted);margin-top:6px">
-            <a href="https://console.cloud.google.com/apis/credentials" target="_blank" rel="noopener" style="color:var(--accent)">前往 Google Cloud Console 获取 →</a>
-          </div>
-        </div>`);
+      </div>`).join('');
     }
 
     function validIsbn(v) {
@@ -1326,18 +1299,6 @@
         if (action === 'search') setPage('search');
         if (action === 'organize') setPage('organize');
         if (action === 'settings') setPage('settings');
-        return;
-      }
-
-      // Google Books API Key save
-      if (event.target.id === 'gbooksKeySaveBtn' || event.target.closest('#gbooksKeySaveBtn')) {
-        const input = document.getElementById('gbooksKeyInput');
-        const status = document.getElementById('gbooksKeyStatus');
-        const val = (input?.value || '').trim();
-        setGBooksApiKey(val);
-        if (status) status.innerHTML = val
-          ? '✅ 已保存，后续 ISBN 查询将使用此 Key'
-          : '已清除，将使用公共额度';
         return;
       }
 
@@ -1711,19 +1672,19 @@
         // Build all fetch URLs
         const olUrl = `https://openlibrary.org/api/books?bibkeys=ISBN:${encodeURIComponent(compact)}&format=json&jscmd=data`;
         const olSearchUrl = `https://openlibrary.org/search.json?isbn=${encodeURIComponent(compact)}&fields=title,author_name,subject,first_publish_year,cover_i,language,publisher&limit=3`;
-        const _gbk = gbooksParam();
-        const gbUrl = `https://www.googleapis.com/books/v1/volumes?q=isbn:${encodeURIComponent(compact)}&maxResults=5${_gbk}`;
+        const _gb = GBOOKS_PROXY;
+        const gbUrl = `${_gb}/?q=isbn:${encodeURIComponent(compact)}&maxResults=5`;
         const gbLangUrl = preferredLang
-          ? `https://www.googleapis.com/books/v1/volumes?q=isbn:${encodeURIComponent(compact)}&langRestrict=${encodeURIComponent(preferredLang)}&maxResults=5${_gbk}`
+          ? `${_gb}/?q=isbn:${encodeURIComponent(compact)}&langRestrict=${encodeURIComponent(preferredLang)}&maxResults=5`
           : null;
         const crUrl = `https://api.crossref.org/works?filter=isbn:${encodeURIComponent(compact)}&rows=3`;
         // Alt ISBN queries (ISBN-10 ↔ 13 conversion)
         const olAltUrl = altIsbn ? `https://openlibrary.org/api/books?bibkeys=ISBN:${encodeURIComponent(altIsbn)}&format=json&jscmd=data` : null;
-        const gbAltUrl = altIsbn ? `https://www.googleapis.com/books/v1/volumes?q=isbn:${encodeURIComponent(altIsbn)}&maxResults=3${_gbk}` : null;
+        const gbAltUrl = altIsbn ? `${_gb}/?q=isbn:${encodeURIComponent(altIsbn)}&maxResults=3` : null;
 
         // Additional search for CJK books: title-based Google Books search with Chinese language
         const gbTitleSearchUrl = preferredLang === 'zh'
-          ? `https://www.googleapis.com/books/v1/volumes?q=isbn:${encodeURIComponent(compact)}&langRestrict=zh&printType=books&maxResults=5${_gbk}`
+          ? `${_gb}/?q=isbn:${encodeURIComponent(compact)}&langRestrict=zh&printType=books&maxResults=5`
           : null;
 
         // Fire all requests in parallel (up to 8 sources)
