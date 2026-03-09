@@ -1193,13 +1193,18 @@
 
     // Category quality filter — used in both render() and fillBookMetaByIsbn
     const JUNK_CATEGORY_RE = /^(China|Chinese|Japan|Japanese|Korea|Korean|English|French|German|America|United States|Europe|Asia|Africa|India|Beijing|Shanghai|Tokyo|Seoul|London|New York|Paris|Berlin|General|Collections|Miscellaneous|Nonfiction|Fiction and nonfiction|Accessible book|Protected DAISY|Internet Archive Wishlist|In library|OverDrive|Large type|Lending library|Place|People|History|Geography|Social|Political|Biography|\d{2,4}(th|st|nd|rd)?\s*(century|Century)|[A-Z][a-z]+,\s*[A-Z])/i;
-    const TOO_SHORT_RE = /^.{0,2}$/;
     function isGoodCategory(raw) {
       const s = String(raw || '').trim();
-      if (!s || TOO_SHORT_RE.test(s)) return false;
+      if (!s) return false;
+      // CJK characters (Chinese/Japanese/Korean) are always valid as categories
+      if (/[\u4e00-\u9fff\u3040-\u30ff\uac00-\ud7af]/.test(s)) return true;
+      // Latin text: apply stricter checks
+      if (s.length <= 2) return false;                      // too short abbreviation
+      if (/[=:]/.test(s)) return false;                     // nyt:hardcover-fiction=20
+      if (/,\s*$/.test(s)) return false;                    // "Man-woman relationships,"
       if (JUNK_CATEGORY_RE.test(s)) return false;
-      if (/^\d{4}\s*[-–]\s*\d{4}$/.test(s)) return false;
-      if (/^[A-Z]{1,3}$/.test(s)) return false;
+      if (/^\d{4}\s*[-–]\s*\d{4}$/.test(s)) return false;  // date ranges
+      if (/^[A-Z]{1,3}$/.test(s)) return false;             // CN, PR etc.
       return true;
     }
     function pickBestCategory(items) {
