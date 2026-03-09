@@ -185,6 +185,7 @@
         <div class="field">
           <label>分类</label>
           <input id="category" placeholder="例如：技术 / 小说" />
+          <div class="chips" id="categoryPresets" style="margin-top:4px"></div>
         </div>
         <div class="field">
           <label>出版年份</label>
@@ -419,6 +420,13 @@
       const isbn = String(book?.isbn || '').replace(/[^0-9Xx]/g, '');
       return isbn ? `https://covers.openlibrary.org/b/isbn/${encodeURIComponent(isbn)}-M.jpg` : '';
     }
+    // Detect 1x1 placeholder images from OpenLibrary and hide them
+    function onCoverLoad(img) {
+      if (img.naturalWidth <= 2 && img.naturalHeight <= 2) {
+        img.style.background = 'var(--surface-2)';
+        img.removeAttribute('src');
+      }
+    }
 
     // ISBN-10 ↔ ISBN-13 conversion
     function isbn13to10(isbn13) {
@@ -578,7 +586,7 @@
         els.bookList.innerHTML = `<div class="book-grid">${byTime.map(b => {
           const cu = coverUrl(b);
           return `<div class="book-grid-item book-detail-btn" data-id="${escapeHtml(b.id)}">
-            <img src="${cu ? escapeHtml(cu) : ''}" alt="${escapeHtml(b.title || '')}" onerror="this.style.background='var(--surface-2)';this.alt=''" />
+            <img src="${cu ? escapeHtml(cu) : ''}" alt="${escapeHtml(b.title || '')}" onload="onCoverLoad(this)" onerror="this.style.background='var(--surface-2)';this.removeAttribute('src')" />
             <div class="book-grid-title">${escapeHtml(b.title || '未命名')}</div>
             <div class="book-grid-author">${escapeHtml(b.author || '未知作者')}</div>
           </div>`;
@@ -597,13 +605,24 @@
           }
           const cu = coverUrl(b);
           html += `<div class="book-grid-item book-detail-btn" data-id="${escapeHtml(b.id)}">
-            <img src="${cu ? escapeHtml(cu) : ''}" alt="${escapeHtml(b.title || '')}" onerror="this.style.background='var(--surface-2)';this.alt=''" />
+            <img src="${cu ? escapeHtml(cu) : ''}" alt="${escapeHtml(b.title || '')}" onload="onCoverLoad(this)" onerror="this.style.background='var(--surface-2)';this.removeAttribute('src')" />
             <div class="book-grid-title">${escapeHtml(b.title || '未命名')}</div>
             <div class="book-grid-author">${escapeHtml(b.author || '未知作者')}</div>
           </div>`;
         }
         if (lastKey !== null) html += '</div>';
         els.bookList.innerHTML = html;
+      }
+
+      // Category presets — common genres + user's existing categories
+      const defaultCats = ['小说','文学','科幻','历史','哲学','心理学','经济','计算机','编程','科普','传记','儿童','艺术','旅行','教育','商业'];
+      const userCats = [...new Set(books.map(b => b.category).filter(Boolean))];
+      const allCatPresets = [...new Set([...userCats, ...defaultCats])].slice(0, 20);
+      const categoryPresetsEl = document.getElementById('categoryPresets');
+      if (categoryPresetsEl) {
+        categoryPresetsEl.innerHTML = allCatPresets.map(c =>
+          `<button class="chip category-preset-btn" data-cat="${escapeHtml(c)}" style="font-size:11px;padding:4px 8px">${escapeHtml(c)}</button>`
+        ).join('');
       }
 
       const locationPresets = loadLocationPresets();
@@ -935,6 +954,12 @@
         return;
       }
 
+      const categoryPresetBtn = event.target.closest('.category-preset-btn');
+      if (categoryPresetBtn) {
+        els.category.value = categoryPresetBtn.dataset.cat || '';
+        return;
+      }
+
       const locationPresetBtn = event.target.closest('.location-preset-btn');
       if (locationPresetBtn) {
         els.location.value = locationPresetBtn.dataset.value || '';
@@ -1133,6 +1158,39 @@
       render();
     }
 
+    // English → Chinese category mapping for CJK books
+    const EN_ZH_CATEGORY = {
+      'fiction': '小说', 'novel': '小说', 'novels': '小说', 'literature': '文学',
+      'literary fiction': '文学小说', 'chinese fiction': '中国小说', 'chinese literature': '中国文学',
+      'historical fiction': '历史小说', 'science fiction': '科幻', 'fantasy': '奇幻',
+      'mystery': '悬疑', 'thriller': '惊悚', 'romance': '言情', 'horror': '恐怖',
+      'poetry': '诗歌', 'drama': '戏剧', 'essay': '散文', 'essays': '散文',
+      'biography': '传记', 'autobiography': '自传', 'memoir': '回忆录',
+      'philosophy': '哲学', 'psychology': '心理学', 'religion': '宗教',
+      'science': '科学', 'mathematics': '数学', 'physics': '物理',
+      'chemistry': '化学', 'biology': '生物', 'medicine': '医学',
+      'computer science': '计算机', 'computers': '计算机', 'programming': '编程',
+      'software': '软件', 'technology': '科技', 'engineering': '工程',
+      'economics': '经济', 'business': '商业', 'finance': '金融',
+      'management': '管理', 'marketing': '营销', 'self-help': '自助',
+      'education': '教育', 'teaching': '教育', 'children': '儿童',
+      'juvenile fiction': '儿童文学', 'juvenile nonfiction': '少儿科普',
+      'young adult': '青少年', 'art': '艺术', 'music': '音乐',
+      'architecture': '建筑', 'photography': '摄影', 'design': '设计',
+      'cooking': '烹饪', 'travel': '旅行', 'sports': '体育',
+      'law': '法律', 'political science': '政治', 'sociology': '社会学',
+      'anthropology': '人类学', 'linguistics': '语言学',
+      'c (computer program language)': '编程/C语言', 'java': '编程/Java',
+      'python': '编程/Python', 'javascript': '编程/JavaScript',
+    };
+    function translateCategory(cat, lang) {
+      if (!cat || !lang || !lang.startsWith('zh')) return cat;
+      // Already Chinese characters? Keep as-is
+      if (/[\u4e00-\u9fff]/.test(cat)) return cat;
+      const key = cat.toLowerCase().trim();
+      return EN_ZH_CATEGORY[key] || cat;
+    }
+
     async function fillBookMetaByIsbn(isbn, noticeTarget = 'scan', sourceLabel = '扫码成功') {
       const setNotice = (kind, text) => {
         const html = makeNotice(kind, text);
@@ -1146,7 +1204,7 @@
         if (c.startsWith('9787') || c.startsWith('9797')) return 'zh';
         if (c.startsWith('9784') || c.startsWith('9794')) return 'ja';
         if (c.startsWith('97889') || c.startsWith('9789')) return 'ko';
-        if (c.startsWith('9782') || c.startsWith('9782')) return 'fr';
+        if (c.startsWith('9782')) return 'fr';
         if (c.startsWith('9783')) return 'de';
         return null;
       }
@@ -1233,6 +1291,22 @@
         return { title, authors, category: '', description: '', year, lang: null, coverUrl: '' };
       }
 
+      // Open Library Search API — more reliable cover_i and broader data
+      function parseOLSearch(data) {
+        if (!data?.docs?.length) return null;
+        const doc = data.docs[0];
+        const title = doc.title || '';
+        const authors = Array.isArray(doc.author_name) ? doc.author_name : [];
+        const subjects = Array.isArray(doc.subject) ? doc.subject : [];
+        const category = pickBestCategory(subjects);
+        const year = doc.first_publish_year ? String(doc.first_publish_year) : '';
+        const langs = Array.isArray(doc.language) ? doc.language : [];
+        const lang = langs.includes('chi') ? 'zh' : langs.includes('jpn') ? 'ja' : langs.includes('kor') ? 'ko' : langs[0] || null;
+        // cover_i → reliable cover URL (much better than ISBN-based)
+        const coverUrl = doc.cover_i ? `https://covers.openlibrary.org/b/id/${doc.cover_i}-M.jpg` : '';
+        return { title, authors, category, description: '', year, lang, coverUrl };
+      }
+
       // Merge multiple results, preferring language-matched sources
       function mergeResults(results, preferredLang) {
         // results is array of {source, data} where data may be null
@@ -1284,6 +1358,7 @@
       try {
         // Build all fetch URLs
         const olUrl = `https://openlibrary.org/api/books?bibkeys=ISBN:${encodeURIComponent(compact)}&format=json&jscmd=data`;
+        const olSearchUrl = `https://openlibrary.org/search.json?isbn=${encodeURIComponent(compact)}&fields=title,author_name,subject,first_publish_year,cover_i,language,publisher&limit=3`;
         const gbUrl = `https://www.googleapis.com/books/v1/volumes?q=isbn:${encodeURIComponent(compact)}&maxResults=5`;
         const gbLangUrl = preferredLang
           ? `https://www.googleapis.com/books/v1/volumes?q=isbn:${encodeURIComponent(compact)}&langRestrict=${encodeURIComponent(preferredLang)}&maxResults=5`
@@ -1293,16 +1368,17 @@
         const olAltUrl = altIsbn ? `https://openlibrary.org/api/books?bibkeys=ISBN:${encodeURIComponent(altIsbn)}&format=json&jscmd=data` : null;
         const gbAltUrl = altIsbn ? `https://www.googleapis.com/books/v1/volumes?q=isbn:${encodeURIComponent(altIsbn)}&maxResults=3` : null;
 
-        // Fire all requests in parallel
-        const urls = [olUrl, gbUrl, gbLangUrl, crUrl, olAltUrl, gbAltUrl].filter(Boolean);
+        // Fire all requests in parallel (7 sources)
+        const urls = [olUrl, olSearchUrl, gbUrl, gbLangUrl, crUrl, olAltUrl, gbAltUrl].filter(Boolean);
         const responses = await Promise.allSettled(urls.map(u => fetch(u).then(r => r.ok ? r.json() : null)));
 
-        const [olRes, gbRes, gbLangRes, crRes, olAltRes, gbAltRes] = responses.map(r => r.status === 'fulfilled' ? r.value : null);
+        const [olRes, olSearchRes, gbRes, gbLangRes, crRes, olAltRes, gbAltRes] = responses.map(r => r.status === 'fulfilled' ? r.value : null);
 
         // Parse Open Library results
         const olData = olRes ? (olRes[`ISBN:${compact}`] || null) : null;
         const olAltData = olAltRes ? (olAltRes[`ISBN:${altIsbn}`] || null) : null;
         const olParsed = parseOpenLibrary(olData) || parseOpenLibrary(olAltData);
+        const olSearchParsed = parseOLSearch(olSearchRes);
 
         // Parse Google Books — prefer language-matched item
         function bestGbItem(data) {
@@ -1323,11 +1399,17 @@
         const resultList = [];
         if (gbLangParsed) resultList.push({ source: 'Google Books', data: gbLangParsed });
         if (olParsed) resultList.push({ source: 'Open Library', data: olParsed });
+        if (olSearchParsed) resultList.push({ source: 'Open Library', data: olSearchParsed });
         if (gbParsed) resultList.push({ source: 'Google Books', data: gbParsed });
         if (gbAltParsed) resultList.push({ source: 'Google Books', data: gbAltParsed });
         if (crParsed) resultList.push({ source: 'Crossref', data: crParsed });
 
         const merged = mergeResults(resultList, preferredLang);
+
+        // Translate English categories to Chinese for CJK books
+        if (merged.category && merged.lang) {
+          merged.category = translateCategory(merged.category, merged.lang);
+        }
 
         // Cover fallback: aggressively search ALL GB results for any thumbnail
         if (!merged.coverUrl) {
