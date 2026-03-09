@@ -168,14 +168,24 @@
     </div>
 
     <div class="card" id="homeSection">
-      <h2 class="section-title">首页</h2>
-      <div id="currentReadingCard"></div>
+      <div class="hero">
+        <h2>首页仪表盘</h2>
+        <p>今天先看库里有什么、哪些还待整理、最近加了什么，再决定下一步去录入、搜索还是整理。</p>
+        <div class="actions">
+          <button class="btn primary" id="openEntryBtn">＋ 录入新书</button>
+          <button class="btn secondary" id="jumpOrganizeBtn">去整理待办</button>
+        </div>
+      </div>
       <h2 class="section-title" style="margin-top:16px">图书概览</h2>
       <div class="summary">
         <div class="metric"><strong id="totalCount">0</strong><span class="muted">总图书</span></div>
         <div class="metric"><strong id="sortCount">0</strong><span class="muted">待整理</span></div>
         <div class="metric"><strong id="inCount">0</strong><span class="muted">已入库</span></div>
       </div>
+      <div class="subsection-title">快捷入口</div>
+      <div class="chips" id="quickActions"></div>
+      <div class="subsection-title">现在在读</div>
+      <div id="currentReadingCard"></div>
       <div class="subsection-title">分类分布</div>
       <div class="chips" id="categoryChips"></div>
       <div class="subsection-title">最近新增</div>
@@ -269,7 +279,10 @@
       const next = [v, ...loadLocationPresets().filter(item => item !== v)].slice(0, 8);
       localStorage.setItem(LOCATION_PRESETS_KEY, JSON.stringify(next));
     }
-    function getMode() { return localStorage.getItem(MODE_KEY) === 'manual' ? 'manual' : 'scan'; }
+    function getMode() {
+      const mode = localStorage.getItem(MODE_KEY);
+      return ['dashboard', 'entry'].includes(mode) ? mode : 'dashboard';
+    }
     function setMode(mode) { localStorage.setItem(MODE_KEY, mode); render(); }
     function getEntryMode() { return localStorage.getItem(ENTRY_KEY) === 'manual' ? 'manual' : 'scan'; }
     function setEntryMode(mode) { localStorage.setItem(ENTRY_KEY, mode); render(); }
@@ -306,6 +319,9 @@
       totalCount: document.getElementById('totalCount'),
       sortCount: document.getElementById('sortCount'),
       inCount: document.getElementById('inCount'),
+      quickActions: document.getElementById('quickActions'),
+      openEntryBtn: document.getElementById('openEntryBtn'),
+      jumpOrganizeBtn: document.getElementById('jumpOrganizeBtn'),
       categoryChips: document.getElementById('categoryChips'),
       bookList: document.getElementById('bookList'),
       scanSection: document.getElementById('scanSection'),
@@ -369,14 +385,17 @@
 
     function render() {
       const page = getPage();
-      els.modePill.textContent = `当前页面：${page === 'home' ? '首页' : page === 'search' ? '搜索' : page === 'organize' ? '整理' : '设置'}`;
+      const mode = getMode();
+      els.modePill.textContent = page === 'home'
+        ? `首页模式：${mode === 'entry' ? '录入' : '仪表盘'}`
+        : `当前页面：${page === 'search' ? '搜索' : page === 'organize' ? '整理' : '设置'}`;
 
       els.navHome.classList.toggle('active', page === 'home');
       els.navSearch.classList.toggle('active', page === 'search');
       els.navOrganize.classList.toggle('active', page === 'organize');
       els.navSettings.classList.toggle('active', page === 'settings');
       els.scanSection.classList.add('hidden');
-      els.manualCard.classList.toggle('hidden', page !== 'home');
+      els.manualCard.classList.toggle('hidden', !(page === 'home' && mode === 'entry'));
       els.homeSection.classList.toggle('hidden', page !== 'home');
       els.searchSection.classList.toggle('hidden', page !== 'search');
       els.organizeSection.classList.toggle('hidden', page !== 'organize');
@@ -399,6 +418,12 @@
       els.totalCount.textContent = String(books.length);
       els.sortCount.textContent = String(books.filter(b => b.status === 'to_be_sorted').length);
       els.inCount.textContent = String(books.filter(b => b.status === 'in_library').length);
+      els.quickActions.innerHTML = [
+        `<button class="chip quick-action-btn" data-action="entry">＋ 录入新书</button>`,
+        `<button class="chip quick-action-btn" data-action="search">🔎 搜索全部</button>`,
+        `<button class="chip quick-action-btn" data-action="organize">🧹 待整理 ${books.filter(b => b.status === 'to_be_sorted').length}</button>`,
+        `<button class="chip quick-action-btn" data-action="settings">⚙️ 数据管理</button>`
+      ].join('');
 
       const currentReading = books.find(b => normalizeReadingStatus(b.readingStatus) === '在读') || null;
       els.currentReadingCard.innerHTML = currentReading
@@ -457,10 +482,12 @@
       return s.length === 0 || s.length === 10 || s.length === 13;
     }
 
-    els.navHome.onclick = () => setPage('home');
+    els.navHome.onclick = () => { setPage('home'); setMode('dashboard'); };
     els.navSearch.onclick = () => setPage('search');
     els.navOrganize.onclick = () => setPage('organize');
     els.navSettings.onclick = () => setPage('settings');
+    els.openEntryBtn.onclick = () => { setPage('home'); setMode('entry'); window.scrollTo({ top: 0, behavior: 'smooth' }); };
+    els.jumpOrganizeBtn.onclick = () => setPage('organize');
 
     els.isbnScanBtn.onclick = (event) => {
       event.preventDefault();
@@ -581,6 +608,7 @@
       els.publishedYear.value = ''; els.location.value = '';
       if (els.description) els.description.value = ''; if (els.notes) els.notes.value = '';
       lookupCompleted = false;
+      if (!options.next) setMode('dashboard');
       if (options.next) {
         els.manualNotice.innerHTML = makeNotice('ok', '已加入图书，继续下一本。');
         els.isbn.focus();
@@ -669,6 +697,16 @@
         return;
       }
 
+      const quickActionBtn = event.target.closest('.quick-action-btn');
+      if (quickActionBtn) {
+        const action = quickActionBtn.dataset.action;
+        if (action === 'entry') { setPage('home'); setMode('entry'); window.scrollTo({ top: 0, behavior: 'smooth' }); }
+        if (action === 'search') setPage('search');
+        if (action === 'organize') setPage('organize');
+        if (action === 'settings') setPage('settings');
+        return;
+      }
+
       const menuBtn = event.target.closest('.menu-btn');
       if (menuBtn) {
         const id = menuBtn.dataset.menuId;
@@ -709,6 +747,7 @@
           lookupCompleted = true;
           setEntryMode('manual');
           setPage('home');
+          setMode('entry');
           els.manualNotice.innerHTML = makeNotice('warn', `正在编辑：${escapeHtml(book.title || '未命名图书')}`);
         } else if (menuAction.dataset.action === 'delete') {
           if (!confirm(`确定删除《${book.title || '未命名图书'}》吗？`)) return;
