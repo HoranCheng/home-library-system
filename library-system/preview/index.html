@@ -102,6 +102,12 @@
     .compact-grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
     .sticky-actions { position:sticky; bottom:0; background:rgba(21,31,66,.98); padding-top:12px; margin-top:14px; }
     .review-card { margin-top:12px; padding:14px; border-radius:16px; background:#10193a; border:1px solid var(--line); }
+    .option-row { display:flex; flex-wrap:wrap; gap:8px; margin-top:10px; }
+    .option-pill { display:inline-flex; align-items:center; justify-content:center; padding:9px 12px; border-radius:999px; border:1px solid var(--line); background:#10193a; color:#d7e0ff; font-size:14px; cursor:pointer; }
+    .option-pill.active { background:var(--accent); color:#081120; border-color:transparent; font-weight:700; }
+    .range-row { display:flex; align-items:center; gap:10px; margin-top:10px; }
+    .range-row input[type="range"] { flex:1; }
+    .range-value { width:72px !important; text-align:center; }
   </style>
   <script src="./vendor/zxing-browser.min.js"></script>
 </head>
@@ -364,6 +370,17 @@
     function coverUrl(book) {
       const isbn = String(book?.isbn || '').replace(/[^0-9Xx]/g, '');
       return isbn ? `https://covers.openlibrary.org/b/isbn/${encodeURIComponent(isbn)}-M.jpg` : '';
+    }
+
+    function updateBook(id, updater) {
+      const books = loadBooks();
+      const index = books.findIndex(b => b.id === id);
+      if (index < 0) return null;
+      const current = books[index];
+      const next = typeof updater === 'function' ? updater(current) : { ...current, ...updater };
+      books[index] = { ...current, ...next, updatedAt: new Date().toISOString() };
+      saveBooks(books);
+      return books[index];
     }
 
     function renderBookRow(b, options = {}) {
@@ -641,6 +658,22 @@
     ['title', 'author', 'category', 'publishedYear', 'location'].forEach((key) => {
       els[key]?.addEventListener('input', render);
     });
+    document.addEventListener('input', (event) => {
+      const range = event.target.closest('.reading-progress-range');
+      const number = event.target.closest('.reading-progress-number');
+      if (!range && !number) return;
+      const id = (range || number).dataset.id;
+      const value = Math.max(0, Math.min(100, Number((range || number).value || 0)));
+      const other = range
+        ? document.querySelector(`.reading-progress-number[data-id="${id}"]`)
+        : document.querySelector(`.reading-progress-range[data-id="${id}"]`);
+      if (other) other.value = String(value);
+      updateBook(id, (book) => ({
+        readingProgress: value,
+        readingStatus: value >= 100 ? '读完' : value > 0 ? '在读' : normalizeReadingStatus(book.readingStatus || '想读')
+      }));
+      render();
+    });
 
     els.markAllSortedBtn.onclick = () => {
       const books = loadBooks().map(b => ({ ...b, status: 'in_library', updatedAt: new Date().toISOString() }));
@@ -672,8 +705,21 @@
                   <div class="muted">${escapeHtml(book.author || '未知作者')}</div>
                   <div class="muted" style="margin-top:8px">分类：${escapeHtml(book.category || '未分类')} · 出版年份：${escapeHtml(book.publishedYear || '未知')} · 存放位置：${escapeHtml(book.location || '未填写')}</div>
                   <div class="muted" style="margin-top:8px">语言：${escapeHtml(book.bookLang || '未识别')} · 来源：${escapeHtml(book.metadataSources || '手动录入')}</div>
+                  <div class="subsection-title">阅读状态</div>
+                  <div class="option-row">
+                    ${['想读','在读','读完'].map(status => `<button class="option-pill reading-status-btn ${normalizeReadingStatus(book.readingStatus || '想读') === status ? 'active' : ''}" data-id="${escapeHtml(book.id)}" data-status="${status}">${status}</button>`).join('')}
+                  </div>
+                  <div class="subsection-title">阅读进度</div>
                   <div class="progress-bar"><div class="progress-fill" style="width:${Math.max(0, Math.min(100, Number(book.readingProgress || 0)))}%"></div></div>
+                  <div class="range-row">
+                    <input type="range" min="0" max="100" step="5" value="${Math.max(0, Math.min(100, Number(book.readingProgress || 0)))}" class="reading-progress-range" data-id="${escapeHtml(book.id)}" />
+                    <input type="number" min="0" max="100" step="5" value="${Math.max(0, Math.min(100, Number(book.readingProgress || 0)))}" class="range-value reading-progress-number" data-id="${escapeHtml(book.id)}" />
+                  </div>
                   <div class="muted" style="margin-top:8px">阅读进度：${Math.max(0, Math.min(100, Number(book.readingProgress || 0)))}%</div>
+                  <div class="actions" style="margin-top:12px">
+                    <button class="btn secondary quick-reading-btn" data-id="${escapeHtml(book.id)}" data-status="在读">设为在读</button>
+                    <button class="btn ghost quick-reading-btn" data-id="${escapeHtml(book.id)}" data-status="读完" data-progress="100">快速标记读完</button>
+                  </div>
                 </div>
               </div>
               <div class="subsection-title">内容简介</div>
@@ -683,6 +729,27 @@
               <div class="actions"><button class="btn ghost" id="closeDetailBtn">关闭</button></div>
             </div>
           </div>`;
+        return;
+      }
+
+      const readingStatusBtn = event.target.closest('.reading-status-btn');
+      if (readingStatusBtn) {
+        const updated = updateBook(readingStatusBtn.dataset.id, (book) => ({
+          readingStatus: readingStatusBtn.dataset.status,
+          readingProgress: readingStatusBtn.dataset.status === '读完' ? 100 : Math.max(0, Math.min(100, Number(book.readingProgress || 0)))
+        }));
+        if (updated) render();
+        return;
+      }
+
+      const quickReadingBtn = event.target.closest('.quick-reading-btn');
+      if (quickReadingBtn) {
+        const progress = quickReadingBtn.dataset.progress;
+        const updated = updateBook(quickReadingBtn.dataset.id, (book) => ({
+          readingStatus: quickReadingBtn.dataset.status,
+          readingProgress: progress ? Number(progress) : Math.max(0, Math.min(100, Number(book.readingProgress || 0) || (quickReadingBtn.dataset.status === '在读' ? 10 : 0)))
+        }));
+        if (updated) render();
         return;
       }
 
