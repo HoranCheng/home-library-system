@@ -501,7 +501,12 @@
     const LOCATION_PRESETS_KEY = 'lib:location-presets:v1';
     const GBOOKS_KEY = 'lib:gbooks-api-key:v1';
 
-    function getGBooksApiKey() { return (localStorage.getItem(GBOOKS_KEY) || '').trim(); }
+    // ── Google Books API Key ──────────────────────────────
+    // 把你的 key 粘贴到下面引号里，部署后所有用户自动生效。
+    // 申请地址：https://console.cloud.google.com/apis/credentials
+    const GBOOKS_BUILTIN_KEY = '';  // ← 在这里填入你的 API Key
+    // ────────────────────────────────────────────────────────
+    function getGBooksApiKey() { return GBOOKS_BUILTIN_KEY || (localStorage.getItem(GBOOKS_KEY) || '').trim(); }
     function setGBooksApiKey(v) { localStorage.setItem(GBOOKS_KEY, (v || '').trim()); }
     function gbooksParam() { const k = getGBooksApiKey(); return k ? `&key=${encodeURIComponent(k)}` : ''; }
 
@@ -1002,7 +1007,7 @@
         <span class="setting-icon">${item.icon}</span>
         <div class="setting-info"><div class="setting-label">${item.label}</div><div class="setting-sub">${item.sub}</div></div>
         <span class="setting-arrow">›</span>
-      </div>`).join('') + `
+      </div>`).join('') + (GBOOKS_BUILTIN_KEY ? '' : `
         <div class="card" style="margin-top:18px;padding:16px">
           <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px">
             <div style="width:44px;height:44px;border-radius:12px;background:var(--accent-light);display:flex;align-items:center;justify-content:center;font-size:22px">🔑</div>
@@ -1023,7 +1028,7 @@
           <div style="font-size:11px;color:var(--muted);margin-top:6px">
             <a href="https://console.cloud.google.com/apis/credentials" target="_blank" rel="noopener" style="color:var(--accent)">前往 Google Cloud Console 获取 →</a>
           </div>
-        </div>`;
+        </div>`);
     }
 
     function validIsbn(v) {
