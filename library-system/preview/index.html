@@ -185,7 +185,7 @@
         <div class="field">
           <label>分类</label>
           <input id="category" placeholder="例如：技术 / 小说" />
-          <div class="chips" id="categoryPresets" style="margin-top:4px"></div>
+          <div id="categoryPresets" style="display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch;margin-top:6px;padding-bottom:2px"></div>
         </div>
         <div class="field">
           <label>出版年份</label>
@@ -614,14 +614,15 @@
         els.bookList.innerHTML = html;
       }
 
-      // Category presets — common genres + user's existing categories
-      const defaultCats = ['小说','文学','科幻','历史','哲学','心理学','经济','计算机','编程','科普','传记','儿童','艺术','旅行','教育','商业'];
-      const userCats = [...new Set(books.map(b => b.category).filter(Boolean))];
-      const allCatPresets = [...new Set([...userCats, ...defaultCats])].slice(0, 20);
+      // Category presets — compact scrollable row, clean data only
+      const defaultCats = ['小说','文学','科幻','历史','哲学','心理学','经济','计算机','编程','科普','传记','儿童','艺术','旅行'];
+      const cleanUserCats = [...new Set(books.map(b => b.category).filter(Boolean))]
+        .filter(c => isGoodCategory(c) && c.length <= 8 && !/[=:]/.test(c));
+      const allCatPresets = [...new Set([...cleanUserCats, ...defaultCats])].slice(0, 14);
       const categoryPresetsEl = document.getElementById('categoryPresets');
       if (categoryPresetsEl) {
         categoryPresetsEl.innerHTML = allCatPresets.map(c =>
-          `<button class="chip category-preset-btn" data-cat="${escapeHtml(c)}" style="font-size:11px;padding:4px 8px">${escapeHtml(c)}</button>`
+          `<button class="chip category-preset-btn" data-cat="${escapeHtml(c)}" style="flex-shrink:0;font-size:12px;padding:5px 10px;white-space:nowrap">${escapeHtml(c)}</button>`
         ).join('');
       }
 
