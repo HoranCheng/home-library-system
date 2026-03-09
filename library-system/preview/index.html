@@ -104,7 +104,7 @@
     .scanner-aim-inner { width:220px; height:90px; border:2.5px solid var(--accent); border-radius:10px; box-shadow:0 0 0 9999px rgba(0,0,0,.45); }
     .scanner-cancel { position:absolute; top:10px; right:10px; background:rgba(0,0,0,.65); color:#fff; border:0; border-radius:10px; padding:7px 14px; font-size:14px; cursor:pointer; font-weight:600; }
     .hidden { display:none !important; }
-    .bottom-nav button { flex:1; text-align:center; padding:10px 8px; color:#8a7a7b; font-size:13px; background:transparent; border:0; border-radius:14px; min-height:44px; transition:background-color .15s ease,color .15s ease; -webkit-tap-highlight-color: transparent; appearance:none; }
+    .bottom-nav button { flex:1; text-align:center; padding:10px 8px; color:#8a7a7b; font-size:13px; background:transparent; border:0; border-radius:14px; min-height:44px; transition:none; -webkit-tap-highlight-color: transparent; appearance:none; }
     .bottom-nav button.active { background:#fff4d6; color:#6a5030; font-weight:700; }
     .cover-card { display:flex; gap:14px; align-items:flex-start; }
     .cover-thumb { width:86px; height:122px; border-radius:14px; object-fit:cover; background:#0b1430; border:1px solid var(--line); }
@@ -510,11 +510,17 @@
         const categoryMatched = !selectedCategoryFilter || String(b.category || '').trim() === selectedCategoryFilter;
         return queryMatched && categoryMatched;
       });
+      const exactIsbnMatches = query ? books.filter(b => String(b.isbn || '').replace(/[^0-9Xx]/g, '') === query.replace(/[^0-9Xx]/g, '')) : [];
       els.searchSummary.innerHTML = books.length
-        ? `<div class="chip">共 ${books.length} 本</div><div class="chip">匹配 ${matchedBooks.length} 本</div>${selectedCategoryFilter ? `<button class="chip category-filter-chip active" data-category="">分类：${escapeHtml(selectedCategoryFilter)} ×</button>` : ''}`
+        ? `${exactIsbnMatches.length ? `<div class="chip active">已在库中：${exactIsbnMatches.length} 本</div>` : ''}<div class="chip">共 ${books.length} 本</div><div class="chip">匹配 ${matchedBooks.length} 本</div>${selectedCategoryFilter ? `<button class="chip category-filter-chip active" data-category="">分类：${escapeHtml(selectedCategoryFilter)} ×</button>` : ''}`
         : '<div class="muted">当前还没有图书数据。</div>';
       els.searchResults.innerHTML = matchedBooks.length
-        ? matchedBooks.map(b => renderBookRow(b)).join('')
+        ? matchedBooks.map(b => {
+            const exactMatch = query && String(b.isbn || '').replace(/[^0-9Xx]/g, '') === query.replace(/[^0-9Xx]/g, '');
+            return renderBookRow(b, {
+              actionHtml: exactMatch ? '<div class="chips" style="margin-top:10px"><div class="chip active">这本书已在库中</div></div>' : ''
+            });
+          }).join('')
         : '<div class="muted" style="margin-top:12px">没有找到匹配的图书。</div>';
 
       const todoBooks = books.filter(b => b.status === 'to_be_sorted');
@@ -871,7 +877,9 @@
           lookupCompleted = true;
           setEntryMode('manual');
           setPage('home', { mode: 'entry' });
-          els.manualNotice.innerHTML = makeNotice('warn', `正在编辑：${escapeHtml(book.title || '未命名图书')}`);
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+          setTimeout(() => els.title.focus(), 120);
+          els.manualNotice.innerHTML = makeNotice('warn', `正在编辑《${escapeHtml(book.title || '未命名图书')}》，修改后直接保存即可。`);
         } else if (menuAction.dataset.action === 'delete') {
           if (!confirm(`确定删除《${book.title || '未命名图书'}》吗？`)) return;
           saveBooks(books.filter(b => b.id !== id));
