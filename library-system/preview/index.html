@@ -393,7 +393,7 @@
            <div class="muted" style="margin-top:6px">${escapeHtml(currentDraftAuthor || '待补充作者')} · ${escapeHtml(currentDraftCategory || '待补充分类')} ${currentDraftYear ? `· ${escapeHtml(currentDraftYear)}` : ''}</div>
            <div class="muted" style="margin-top:6px">${currentDraftLocation ? `存放位置：${escapeHtml(currentDraftLocation)}` : '只要补齐书名和作者，就可以先导入库中；其他缺失信息后续可在整理里继续完善。'}</div>`
         : '<div class="muted">先输入或扫描 ISBN。系统识别到完整 ISBN 后会自动补全信息，你再审阅并导入库中。</div>';
-      els.saveBtn.disabled = !(canImport || editingBookId);
+      els.saveBtn.disabled = false;
 
       const books = loadBooks();
       els.totalCount.textContent = String(books.length);
@@ -535,6 +535,7 @@
 
       const books = loadBooks();
       const duplicate = books.find(b => b.id !== editingBookId && ((isbn && b.isbn === isbn) || (b.title === title && b.author === author)));
+      const isCompleteRecord = Boolean(category && publishedYear && location);
       if (duplicate) {
         els.manualNotice.innerHTML = makeNotice('warn', '疑似重复：系统发现相同 ISBN 或书名+作者组合。');
         return false;
@@ -555,18 +556,19 @@
         target.location = location;
         target.description = description;
         target.notes = notes;
+        target.status = isCompleteRecord ? 'in_library' : 'to_be_sorted';
         target.updatedAt = new Date().toISOString();
         saveBooks(books);
-        els.manualNotice.innerHTML = makeNotice('ok', `已更新：${title}`);
+        els.manualNotice.innerHTML = makeNotice('ok', `已更新：${title}${isCompleteRecord ? '（已入库）' : '（已放入待整理）'}`);
         editingBookId = null;
         els.saveBtn.textContent = '保存图书';
       } else {
         books.push({
           id: makeId(), isbn, title, author, category, readingStatus, readingProgress, publishedYear, location, description, notes,
-          status: 'to_be_sorted', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString()
+          status: isCompleteRecord ? 'in_library' : 'to_be_sorted', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString()
         });
         saveBooks(books);
-        els.manualNotice.innerHTML = makeNotice('ok', `保存成功：${title}`);
+        els.manualNotice.innerHTML = makeNotice('ok', `已导入：${title}${isCompleteRecord ? '（已入库）' : '（已放入待整理，后续可补信息）'}`);
       }
       els.isbn.value = ''; els.title.value = ''; els.author.value = ''; els.category.value = '';
       if (els.readingStatus) els.readingStatus.value = ''; if (els.readingProgress) els.readingProgress.value = '';
