@@ -65,6 +65,8 @@
     /* ── Stats grid ── */
     .stat-grid { display:flex; justify-content:space-around; padding:16px 0; }
     .stat-item { text-align:center; }
+    .stat-clickable { border-radius:12px; padding:8px 4px; transition:background .15s; }
+    .stat-clickable:active { background:var(--accent-light); }
     .stat-num { font-size:26px; font-weight:800; line-height:1.1; color:var(--text); }
     .stat-num.green { color:var(--accent); }
     .stat-num.brown { color:var(--accent2); }
@@ -410,10 +412,10 @@
       <div id="homeSection">
         <div class="card">
           <div class="stat-grid">
-            <div class="stat-item"><div class="stat-num" id="totalCount">0</div><div class="stat-label">总藏书</div></div>
-            <div class="stat-item"><div class="stat-num green" id="inCount">0</div><div class="stat-label">已入库</div></div>
-            <div class="stat-item"><div class="stat-num warn" id="sortCount">0</div><div class="stat-label">待补充</div></div>
-            <div class="stat-item"><div class="stat-num brown" id="readingCount">0</div><div class="stat-label">在读中</div></div>
+            <div class="stat-item stat-clickable" data-stat-filter="all" style="cursor:pointer"><div class="stat-num" id="totalCount">0</div><div class="stat-label">总藏书</div></div>
+            <div class="stat-item stat-clickable" data-stat-filter="in_library" style="cursor:pointer"><div class="stat-num green" id="inCount">0</div><div class="stat-label">已入库</div></div>
+            <div class="stat-item stat-clickable" data-stat-filter="to_be_sorted" style="cursor:pointer"><div class="stat-num warn" id="sortCount">0</div><div class="stat-label">待补充</div></div>
+            <div class="stat-item stat-clickable" data-stat-filter="reading" style="cursor:pointer"><div class="stat-num brown" id="readingCount">0</div><div class="stat-label">在读中</div></div>
           </div>
           <div id="sortAlert"></div>
         </div>
@@ -437,8 +439,9 @@
           <svg width="16" height="16" fill="none" stroke="var(--muted)" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
           <input id="searchInput" placeholder="书名、作者、ISBN…" />
           <button class="clear-btn" id="searchClearBtn" style="display:none">&times;</button>
-          <button class="input-action-btn" id="searchScanBtn" title="扫码搜索" style="position:static;width:36px;height:36px;font-size:16px;display:flex;align-items:center;justify-content:center;flex-shrink:0">📷</button>
+          <button class="input-action-btn" id="searchScanBtn" title="扫码搜索" style="position:static;width:36px;height:36px;font-size:16px;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin:auto 0">📷</button>
         </div>
+        <div class="muted" style="font-size:11px;margin:-6px 0 8px 4px">💡 点击 📷 扫描条形码，快速查找已有图书</div>
         <div class="chips" id="searchCatChips" style="margin-top:0;margin-bottom:12px"></div>
         <div class="chips" id="searchSummary"></div>
         <div class="book-list" id="searchResults"></div>
@@ -916,7 +919,9 @@
       const query = String(els.searchInput?.value || '').trim().toLowerCase();
       els.searchClearBtn.style.display = query ? 'block' : 'none';
       const matchedBooks = books.filter(b => {
-        const queryMatched = !query || [b.title, b.author, b.isbn, b.category].some(v => String(v || '').toLowerCase().includes(query));
+        const statusLabel = b.status === 'to_be_sorted' ? '待补充' : '已入库';
+        const readLabel = normalizeReadingStatus(b.readingStatus || '');
+        const queryMatched = !query || [b.title, b.author, b.isbn, b.category, statusLabel, readLabel, b.location].some(v => String(v || '').toLowerCase().includes(query));
         const categoryMatched = !selectedCategoryFilter || String(b.category || '').trim() === selectedCategoryFilter;
         return queryMatched && categoryMatched;
       });
@@ -1327,6 +1332,24 @@
         return;
       }
 
+      // Dashboard stat items → navigate to search with filter
+      const statClick = event.target.closest('.stat-clickable');
+      if (statClick) {
+        const filter = statClick.dataset.statFilter;
+        setPage('search');
+        if (filter === 'all') {
+          els.searchInput.value = '';
+        } else if (filter === 'in_library') {
+          els.searchInput.value = '已入库';
+        } else if (filter === 'to_be_sorted') {
+          els.searchInput.value = '待补充';
+        } else if (filter === 'reading') {
+          els.searchInput.value = '在读';
+        }
+        render();
+        return;
+      }
+
       const quickActionBtn = event.target.closest('.quick-action-btn');
       if (quickActionBtn) {
         const action = quickActionBtn.dataset.action;
@@ -1504,7 +1527,7 @@
       render();
     }
 
-    // English → Chinese category mapping for CJK books
+    // English → Chinese category mapping (applied to ALL books)
     const EN_ZH_CATEGORY = {
       'fiction': '小说', 'novel': '小说', 'novels': '小说', 'literature': '文学',
       'literary fiction': '文学小说', 'chinese fiction': '中国小说', 'chinese literature': '中国文学',
@@ -1528,9 +1551,25 @@
       'anthropology': '人类学', 'linguistics': '语言学',
       'c (computer program language)': '编程/C语言', 'java': '编程/Java',
       'python': '编程/Python', 'javascript': '编程/JavaScript',
+      'history': '历史', 'world history': '世界历史', 'chinese history': '中国历史',
+      'politics': '政治', 'military': '军事', 'war': '军事',
+      'nature': '自然', 'environment': '环境', 'gardening': '园艺',
+      'health': '健康', 'fitness': '健身', 'diet': '饮食',
+      'comics': '漫画', 'graphic novels': '漫画', 'manga': '漫画',
+      'humor': '幽默', 'satire': '讽刺', 'adventure': '冒险',
+      'crime': '犯罪', 'detective': '侦探', 'spy': '间谍',
+      'family': '家庭', 'parenting': '育儿', 'pets': '宠物',
+      'crafts': '手工', 'games': '游戏', 'reference': '工具书',
+      'literary criticism': '文学评论', 'literary collections': '文学合集',
+      'performing arts': '表演艺术', 'film': '电影', 'theater': '戏剧',
+      'social science': '社会科学', 'true crime': '纪实犯罪',
+      'body, mind & spirit': '身心灵', 'self help': '自助',
+      'business & economics': '商业', 'language arts & disciplines': '语言文学',
+      'foreign language study': '外语学习', 'study aids': '学习辅导',
     };
-    function translateCategory(cat, lang) {
-      if (!cat || !lang || !lang.startsWith('zh')) return cat;
+    function translateCategory(cat, _lang) {
+      if (!cat) return cat;
+      // Already Chinese — keep as-is
       if (/[\u4e00-\u9fff]/.test(cat)) return cat;
       const key = cat.toLowerCase().trim();
       return EN_ZH_CATEGORY[key] || cat;
@@ -1762,9 +1801,9 @@
 
         const merged = mergeResults(resultList, preferredLang);
 
-        // Translate English categories to Chinese for CJK books
-        if (merged.category && merged.lang) {
-          merged.category = translateCategory(merged.category, merged.lang);
+        // Translate English categories to Chinese (always, not just CJK books)
+        if (merged.category) {
+          merged.category = translateCategory(merged.category);
         }
 
         // Cover fallback: aggressively search ALL GB results for any thumbnail
