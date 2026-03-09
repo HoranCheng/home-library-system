@@ -51,7 +51,10 @@
     }
     .primary { background:var(--accent); color:#f8f7f2; box-shadow:0 10px 20px rgba(163,177,138,.24); }
     .secondary { background:#eef1e8; color:#627052; border:1px solid rgba(163,177,138,.22); }
+    #saveBtn, #finishEntryBtn { appearance:none; -webkit-appearance:none; }
+    #saveBtn { background:var(--accent) !important; color:#f8f7f2 !important; }
     #saveBtn::after { content:' ᓚ'; font-size:12px; opacity:.85; }
+    #finishEntryBtn { background:#eef1e8 !important; color:#627052 !important; border:1px solid rgba(163,177,138,.22) !important; }
     .ghost { background:transparent; color:var(--text); border:1px solid var(--line); }
     .section-title { font-size:18px; margin:0 0 10px; }
     .field { margin-top:12px; }
@@ -666,7 +669,10 @@
         saveBooks(books);
         els.manualNotice.innerHTML = makeNotice('ok', `已更新：${title}${isCompleteRecord ? '（已入库）' : '（已放入待整理）'}`);
         editingBookId = null;
-        els.saveBtn.textContent = '保存图书';
+        els.saveBtn.textContent = '导入库中';
+        clearDraftFields({ keepIsbn: false, keepLocation: false, clearNotices: false });
+        setPage(editReturnPage, { mode: editReturnMode });
+        return true;
       } else {
         books.push({
           id: makeId(), isbn, title, author, category, readingStatus, readingProgress, publishedYear, location, description, notes, bookLang, metadataSources,
@@ -865,6 +871,8 @@
         if (menuAction.dataset.action === 'edit') {
           stopScanner();
           scannerIntent = 'entry';
+          editReturnPage = getPage();
+          editReturnMode = getMode();
           editingBookId = id;
           els.isbn.value = book.isbn || '';
           els.title.value = book.title || '';
@@ -990,6 +998,8 @@
     let scannerIntent = 'entry';
     let lastEntryMethod = 'manual';
     let entrySessionCount = 0;
+    let editReturnPage = 'home';
+    let editReturnMode = 'dashboard';
 
     function stopScanner() {
       scannerActive = false;
