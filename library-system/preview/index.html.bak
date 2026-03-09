@@ -4,10 +4,6 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>毛毛图书管理系统</title>
-  <link rel="manifest" href="./manifest.json">
-  <link rel="apple-touch-icon" href="./icon-192.svg">
-  <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@600;700&display=swap" rel="stylesheet">
@@ -44,7 +40,7 @@
       display:flex; background:var(--surface-2); border-radius:10px; padding:3px; gap:3px;
     }
     .mode-toggle button {
-      padding:10px 20px; border:none; border-radius:10px; cursor:pointer; font-size:14px; font-weight:700;
+      padding:7px 14px; border:none; border-radius:8px; cursor:pointer; font-size:12px; font-weight:600;
       background:transparent; color:var(--muted); transition:all .2s;
     }
     .mode-toggle button.active { background:var(--card); color:var(--text); box-shadow:var(--shadow); }
@@ -191,22 +187,6 @@
     .scanner-aim { position:absolute; inset:0; pointer-events:none; display:flex; align-items:center; justify-content:center; }
     .scanner-aim-inner { width:220px; height:90px; border:2.5px solid var(--accent); border-radius:10px; box-shadow:0 0 0 9999px rgba(0,0,0,.45); }
     .scanner-cancel { position:absolute; top:10px; right:10px; background:rgba(0,0,0,.65); color:#fff; border:0; border-radius:10px; padding:7px 14px; font-size:14px; cursor:pointer; font-weight:600; }
-    /* Auto-filled field highlight */
-    input.auto-filled {
-      background:var(--accent-light) !important; border-color:var(--accent) !important;
-      box-shadow:inset 0 0 0 1px rgba(61,94,76,.15);
-    }
-    .auto-fill-hint { font-size:10px; color:var(--accent); margin-top:2px; font-weight:600; }
-    /* Scan success toast */
-    .scan-toast {
-      position:fixed; top:60px; left:50%; transform:translateX(-50%); z-index:999;
-      background:var(--ok); color:#fff; padding:12px 24px; border-radius:14px;
-      font-size:15px; font-weight:700; box-shadow:0 6px 20px rgba(74,124,89,.4);
-      animation: toastIn .3s ease, toastOut .3s ease 1.5s forwards;
-      pointer-events:none;
-    }
-    @keyframes toastIn { from { opacity:0; transform:translateX(-50%) translateY(-20px); } to { opacity:1; transform:translateX(-50%) translateY(0); } }
-    @keyframes toastOut { from { opacity:1; } to { opacity:0; } }
 
     /* ── Book grid ── */
     .book-list { margin-top:12px; }
@@ -305,7 +285,7 @@
       gap:3px; cursor:pointer; padding:6px 0; position:relative;
       -webkit-tap-highlight-color:transparent; appearance:none;
     }
-    .bottom-nav button .nav-icon { font-size:20px; display:flex; align-items:center; justify-content:center; }
+    .bottom-nav button .nav-icon { font-size:20px; }
     .bottom-nav button .nav-label { font-size:11px; font-weight:600; color:var(--muted); }
     .bottom-nav button.active .nav-label { color:var(--accent); }
     .bottom-nav button .nav-indicator {
@@ -399,7 +379,7 @@
         <div class="sticky-actions">
           <div class="actions">
             <button class="btn primary" id="saveBtn">导入库中</button>
-            <button class="btn ghost" id="finishEntryBtn">结束扫描</button>
+            <button class="btn ghost" id="finishEntryBtn">完成录入</button>
           </div>
         </div>
         <div class="hint" id="entrySessionHint">自动从 Open Library · Google Books 补全书目信息</div>
@@ -437,7 +417,7 @@
           <svg width="16" height="16" fill="none" stroke="var(--muted)" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
           <input id="searchInput" placeholder="书名、作者、ISBN…" />
           <button class="clear-btn" id="searchClearBtn" style="display:none">&times;</button>
-          <button class="input-action-btn" id="searchScanBtn" title="扫码搜索" style="position:static;width:36px;height:36px;font-size:16px;display:flex;align-items:center;justify-content:center;flex-shrink:0">📷</button>
+          <button class="input-action-btn" id="searchScanBtn" title="扫码搜索" style="position:static;width:32px;height:32px;font-size:15px">📷</button>
         </div>
         <div class="chips" id="searchCatChips" style="margin-top:0;margin-bottom:12px"></div>
         <div class="chips" id="searchSummary"></div>
@@ -458,35 +438,32 @@
       <!-- Settings -->
       <div class="hidden" id="settingsSection">
         <div id="settingsRows"></div>
+        <div class="field" style="margin-top:16px">
+          <label>导入 JSON</label>
+          <textarea id="importText" placeholder="粘贴 JSON 后，先校验再导入"></textarea>
+        </div>
+        <div class="actions">
+          <button class="btn primary" id="validateBtn">校验导入</button>
+          <button class="btn ghost" id="importBtn">执行导入</button>
+        </div>
         <div id="settingsNotice"></div>
-        <details style="margin-top:16px">
-          <summary style="font-size:13px;color:var(--muted);cursor:pointer;font-weight:600;padding:8px 0">高级：数据导入</summary>
-          <div class="field" style="margin-top:10px">
-            <label>导入 JSON 备份</label>
-            <textarea id="importText" placeholder="粘贴之前导出的 JSON 数据…" style="min-height:80px"></textarea>
-          </div>
-          <div class="actions">
-            <button class="btn secondary" id="validateBtn">校验</button>
-            <button class="btn primary" id="importBtn">导入</button>
-          </div>
-          <pre id="exportOutput" style="display:none"></pre>
-        </details>
+        <pre id="exportOutput">导出内容预览…</pre>
       </div>
     </div>
 
     <!-- Bottom nav -->
     <div class="bottom-nav">
       <button id="navHome" class="active">
-        <span class="nav-icon"><svg width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M3 12l9-8 9 8"/><path d="M5 10v9a1 1 0 001 1h3v-5h6v5h3a1 1 0 001-1v-9"/></svg></span><span class="nav-label">首页</span><span class="nav-indicator"></span>
+        <span class="nav-icon">🏠</span><span class="nav-label">首页</span><span class="nav-indicator"></span>
       </button>
       <button id="navSearch">
-        <span class="nav-icon"><svg width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg></span><span class="nav-label">搜索</span><span class="nav-indicator"></span>
+        <span class="nav-icon">🔍</span><span class="nav-label">搜索</span><span class="nav-indicator"></span>
       </button>
       <button id="navOrganize" style="position:relative">
-        <span class="nav-icon"><svg width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M4 6h16M4 12h10M4 18h7"/><circle cx="19" cy="15" r="3"/><path d="M19 13v4M17 15h4"/></svg></span><span class="nav-label">整理</span><span class="nav-indicator"></span>
+        <span class="nav-icon">✏️</span><span class="nav-label">整理</span><span class="nav-indicator"></span>
       </button>
       <button id="navSettings">
-        <span class="nav-icon"><svg width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 01-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg></span><span class="nav-label">设置</span><span class="nav-indicator"></span>
+        <span class="nav-icon">⚙️</span><span class="nav-label">设置</span><span class="nav-indicator"></span>
       </button>
     </div>
     <div id="detailModalRoot"></div>
@@ -774,18 +751,14 @@
       const currentDraftYear = String(els.publishedYear?.value || '').trim();
       const currentDraftLocation = String(els.location?.value || '').trim();
       els.entrySessionHint.textContent = mode === 'entry' && entrySessionCount > 0
-        ? `连续录入中：本轮已添加 ${entrySessionCount} 本`
+        ? `连续录入中：本轮已导入 ${entrySessionCount} 本`
         : '自动从 Open Library · Google Books 补全书目信息';
-      // Save button text: "导入库中" for new, "保存修改" for edit
-      if (!editingBookId) els.saveBtn.textContent = '导入库中';
       els.reviewCard.innerHTML = (lookupCompleted || currentDraftTitle || currentDraftAuthor)
         ? `<div style="font-weight:600;font-family:var(--serif)">${escapeHtml(currentDraftTitle || '待补充书名')}</div>
            <div class="muted" style="margin-top:6px">${escapeHtml(currentDraftAuthor || '待补充作者')} · ${escapeHtml(currentDraftCategory || '待补充分类')} ${currentDraftYear ? `· ${escapeHtml(currentDraftYear)}` : ''}</div>
            <div class="muted" style="margin-top:6px">${currentDraftLocation ? `📍 ${escapeHtml(currentDraftLocation)}` : '补齐书名和作者即可导入'}</div>`
         : '<div class="muted">先输入或扫描 ISBN，系统会自动补全信息。</div>';
       els.saveBtn.disabled = false;
-      // Dynamic button text based on entry method
-      els.finishEntryBtn.textContent = lastEntryMethod === 'scan' ? '结束扫描' : '返回总览';
 
       const books = loadBooks();
       const todoCount = books.filter(b => b.status === 'to_be_sorted').length;
@@ -975,29 +948,21 @@
         </div>`;
       }).join('');
 
-      // Settings — user-friendly
-      const bookCount = books.length;
-      const lastUpdated = loadMeta().updatedAt ? new Date(loadMeta().updatedAt).toLocaleDateString('zh-CN') : '—';
-      els.settingsRows.innerHTML = `
-        <div class="card" style="margin-bottom:14px;padding:16px">
-          <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px">
-            <div style="width:44px;height:44px;border-radius:12px;background:var(--accent-light);display:flex;align-items:center;justify-content:center;font-size:22px">📚</div>
-            <div>
-              <div style="font-size:16px;font-weight:700">我的藏书数据</div>
-              <div style="font-size:12px;color:var(--muted);margin-top:2px">${bookCount} 本书 · 最后更新 ${escapeHtml(lastUpdated)}</div>
-            </div>
-          </div>
-          <div style="font-size:12px;color:var(--muted);background:var(--surface);padding:10px 12px;border-radius:8px">
-            💡 数据保存在你的浏览器本地，建议定期备份。换设备时需要导出再导入。
-          </div>
-        </div>` + [
-        { icon: '💾', label: '备份数据', sub: '导出完整的藏书记录', action: 'exportJson' },
-        { icon: '📊', label: '导出表格', sub: '导出为 CSV，可用 Excel 打开', action: 'exportCsv' },
+      // Settings
+      els.settingsRows.innerHTML = [
+        { icon: '📤', label: '导出 JSON', sub: '完整数据备份', action: 'exportJson' },
+        { icon: '📊', label: '导出 CSV', sub: '表格格式，便于迁移', action: 'exportCsv' },
+        { icon: '📥', label: '导入 JSON', sub: '从备份恢复', action: 'importJson' },
+        { icon: '🔍', label: '数据校验', sub: '检查数据完整性', action: 'validate' },
       ].map(item => `<div class="setting-row setting-action" data-action="${item.action}">
         <span class="setting-icon">${item.icon}</span>
         <div class="setting-info"><div class="setting-label">${item.label}</div><div class="setting-sub">${item.sub}</div></div>
         <span class="setting-arrow">›</span>
-      </div>`).join('');
+      </div>`).join('') + `<div class="card" style="margin-top:16px;padding:14px 16px">
+        <div style="font-size:12px;color:var(--muted)">存储方式</div>
+        <div style="font-size:14px;font-weight:600;margin-top:4px">本地 localStorage</div>
+        <div style="font-size:12px;color:var(--muted);margin-top:2px">数据存在浏览器本地，建议定期导出备份</div>
+      </div>`;
     }
 
     function validIsbn(v) {
@@ -1368,39 +1333,33 @@
       openMenuBookId = null;
     });
 
-    function downloadFile(content, filename, mime) {
-      const blob = new Blob([content], { type: mime });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url; a.download = filename; a.click();
-      URL.revokeObjectURL(url);
-    }
-
     els.exportJsonBtn_handler = () => {
       const payload = { books: loadBooks(), meta: loadMeta() };
-      const date = new Date().toISOString().slice(0, 10);
-      downloadFile(JSON.stringify(payload, null, 2), `藏书备份_${date}.json`, 'application/json');
-      els.settingsNotice.innerHTML = makeNotice('ok', `已下载备份文件 📥 共 ${payload.books.length} 本书`);
+      els.exportOutput.textContent = JSON.stringify(payload, null, 2);
+      els.settingsNotice.innerHTML = makeNotice('ok', 'JSON 导出已生成，可直接复制。');
     };
 
     els.exportCsvBtn_handler = () => {
       const books = loadBooks();
-      const rows = ['书名,作者,分类,ISBN,阅读状态,存放位置,入库状态,添加日期'];
+      const rows = ['id,title,authors,isbn13,isbn10,edition,status,createdAt,updatedAt'];
       for (const b of books) {
+        const isbnRaw = String(b.isbn || '').replace(/[^0-9Xx]/g, '');
+        const isbn13 = isbnRaw.length === 13 ? isbnRaw : '';
+        const isbn10 = isbnRaw.length === 10 ? isbnRaw.toUpperCase() : '';
         rows.push([
-          b.title || '',
+          b.id,
+          b.title,
           b.author || '',
-          b.category || '',
-          b.isbn || '',
-          normalizeReadingStatus(b.readingStatus),
-          b.location || '',
-          b.status === 'in_library' ? '已入库' : '待补充',
-          b.createdAt ? new Date(b.createdAt).toLocaleDateString('zh-CN') : ''
+          isbn13,
+          isbn10,
+          '',
+          b.status,
+          b.createdAt,
+          b.updatedAt
         ].map(v => `"${String(v||'').replaceAll('"','""')}"`).join(','));
       }
-      const date = new Date().toISOString().slice(0, 10);
-      downloadFile('\uFEFF' + rows.join('\n'), `藏书表格_${date}.csv`, 'text/csv;charset=utf-8');
-      els.settingsNotice.innerHTML = makeNotice('ok', `已下载表格 📊 共 ${books.length} 本书`);
+      els.exportOutput.textContent = rows.join('\n');
+      els.settingsNotice.innerHTML = makeNotice('ok', 'CSV 导出已生成，可直接复制。');
     };
 
     els.validateBtn.onclick = () => {
@@ -1677,16 +1636,11 @@
         const olAltUrl = altIsbn ? `https://openlibrary.org/api/books?bibkeys=ISBN:${encodeURIComponent(altIsbn)}&format=json&jscmd=data` : null;
         const gbAltUrl = altIsbn ? `https://www.googleapis.com/books/v1/volumes?q=isbn:${encodeURIComponent(altIsbn)}&maxResults=3` : null;
 
-        // Additional search for CJK books: title-based Google Books search with Chinese language
-        const gbTitleSearchUrl = preferredLang === 'zh'
-          ? `https://www.googleapis.com/books/v1/volumes?q=isbn:${encodeURIComponent(compact)}&langRestrict=zh&printType=books&maxResults=5`
-          : null;
-
-        // Fire all requests in parallel (up to 8 sources)
-        const urls = [olUrl, olSearchUrl, gbUrl, gbLangUrl, crUrl, olAltUrl, gbAltUrl, gbTitleSearchUrl].filter(Boolean);
+        // Fire all requests in parallel (7 sources)
+        const urls = [olUrl, olSearchUrl, gbUrl, gbLangUrl, crUrl, olAltUrl, gbAltUrl].filter(Boolean);
         const responses = await Promise.allSettled(urls.map(u => fetch(u).then(r => r.ok ? r.json() : null)));
 
-        const [olRes, olSearchRes, gbRes, gbLangRes, crRes, olAltRes, gbAltRes, gbTitleRes] = responses.map(r => r.status === 'fulfilled' ? r.value : null);
+        const [olRes, olSearchRes, gbRes, gbLangRes, crRes, olAltRes, gbAltRes] = responses.map(r => r.status === 'fulfilled' ? r.value : null);
 
         // Parse Open Library results
         const olData = olRes ? (olRes[`ISBN:${compact}`] || null) : null;
@@ -1716,8 +1670,6 @@
         if (olSearchParsed) resultList.push({ source: 'Open Library', data: olSearchParsed });
         if (gbParsed) resultList.push({ source: 'Google Books', data: gbParsed });
         if (gbAltParsed) resultList.push({ source: 'Google Books', data: gbAltParsed });
-        const gbTitleParsed = parseGoogleBooks(bestGbItem(gbTitleRes));
-        if (gbTitleParsed) resultList.push({ source: 'Google Books', data: gbTitleParsed });
         if (crParsed) resultList.push({ source: 'Crossref', data: crParsed });
 
         const merged = mergeResults(resultList, preferredLang);
@@ -1729,7 +1681,7 @@
 
         // Cover fallback: aggressively search ALL GB results for any thumbnail
         if (!merged.coverUrl) {
-          merged.coverUrl = extractAnyCover(gbLangRes) || extractAnyCover(gbRes) || extractAnyCover(gbAltRes) || extractAnyCover(gbTitleRes) || '';
+          merged.coverUrl = extractAnyCover(gbLangRes) || extractAnyCover(gbRes) || extractAnyCover(gbAltRes) || '';
         }
         // Final cover fallback: OpenLibrary ISBN cover (may return placeholder but worth trying)
         if (!merged.coverUrl && compact) {
@@ -1742,8 +1694,6 @@
         if (merged.category && !els.category.value) els.category.value = merged.category;
         if (merged.year && !els.publishedYear.value) els.publishedYear.value = merged.year;
         if (merged.description && els.description && !els.description.value) els.description.value = merged.description;
-        // Mark auto-filled fields with highlight
-        markAutoFilled('title', 'author', 'category', 'publishedYear');
         if (merged.coverUrl) els.manualCard.dataset.pendingCoverUrl = merged.coverUrl;
         if (merged.lang) els.manualCard.dataset.bookLang = merged.lang;
         if (merged.sources.length) els.manualCard.dataset.bookSources = merged.sources.join(' / ');
@@ -1772,31 +1722,10 @@
       }
     }
 
-    function showScanToast(text) {
-      const existing = document.querySelector('.scan-toast');
-      if (existing) existing.remove();
-      const toast = document.createElement('div');
-      toast.className = 'scan-toast';
-      toast.textContent = text;
-      document.body.appendChild(toast);
-      setTimeout(() => toast.remove(), 2000);
-    }
-
-    function markAutoFilled(...fieldIds) {
-      fieldIds.forEach(id => {
-        const el = els[id];
-        if (el && el.value) {
-          el.classList.add('auto-filled');
-          el.addEventListener('input', function handler() { el.classList.remove('auto-filled'); el.removeEventListener('input', handler); }, { once: true });
-        }
-      });
-    }
-
     function handleScanResult(rawValue) {
       stopScanner();
       const isbn = rawValue.replace(/[^0-9Xx]/g, '');
       if (isbn.length === 10 || isbn.length === 13) {
-        showScanToast(`✓ 扫到了！ISBN: ${isbn}`);
         if (scannerIntent === 'search') {
           selectedCategoryFilter = '';
           els.searchInput.value = isbn;
@@ -1806,7 +1735,6 @@
           return;
         }
         els.isbn.value = isbn;
-        els.isbn.classList.add('auto-filled');
         fillBookMetaByIsbn(isbn, 'scan');
       } else {
         els.scanNotice.innerHTML = makeNotice('warn', `识别到条码但非 ISBN 格式（${escapeHtml(rawValue)}），请手动录入 ISBN。`);
@@ -1836,7 +1764,7 @@
           els.scannerBox.style.display = 'block';
           render();
           els.scanNotice.innerHTML = makeNotice('warn', '将书背面条码对准框内…');
-          const detector = new BarcodeDetector({ formats: ['ean_13', 'ean_8', 'code_128', 'code_39', 'itf', 'upc_a', 'upc_e', 'qr_code'] });
+          const detector = new BarcodeDetector({ formats: ['ean_13', 'ean_8', 'code_128', 'qr_code'] });
           const scan = async () => {
             if (!scannerActive) return;
             try {
@@ -1889,11 +1817,6 @@
     // ── End Scanner ───────────────────────────────────────────────────────────
 
     render();
-
-    // Register Service Worker
-    if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('./sw.js').catch(() => {});
-    }
   </script>
 </body>
 </html>
