@@ -26,7 +26,7 @@
         linear-gradient(180deg,var(--bg),var(--bg2));
       background-size: 12px 12px, auto;
     }
-    .app { max-width:480px; margin:0 auto; min-height:100vh; padding:18px 16px calc(var(--safe-bottom) + 24px); }
+    .app { max-width:480px; margin:0 auto; min-height:100vh; padding:18px 16px calc(var(--safe-bottom) + 96px); }
     .topbar { display:flex; align-items:center; justify-content:space-between; }
     .pill { display:inline-flex; align-items:center; gap:6px; padding:6px 10px; background:var(--surface-2); border:1px solid rgba(163,177,138,.28); border-radius:999px; color:#697458; font-size:12px; }
     h1 { margin:12px 0 6px; font-size:30px; font-family:"Noto Serif SC","Songti SC","STSong",serif; letter-spacing:.02em; }
@@ -94,8 +94,9 @@
     .menu-panel button:hover { background:#fff4d6; }
     pre { margin:12px 0 0; padding:12px; border-radius:14px; background:#0a1128; color:#d7e0ff; white-space:pre-wrap; word-break:break-word; font-size:12px; }
     .bottom-nav {
-      position:sticky; bottom:0; display:flex; gap:8px; margin-top:18px; padding:10px;
-      background:rgba(255,255,255,.92); border:1px solid rgba(61,44,46,.05); border-radius:22px; backdrop-filter:blur(10px); box-shadow:0 -2px 20px rgba(61,44,46,.06);
+      position:fixed; left:50%; transform:translateX(-50%); bottom:calc(var(--safe-bottom) + 8px); width:min(448px, calc(100vw - 24px));
+      display:flex; gap:8px; margin-top:18px; padding:10px;
+      background:rgba(255,255,255,.94); border:1px solid rgba(61,44,46,.05); border-radius:22px; backdrop-filter:blur(10px); box-shadow:0 -2px 20px rgba(61,44,46,.06); z-index:40;
     }
     .bottom-nav div { flex:1; text-align:center; padding:10px 8px; color:#c8d3ff; font-size:13px; }
     .scanner-box { display:none; margin-top:14px; border-radius:18px; overflow:hidden; position:relative; background:#000; }
@@ -558,7 +559,7 @@
     els.searchScanBtn.onclick = (event) => {
       event.preventDefault();
       scannerIntent = 'search';
-      setPage('search');
+      setPage('home', { mode: 'entry' });
       if (scannerActive) stopScanner();
       startScanner();
     };
@@ -862,6 +863,8 @@
         const book = books.find(b => b.id === id);
         if (!book) return;
         if (menuAction.dataset.action === 'edit') {
+          stopScanner();
+          scannerIntent = 'entry';
           editingBookId = id;
           els.isbn.value = book.isbn || '';
           els.title.value = book.title || '';
