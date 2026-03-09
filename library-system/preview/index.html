@@ -153,6 +153,7 @@
     .field textarea { min-height:120px; resize:vertical; }
     .hint { font-size:12px; color:var(--muted); margin-top:8px; line-height:1.5; }
     .compact-grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+    .compact-grid > * { min-width:0; }
     .sticky-actions { position:sticky; bottom:0; background:rgba(246,243,237,.96); padding-top:12px; margin-top:14px; border-top:1px solid var(--line); }
     .review-card { margin-top:12px; padding:14px 16px; border-radius:14px; background:var(--brown-light); border:1px solid rgba(139,111,78,.1); }
     .review-card .muted { color:var(--accent2); }
@@ -363,13 +364,13 @@
           <div class="field">
             <label>分类</label>
             <input id="category" placeholder="技术 / 小说" />
-            <div id="categoryPresets" style="display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch;margin-top:6px;padding-bottom:2px"></div>
           </div>
           <div class="field">
             <label>出版年份</label>
             <input id="publishedYear" placeholder="2021" />
           </div>
         </div>
+        <div id="categoryPresets" style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px;padding-bottom:2px"></div>
         <div class="field">
           <label>存放位置</label>
           <input id="location" placeholder="客厅书架 / 书房左柜 / 床头" />
@@ -391,7 +392,7 @@
           <div class="stat-grid">
             <div class="stat-item"><div class="stat-num" id="totalCount">0</div><div class="stat-label">总藏书</div></div>
             <div class="stat-item"><div class="stat-num green" id="inCount">0</div><div class="stat-label">已入库</div></div>
-            <div class="stat-item"><div class="stat-num warn" id="sortCount">0</div><div class="stat-label">待整理</div></div>
+            <div class="stat-item"><div class="stat-num warn" id="sortCount">0</div><div class="stat-label">待补充</div></div>
             <div class="stat-item"><div class="stat-num brown" id="readingCount">0</div><div class="stat-label">在读中</div></div>
           </div>
           <div id="sortAlert"></div>
@@ -428,7 +429,7 @@
         <div id="organizeStats"></div>
         <div class="actions" style="margin-top:12px">
           <button class="btn secondary" id="markAllSortedBtn">全部入库</button>
-          <button class="btn ghost" id="markAllTodoBtn">全部恢复待整理</button>
+          <button class="btn ghost" id="markAllTodoBtn">全部恢复待补充</button>
         </div>
         <div id="organizeList" style="margin-top:14px"></div>
         <div id="organizeNotice"></div>
@@ -595,7 +596,8 @@
 
     function normalizeReadingStatus(v) {
       const s = String(v || '').trim();
-      if (!s) return '想读';
+      if (!s) return '要读';
+      if (['要读', '想读'].includes(s)) return '要读';
       if (['在读', '正在读'].includes(s)) return '在读';
       if (['读完', '已读完', '已完成'].includes(s)) return '读完';
       return s;
@@ -676,7 +678,7 @@
     function renderBookRow(b, options = {}) {
       const actionHtml = options.actionHtml || '';
       const showMenu = options.showMenu !== false;
-      const metaLine = [b.author || '未知作者', b.category || '未分类', b.isbn || '无 ISBN', normalizeReadingStatus(b.readingStatus || ''), b.status === 'to_be_sorted' ? '待整理' : '已入库'].join(' · ');
+      const metaLine = [b.author || '未知作者', b.category || '未分类', b.isbn || '无 ISBN', normalizeReadingStatus(b.readingStatus || ''), b.status === 'to_be_sorted' ? '待补充' : '已入库'].join(' · ');
       return `
         <div class="book-item">
           <div class="book-head">
@@ -706,7 +708,7 @@
     function libBadgeHtml(status) {
       return status === 'in_library'
         ? '<span class="lib-badge in">已入库</span>'
-        : '<span class="lib-badge sort">待整理</span>';
+        : '<span class="lib-badge sort">待补充</span>';
     }
 
     function render() {
@@ -714,8 +716,8 @@
       const mode = getMode();
 
       // Top bar
-      const pageTitles = { home: '我的藏书', search: '找一本书', organize: '待整理', settings: '设置' };
-      const pageSubs = { home: '毛毛的书房', search: '搜索', organize: '整理', settings: '设置' };
+      const pageTitles = { home: '我的藏书', search: '找一本书', organize: '信息补充', settings: '设置' };
+      const pageSubs = { home: '毛毛的书房', search: '搜索', organize: '补充信息', settings: '设置' };
       els.topbarTitle.textContent = pageTitles[page] || '我的藏书';
       els.modePill.textContent = pageSubs[page] || '';
 
@@ -771,7 +773,7 @@
 
       // Sort alert
       els.sortAlert.innerHTML = todoCount > 0
-        ? `<div class="alert-banner warn"><span>📋 有 ${todoCount} 本书待整理</span><span class="alert-action quick-action-btn" data-action="organize">去整理 →</span></div>`
+        ? `<div class="alert-banner warn"><span>📋 有 ${todoCount} 本书信息待补充</span><span class="alert-action quick-action-btn" data-action="organize">去补充 →</span></div>`
         : '';
 
       // Nav organize badge
@@ -787,7 +789,6 @@
       // Currently reading
       const currentReading = readingBooks[0] || null;
       if (currentReading) {
-        const pct = Math.max(0, Math.min(100, Number(currentReading.readingProgress || 0)));
         const cc = catColor(currentReading.category);
         els.currentReadingCard.innerHTML = `
           <div class="reading-hero book-detail-btn" data-id="${escapeHtml(currentReading.id)}" style="background:${cc};box-shadow:0 6px 24px ${cc}55">
@@ -797,9 +798,7 @@
                 <div class="reading-hero-author">${escapeHtml(currentReading.author || '未知作者')}</div>
                 <div class="reading-hero-title">${escapeHtml(currentReading.title || '未命名图书')}</div>
               </div>
-              <span class="reading-hero-pct">${pct}%</span>
             </div>
-            <div class="reading-hero-bar"><div class="reading-hero-fill" style="width:${pct}%"></div></div>
           </div>`;
       } else {
         els.currentReadingCard.innerHTML = '<div class="muted" style="margin-top:4px">还没有在读的书</div>';
@@ -925,7 +924,7 @@
       els.organizeStats.innerHTML = todoBooks.length
         ? `<div class="card" style="display:flex;gap:12px;align-items:center;padding:12px 16px">
             <div style="font-size:28px;font-weight:800;color:var(--warn)">${todoBooks.length}</div>
-            <div><div style="font-size:13px;font-weight:600;color:#8B6A20">本书待整理</div><div style="font-size:11px;color:var(--muted);margin-top:2px">信息不完整，还未正式入库</div></div>
+            <div><div style="font-size:13px;font-weight:600;color:#8B6A20">本书信息待补充</div><div style="font-size:11px;color:var(--muted);margin-top:2px">缺少分类、位置或出版年份</div></div>
           </div>`
         : `<div style="text-align:center;padding:40px 20px"><div style="font-size:40px;margin-bottom:12px">✅</div><div class="muted">全部整理完毕</div></div>`;
       els.organizeList.innerHTML = todoBooks.map((b, index) => {
@@ -1106,7 +1105,7 @@
         target.status = isCompleteRecord ? 'in_library' : 'to_be_sorted';
         target.updatedAt = new Date().toISOString();
         saveBooks(books);
-        els.manualNotice.innerHTML = makeNotice('ok', `已更新：${title}${isCompleteRecord ? '（已入库）' : '（已放入待整理）'}`);
+        els.manualNotice.innerHTML = makeNotice('ok', `已更新：${title}${isCompleteRecord ? '（已入库）' : '（信息待补充）'}`);
         editingBookId = null;
         els.saveBtn.textContent = '导入库中';
         clearDraftFields({ keepIsbn: false, keepLocation: false, clearNotices: false });
@@ -1121,7 +1120,7 @@
         });
         saveBooks(books);
         entrySessionCount += 1;
-        els.manualNotice.innerHTML = makeNotice('ok', `已导入：${title}${isCompleteRecord ? '（已入库）' : '（已放入待整理，后续可补信息）'}。继续下一本吧。`);
+        els.manualNotice.innerHTML = makeNotice('ok', `已导入：${title}${isCompleteRecord ? '（已入库）' : '（信息待补充，后续可完善）'}。继续下一本吧。`);
       }
       const shouldResumeScan = !wasEditing && lastEntryMethod === 'scan';
       clearDraftFields({ keepIsbn: false, keepLocation: true, clearNotices: shouldResumeScan });
@@ -1161,23 +1160,6 @@
     ['title', 'author', 'category', 'publishedYear', 'location'].forEach((key) => {
       els[key]?.addEventListener('input', render);
     });
-    document.addEventListener('input', (event) => {
-      const range = event.target.closest('.reading-progress-range');
-      const number = event.target.closest('.reading-progress-number');
-      if (!range && !number) return;
-      const id = (range || number).dataset.id;
-      const value = Math.max(0, Math.min(100, Number((range || number).value || 0)));
-      const other = range
-        ? document.querySelector(`.reading-progress-number[data-id="${id}"]`)
-        : document.querySelector(`.reading-progress-range[data-id="${id}"]`);
-      if (other) other.value = String(value);
-      updateBook(id, (book) => ({
-        readingProgress: value,
-        readingStatus: value >= 100 ? '读完' : value > 0 ? '在读' : normalizeReadingStatus(book.readingStatus || '想读')
-      }));
-      render();
-    });
-
     els.markAllSortedBtn.onclick = () => {
       const books = loadBooks().map(b => ({ ...b, status: 'in_library', updatedAt: new Date().toISOString() }));
       saveBooks(books);
@@ -1188,90 +1170,69 @@
     els.markAllTodoBtn.onclick = () => {
       const books = loadBooks().map(b => ({ ...b, status: 'to_be_sorted', updatedAt: new Date().toISOString() }));
       saveBooks(books);
-      els.organizeNotice.innerHTML = makeNotice('warn', '已将全部图书恢复为待整理。');
+      els.organizeNotice.innerHTML = makeNotice('warn', '已将全部图书恢复为待补充。');
       render();
     };
+
+    function showBookDetail(id) {
+      const book = loadBooks().find(b => b.id === id);
+      if (!book) return;
+      const cc = catColor(book.category);
+      const cu = coverUrl(book);
+      els.detailModalRoot.innerHTML = `
+        <div class="modal-backdrop" id="detailBackdrop">
+          <div class="modal-sheet">
+            <div class="modal-handle"><div class="modal-handle-bar"></div></div>
+            <div class="modal-header">
+              ${cu ? `<img class="modal-cover-mini" src="${escapeHtml(cu)}" alt="" onerror="this.style.background='${cc}';this.removeAttribute('src')" style="background:${cc}" />` : `<div class="modal-cover-mini" style="background:${cc};display:flex;align-items:flex-end;padding:6px"><span style="font-size:8px;color:rgba(255,255,255,.7);font-weight:600">${escapeHtml((book.bookLang||'').toUpperCase())}</span></div>`}
+              <div style="flex:1;min-width:0">
+                <div class="modal-title">${escapeHtml(book.title || '未命名图书')}</div>
+                <div class="modal-meta">${escapeHtml(book.author || '未知作者')} · ${escapeHtml(book.publishedYear || '')}</div>
+                <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px">
+                  ${statusBadgeHtml(book.readingStatus)}
+                  ${libBadgeHtml(book.status)}
+                </div>
+              </div>
+            </div>
+            <div class="modal-body">
+              <div style="margin-bottom:20px">
+                <div style="font-size:12px;font-weight:600;color:var(--muted);margin-bottom:10px">阅读状态</div>
+                <div class="option-row">
+                  ${['要读','在读','读完'].map(status => `<button class="option-pill reading-status-btn ${normalizeReadingStatus(book.readingStatus || '要读') === status ? 'active' : ''}" data-id="${escapeHtml(book.id)}" data-status="${status}">${status}</button>`).join('')}
+                </div>
+              </div>
+              <div style="background:var(--card);border-radius:14px;overflow:hidden;margin-bottom:16px">
+                ${[
+                  { label: '分类', value: book.category || '未分类' },
+                  { label: '存放位置', value: book.location || '未填写' },
+                  { label: '来源', value: book.metadataSources || '手动录入' },
+                  { label: 'ISBN', value: book.isbn || '未填写' },
+                ].map(row => `<div class="modal-meta-row"><span class="modal-meta-label">${row.label}</span><span class="modal-meta-value">${escapeHtml(row.value)}</span></div>`).join('')}
+              </div>
+              ${book.notes ? `<div class="modal-note"><div class="modal-note-label">我的笔记</div><div class="modal-note-text">${escapeHtml(book.notes)}</div></div>` : ''}
+              ${book.description ? `<div style="margin-bottom:16px"><div style="font-size:12px;font-weight:600;color:var(--muted);margin-bottom:6px">内容简介</div><div class="muted">${escapeHtml(book.description)}</div></div>` : ''}
+              <div class="actions">
+                <button class="btn secondary" data-action="edit" data-id="${escapeHtml(book.id)}" style="cursor:pointer">编辑</button>
+                <button class="btn ghost" id="closeDetailBtn">关闭</button>
+              </div>
+            </div>
+          </div>
+        </div>`;
+    }
 
     document.addEventListener('click', (event) => {
       const detailBtn = event.target.closest('.book-detail-btn');
       if (detailBtn) {
-        const book = loadBooks().find(b => b.id === detailBtn.dataset.id);
-        if (!book) return;
-        const pct = Math.max(0, Math.min(100, Number(book.readingProgress || 0)));
-        const cc = catColor(book.category);
-        const cu = coverUrl(book);
-        els.detailModalRoot.innerHTML = `
-          <div class="modal-backdrop" id="detailBackdrop">
-            <div class="modal-sheet">
-              <div class="modal-handle"><div class="modal-handle-bar"></div></div>
-              <div class="modal-header">
-                ${cu ? `<img class="modal-cover-mini" src="${escapeHtml(cu)}" alt="" onerror="this.style.background='${cc}';this.removeAttribute('src')" style="background:${cc}" />` : `<div class="modal-cover-mini" style="background:${cc};display:flex;align-items:flex-end;padding:6px"><span style="font-size:8px;color:rgba(255,255,255,.7);font-weight:600">${escapeHtml((book.bookLang||'').toUpperCase())}</span></div>`}
-                <div style="flex:1;min-width:0">
-                  <div class="modal-title">${escapeHtml(book.title || '未命名图书')}</div>
-                  <div class="modal-meta">${escapeHtml(book.author || '未知作者')} · ${escapeHtml(book.publishedYear || '')}</div>
-                  <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px">
-                    ${statusBadgeHtml(book.readingStatus)}
-                    ${libBadgeHtml(book.status)}
-                  </div>
-                </div>
-              </div>
-              <div class="modal-body">
-                <div style="margin-bottom:20px">
-                  <div style="font-size:12px;font-weight:600;color:var(--muted);margin-bottom:10px">阅读状态</div>
-                  <div class="option-row">
-                    ${['想读','在读','读完'].map(status => `<button class="option-pill reading-status-btn ${normalizeReadingStatus(book.readingStatus || '想读') === status ? 'active' : ''}" data-id="${escapeHtml(book.id)}" data-status="${status}">${status}</button>`).join('')}
-                  </div>
-                </div>
-                ${normalizeReadingStatus(book.readingStatus) === '在读' ? `
-                <div style="margin-bottom:20px;background:var(--card);border-radius:14px;padding:16px">
-                  <div style="display:flex;justify-content:space-between;margin-bottom:10px">
-                    <span style="font-size:12px;font-weight:600;color:var(--muted)">阅读进度</span>
-                    <span style="font-size:13px;font-weight:700;color:var(--accent)">${pct}%</span>
-                  </div>
-                  <div class="progress-bar"><div class="progress-fill" style="width:${pct}%"></div></div>
-                  <div class="range-row">
-                    <input type="range" min="0" max="100" step="5" value="${pct}" class="reading-progress-range" data-id="${escapeHtml(book.id)}" />
-                    <input type="number" min="0" max="100" step="5" value="${pct}" class="range-value reading-progress-number" data-id="${escapeHtml(book.id)}" />
-                  </div>
-                </div>` : ''}
-                <div style="background:var(--card);border-radius:14px;overflow:hidden;margin-bottom:16px">
-                  ${[
-                    { label: '分类', value: book.category || '未分类' },
-                    { label: '存放位置', value: book.location || '未填写' },
-                    { label: '来源', value: book.metadataSources || '手动录入' },
-                    { label: 'ISBN', value: book.isbn || '未填写' },
-                  ].map(row => `<div class="modal-meta-row"><span class="modal-meta-label">${row.label}</span><span class="modal-meta-value">${escapeHtml(row.value)}</span></div>`).join('')}
-                </div>
-                ${book.notes ? `<div class="modal-note"><div class="modal-note-label">我的笔记</div><div class="modal-note-text">${escapeHtml(book.notes)}</div></div>` : ''}
-                ${book.description ? `<div style="margin-bottom:16px"><div style="font-size:12px;font-weight:600;color:var(--muted);margin-bottom:6px">内容简介</div><div class="muted">${escapeHtml(book.description)}</div></div>` : ''}
-                <div class="actions">
-                  <button class="btn secondary" data-action="edit" data-id="${escapeHtml(book.id)}" style="cursor:pointer">编辑</button>
-                  <button class="btn ghost" id="closeDetailBtn">关闭</button>
-                </div>
-              </div>
-            </div>
-          </div>`;
+        showBookDetail(detailBtn.dataset.id);
         return;
       }
 
       const readingStatusBtn = event.target.closest('.reading-status-btn');
       if (readingStatusBtn) {
-        const updated = updateBook(readingStatusBtn.dataset.id, (book) => ({
-          readingStatus: readingStatusBtn.dataset.status,
-          readingProgress: readingStatusBtn.dataset.status === '读完' ? 100 : Math.max(0, Math.min(100, Number(book.readingProgress || 0)))
-        }));
-        if (updated) render();
-        return;
-      }
-
-      const quickReadingBtn = event.target.closest('.quick-reading-btn');
-      if (quickReadingBtn) {
-        const progress = quickReadingBtn.dataset.progress;
-        const updated = updateBook(quickReadingBtn.dataset.id, (book) => ({
-          readingStatus: quickReadingBtn.dataset.status,
-          readingProgress: progress ? Number(progress) : Math.max(0, Math.min(100, Number(book.readingProgress || 0) || (quickReadingBtn.dataset.status === '在读' ? 10 : 0)))
-        }));
-        if (updated) render();
+        const id = readingStatusBtn.dataset.id;
+        updateBook(id, { readingStatus: readingStatusBtn.dataset.status });
+        render();
+        showBookDetail(id);
         return;
       }
 
