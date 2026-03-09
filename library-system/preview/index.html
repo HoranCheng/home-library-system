@@ -529,6 +529,7 @@
     els.isbnScanBtn.onclick = (event) => {
       event.preventDefault();
       scannerIntent = 'entry';
+      lastEntryMethod = 'scan';
       if (scannerActive) { stopScanner(); }
       else {
         clearDraftFields({ keepIsbn: false });
@@ -547,6 +548,7 @@
     function clearDraftFields(options = {}) {
       const keepIsbn = options.keepIsbn === true;
       const keepLocation = options.keepLocation === true;
+      const clearNotices = options.clearNotices !== false;
       if (!keepIsbn) els.isbn.value = '';
       els.title.value = '';
       els.author.value = '';
@@ -560,6 +562,10 @@
       delete els.manualCard.dataset.bookLang;
       delete els.manualCard.dataset.bookSources;
       lookupCompleted = false;
+      if (clearNotices) {
+        els.scanNotice.innerHTML = '';
+        els.manualNotice.innerHTML = '';
+      }
     }
 
     async function lookupCurrentIsbn() {
@@ -610,6 +616,7 @@
         return false;
       }
 
+      const wasEditing = Boolean(editingBookId);
       const books = loadBooks();
       const duplicate = books.find(b => b.id !== editingBookId && ((isbn && b.isbn === isbn) || (b.title === title && b.author === author)));
       const isCompleteRecord = Boolean(category && publishedYear && location);
@@ -650,14 +657,21 @@
         entrySessionCount += 1;
         els.manualNotice.innerHTML = makeNotice('ok', `已导入：${title}${isCompleteRecord ? '（已入库）' : '（已放入待整理，后续可补信息）'}。继续下一本吧。`);
       }
-      clearDraftFields({ keepIsbn: false, keepLocation: true });
+      const shouldResumeScan = !wasEditing && lastEntryMethod === 'scan';
+      clearDraftFields({ keepIsbn: false, keepLocation: true, clearNotices: shouldResumeScan });
       lookupCompleted = false;
-      els.isbn.focus();
+      if (shouldResumeScan) {
+        scannerIntent = 'entry';
+        startScanner();
+      } else {
+        els.isbn.focus();
+      }
       render();
       return true;
     }
 
     els.isbn.addEventListener('input', () => {
+      if (!scannerActive) lastEntryMethod = 'manual';
       lookupCompleted = false;
       if (isbnLookupTimer) clearTimeout(isbnLookupTimer);
       render();
@@ -951,6 +965,7 @@
     let isbnLookupTimer = null;
     let selectedCategoryFilter = '';
     let scannerIntent = 'entry';
+    let lastEntryMethod = 'manual';
     let entrySessionCount = 0;
 
     function stopScanner() {
