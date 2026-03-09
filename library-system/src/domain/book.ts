@@ -10,6 +10,7 @@ export type Book = {
   publisher?: string;
   publishedDate?: string;
   tags?: string[];
+  coverUrl?: string;
   status: BookStatus;
   createdAt: string;
   updatedAt: string;

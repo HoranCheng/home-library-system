@@ -118,6 +118,8 @@
     .book-grid-item img { width:100%; aspect-ratio:2/3; object-fit:cover; border-radius:12px; background:var(--surface-2); border:1px solid var(--line); }
     .book-grid-item .book-grid-title { font-size:13px; margin-top:6px; line-height:1.3; overflow:hidden; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; }
     .book-grid-item .book-grid-author { font-size:11px; color:var(--muted); margin-top:2px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .shelf-letter-head { display:block; font-size:13px; font-weight:700; color:var(--accent); letter-spacing:.08em; padding:10px 2px 4px; margin-top:8px; border-bottom:1px solid var(--line); }
+    .book-list > .book-grid { margin-top:0; }
     .bottom-nav button { flex:1; text-align:center; padding:12px 8px; color:#8a7a7b; font-size:12px; background:transparent; border:0; border-radius:14px; min-height:52px; transition:none; -webkit-tap-highlight-color: transparent; appearance:none; }
     .bottom-nav button.active { background:#fff4d6; color:#6a5030; font-weight:700; }
     .cover-card { display:flex; gap:14px; align-items:flex-start; }
@@ -225,7 +227,10 @@
       <div id="currentReadingCard"></div>
       <div class="subsection-title">分类分布</div>
       <div class="chips" id="categoryChips"></div>
-      <div class="subsection-title">我的书架</div>
+      <div class="subsection-title" style="display:flex;align-items:center;justify-content:space-between">
+        我的书架
+        <span id="shelfSortToggle" style="font-size:12px;color:var(--muted);cursor:pointer;user-select:none;font-weight:600;letter-spacing:.03em"></span>
+      </div>
       <div class="book-list" id="bookList"></div>
     </div>
 
@@ -410,8 +415,57 @@
     }
 
     function coverUrl(book) {
+      if (book?.coverUrl) return book.coverUrl;
       const isbn = String(book?.isbn || '').replace(/[^0-9Xx]/g, '');
       return isbn ? `https://covers.openlibrary.org/b/isbn/${encodeURIComponent(isbn)}-M.jpg` : '';
+    }
+
+    // ISBN-10 ↔ ISBN-13 conversion
+    function isbn13to10(isbn13) {
+      const c = String(isbn13 || '').replace(/[^0-9]/g, '');
+      if (c.length !== 13 || !c.startsWith('978')) return null;
+      const core = c.slice(3, 12);
+      let sum = 0;
+      for (let i = 0; i < 9; i++) sum += (10 - i) * parseInt(core[i]);
+      const check = (11 - (sum % 11)) % 11;
+      return core + (check === 10 ? 'X' : String(check));
+    }
+    function isbn10to13(isbn10) {
+      const c = String(isbn10 || '').replace(/[^0-9Xx]/g, '').toUpperCase();
+      if (c.length !== 10) return null;
+      const body = '978' + c.slice(0, 9);
+      let sum = 0;
+      for (let i = 0; i < 12; i++) sum += parseInt(body[i]) * (i % 2 === 0 ? 1 : 3);
+      const check = (10 - (sum % 10)) % 10;
+      return body + String(check);
+    }
+
+    // Pinyin initial letter for Chinese characters
+    function getPinyinInitial(ch) {
+      // Boundary characters in zh-CN-u-co-pinyin order
+      const map = [
+        ['A','啊'],['B','芭'],['C','擦'],['D','搭'],['E','蛾'],['F','发'],
+        ['G','噶'],['H','哈'],['J','击'],['K','喀'],['L','垃'],['M','妈'],
+        ['N','拿'],['O','哦'],['P','啪'],['Q','期'],['R','然'],['S','撒'],
+        ['T','塌'],['W','挖'],['X','昔'],['Y','压'],['Z','匝']
+      ];
+      for (let i = map.length - 1; i >= 0; i--) {
+        if (ch.localeCompare(map[i][1], 'zh-CN-u-co-pinyin') >= 0) return map[i][0];
+      }
+      return '#';
+    }
+    function getSortKey(title) {
+      const first = String(title || '').trim().charAt(0);
+      if (!first) return '#';
+      const code = first.charCodeAt(0);
+      if (code >= 0x4e00 && code <= 0x9fff) return getPinyinInitial(first);
+      const upper = first.toUpperCase();
+      return (upper >= 'A' && upper <= 'Z') ? upper : '#';
+    }
+    function sortByTitle(arr) {
+      return arr.slice().sort((a, b) =>
+        String(a.title || '').localeCompare(String(b.title || ''), 'zh-CN-u-co-pinyin')
+      );
     }
 
     function updateBook(id, updater) {
@@ -513,17 +567,44 @@
         ? sortedCategories.map(([name, count]) => `<button class="chip category-filter-chip ${selectedCategoryFilter === name ? 'active' : ''}" data-category="${escapeHtml(name)}">${escapeHtml(name)} · ${count}</button>`).join('') + (selectedCategoryFilter ? `<button class="chip category-filter-chip" data-category="">清除筛选</button>` : '')
         : '<div class="muted">还没有分类数据，先录入几本书试试。</div>';
 
-      const sortedBooks = books.slice().sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || '')));
-      els.bookList.innerHTML = sortedBooks.length
-        ? `<div class="book-grid">${sortedBooks.map(b => {
-            const cover = coverUrl(b);
-            return `<div class="book-grid-item book-detail-btn" data-id="${escapeHtml(b.id)}">
-              <img src="${cover ? escapeHtml(cover) : ''}" alt="${escapeHtml(b.title || '')}" onerror="this.style.background='var(--surface-2)';this.alt='无封面'" />
-              <div class="book-grid-title">${escapeHtml(b.title || '未命名')}</div>
-              <div class="book-grid-author">${escapeHtml(b.author || '未知作者')}</div>
-            </div>`;
-          }).join('')}</div>`
-        : '<div class="muted" style="margin-top:12px">还没有图书，先录入一本试试。</div>';
+      // Sort toggle label
+      const toggleEl = document.getElementById('shelfSortToggle');
+      if (toggleEl) toggleEl.textContent = bookSortMode === 'alpha' ? '按字母 ↕时间' : '按时间 ↕字母';
+
+      if (!books.length) {
+        els.bookList.innerHTML = '<div class="muted" style="margin-top:12px">还没有图书，先录入一本试试。</div>';
+      } else if (bookSortMode === 'time') {
+        const byTime = books.slice().sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || '')));
+        els.bookList.innerHTML = `<div class="book-grid">${byTime.map(b => {
+          const cu = coverUrl(b);
+          return `<div class="book-grid-item book-detail-btn" data-id="${escapeHtml(b.id)}">
+            <img src="${cu ? escapeHtml(cu) : ''}" alt="${escapeHtml(b.title || '')}" onerror="this.style.background='var(--surface-2)';this.alt=''" />
+            <div class="book-grid-title">${escapeHtml(b.title || '未命名')}</div>
+            <div class="book-grid-author">${escapeHtml(b.author || '未知作者')}</div>
+          </div>`;
+        }).join('')}</div>`;
+      } else {
+        // Alphabetical sort with pinyin group headers
+        const byAlpha = sortByTitle(books);
+        let html = '';
+        let lastKey = null;
+        for (const b of byAlpha) {
+          const key = getSortKey(b.title);
+          if (key !== lastKey) {
+            if (lastKey !== null) html += '</div>'; // close previous group grid
+            html += `<div class="shelf-letter-head">${escapeHtml(key)}</div><div class="book-grid">`;
+            lastKey = key;
+          }
+          const cu = coverUrl(b);
+          html += `<div class="book-grid-item book-detail-btn" data-id="${escapeHtml(b.id)}">
+            <img src="${cu ? escapeHtml(cu) : ''}" alt="${escapeHtml(b.title || '')}" onerror="this.style.background='var(--surface-2)';this.alt=''" />
+            <div class="book-grid-title">${escapeHtml(b.title || '未命名')}</div>
+            <div class="book-grid-author">${escapeHtml(b.author || '未知作者')}</div>
+          </div>`;
+        }
+        if (lastKey !== null) html += '</div>';
+        els.bookList.innerHTML = html;
+      }
 
       const locationPresets = loadLocationPresets();
       els.locationPresetChips.innerHTML = locationPresets.length
@@ -571,6 +652,10 @@
     els.navSettings.onclick = () => setPage('settings');
     els.openEntryBtn.onclick = () => { entrySessionCount = 0; setPage('home', { mode: 'entry' }); window.scrollTo({ top: 0, behavior: 'smooth' }); };
     els.jumpOrganizeBtn.onclick = () => setPage('organize');
+    document.getElementById('shelfSortToggle').onclick = () => {
+      bookSortMode = bookSortMode === 'alpha' ? 'time' : 'alpha';
+      render();
+    };
     els.finishEntryBtn.onclick = () => { entrySessionCount = 0; clearDraftFields({ keepIsbn: false, keepLocation: false }); setPage('home', { mode: 'dashboard' }); };
 
     els.isbnScanBtn.onclick = (event) => {
@@ -608,6 +693,7 @@
       if (els.notes) els.notes.value = '';
       delete els.manualCard.dataset.bookLang;
       delete els.manualCard.dataset.bookSources;
+      delete els.manualCard.dataset.pendingCoverUrl;
       lookupCompleted = false;
       if (clearNotices) {
         els.scanNotice.innerHTML = '';
@@ -642,6 +728,7 @@
       let notes = String(els.notes?.value || '').trim();
       let bookLang = String(els.manualCard.dataset.bookLang || '').trim();
       let metadataSources = String(els.manualCard.dataset.bookSources || '').trim();
+      let coverUrl = String(els.manualCard.dataset.pendingCoverUrl || '').trim();
 
       if (!validIsbn(isbn)) {
         els.manualNotice.innerHTML = makeNotice('err', 'ISBN 格式不合法，请输入 10 位或 13 位。');
@@ -689,6 +776,7 @@
         target.notes = notes;
         target.bookLang = bookLang;
         target.metadataSources = metadataSources;
+        if (coverUrl) target.coverUrl = coverUrl;
         target.status = isCompleteRecord ? 'in_library' : 'to_be_sorted';
         target.updatedAt = new Date().toISOString();
         saveBooks(books);
@@ -702,6 +790,7 @@
       } else {
         books.push({
           id: makeId(), isbn, title, author, category, readingStatus, readingProgress, publishedYear, location, description, notes, bookLang, metadataSources,
+          ...(coverUrl ? { coverUrl } : {}),
           status: isCompleteRecord ? 'in_library' : 'to_be_sorted', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString()
         });
         saveBooks(books);
@@ -1028,6 +1117,7 @@
     let editReturnPage = 'home';
     let editReturnMode = 'dashboard';
     let editReturnScrollY = 0;
+    let bookSortMode = 'alpha'; // 'alpha' | 'time'
 
     function stopScanner() {
       scannerActive = false;
@@ -1049,119 +1139,188 @@
         if (noticeTarget === 'scan') els.scanNotice.innerHTML = html;
         else els.manualNotice.innerHTML = html;
       };
-      function inferPreferredLanguageFromIsbn(isbn) {
-        const compact = String(isbn || '').replace(/[^0-9Xx]/g, '');
-        if (compact.startsWith('9787') || compact.startsWith('9797')) return 'zh';
-        if (compact.startsWith('9784') || compact.startsWith('9794')) return 'ja';
-        if (compact.startsWith('97889')) return 'ko';
+
+      // Infer preferred language from ISBN prefix
+      function inferLang(isbnStr) {
+        const c = String(isbnStr || '').replace(/[^0-9Xx]/g, '');
+        if (c.startsWith('9787') || c.startsWith('9797')) return 'zh';
+        if (c.startsWith('9784') || c.startsWith('9794')) return 'ja';
+        if (c.startsWith('97889') || c.startsWith('9789')) return 'ko';
+        if (c.startsWith('9782') || c.startsWith('9782')) return 'fr';
+        if (c.startsWith('9783')) return 'de';
         return null;
       }
 
-      const applyOpenLibrary = (book) => {
+      // Extract data from each API into a neutral object
+      function parseOpenLibrary(book) {
         if (!book) return null;
-        if (!els.title.value && book.title) els.title.value = book.title;
-        if (!els.author.value && Array.isArray(book.authors) && book.authors.length) {
-          els.author.value = book.authors.map(a => a.name).filter(Boolean).join(', ');
-        }
-        if (!els.category.value) {
-          const subject = Array.isArray(book.subjects) && book.subjects.length ? (book.subjects[0]?.name || book.subjects[0]) : '';
-          if (subject) els.category.value = String(subject).split(' / ')[0].slice(0, 24);
-        }
-        if (!els.description.value && book.excerpts && book.excerpts.length) {
-          const excerpt = book.excerpts[0]?.text || '';
-          if (excerpt) els.description.value = String(excerpt).slice(0, 280);
-        }
-        if (!els.publishedYear.value && book.publish_date) {
-          const match = String(book.publish_date).match(/(19|20)\d{2}/);
-          if (match) els.publishedYear.value = match[0];
-        }
-        const olLang = Array.isArray(book.languages) && book.languages.length
-          ? String(book.languages[0]?.key || '').split('/').pop()
-          : '';
-        return olLang || null;
-      };
-      const applyGoogleBooks = (item) => {
-        const info = item?.volumeInfo || {};
-        if (!els.title.value && info.title) els.title.value = info.title;
-        if (!els.author.value && Array.isArray(info.authors) && info.authors.length) els.author.value = info.authors.join(', ');
-        if (!els.category.value && Array.isArray(info.categories) && info.categories.length) els.category.value = String(info.categories[0]).slice(0, 24);
-        if (!els.description.value && info.description) els.description.value = String(info.description).replace(/<[^>]+>/g, '').slice(0, 280);
-        if (!els.publishedYear.value && info.publishedDate) {
-          const match = String(info.publishedDate).match(/(19|20)\d{2}/);
-          if (match) els.publishedYear.value = match[0];
-        }
-        return info.language || null;
-      };
-      const applyCrossref = (item) => {
-        if (!item) return;
-        if (!els.title.value && Array.isArray(item.title) && item.title[0]) els.title.value = item.title[0];
-        if (!els.author.value && Array.isArray(item.author) && item.author.length) {
-          els.author.value = item.author.map(a => [a.given, a.family].filter(Boolean).join(' ')).filter(Boolean).join(', ');
-        }
-        if (!els.publishedYear.value) {
-          const year = item.published?.['date-parts']?.[0]?.[0] || item.published_print?.['date-parts']?.[0]?.[0];
-          if (year) els.publishedYear.value = String(year);
-        }
-      };
+        const title = book.title || '';
+        const authors = (Array.isArray(book.authors) ? book.authors.map(a => a.name) : []).filter(Boolean);
+        const subjects = Array.isArray(book.subjects) ? book.subjects : [];
+        const category = subjects.length ? String(subjects[0]?.name || subjects[0] || '').split(' / ')[0].trim().slice(0, 32) : '';
+        const description = Array.isArray(book.excerpts) && book.excerpts.length ? String(book.excerpts[0]?.text || '').slice(0, 280) : '';
+        const yearMatch = String(book.publish_date || '').match(/(19|20)\d{2}/);
+        const year = yearMatch ? yearMatch[0] : '';
+        const langKey = Array.isArray(book.languages) && book.languages.length ? String(book.languages[0]?.key || '').split('/').pop() : '';
+        // OL cover
+        const coverThumb = book.cover ? (book.cover.large || book.cover.medium || book.cover.small || '') : '';
+        return { title, authors, category, description, year, lang: langKey || null, coverUrl: coverThumb };
+      }
+
+      function parseGoogleBooks(item) {
+        if (!item) return null;
+        const info = item.volumeInfo || {};
+        const title = info.title || '';
+        const authors = Array.isArray(info.authors) ? info.authors : [];
+        const cats = Array.isArray(info.categories) ? info.categories : [];
+        const category = cats.length ? String(cats[0]).split(' / ')[0].trim().slice(0, 32) : '';
+        const description = info.description ? String(info.description).replace(/<[^>]+>/g, '').slice(0, 280) : '';
+        const yearMatch = String(info.publishedDate || '').match(/(19|20)\d{2}/);
+        const year = yearMatch ? yearMatch[0] : '';
+        const lang = info.language || null;
+        // Google Books thumbnail (remove curl param for better quality)
+        const thumb = info.imageLinks?.thumbnail || info.imageLinks?.smallThumbnail || '';
+        const coverUrl = thumb ? thumb.replace('&edge=curl', '').replace('zoom=1', 'zoom=2') : '';
+        return { title, authors, category, description, year, lang, coverUrl };
+      }
+
+      function parseCrossref(item) {
+        if (!item) return null;
+        const title = Array.isArray(item.title) && item.title[0] ? item.title[0] : '';
+        const authors = Array.isArray(item.author)
+          ? item.author.map(a => [a.given, a.family].filter(Boolean).join(' ')).filter(Boolean)
+          : [];
+        const yearVal = item.published?.['date-parts']?.[0]?.[0] || item.published_print?.['date-parts']?.[0]?.[0];
+        const year = yearVal ? String(yearVal) : '';
+        return { title, authors, category: '', description: '', year, lang: null, coverUrl: '' };
+      }
+
+      // Merge multiple results, preferring language-matched sources
+      function mergeResults(results, preferredLang) {
+        // results is array of {source, data} where data may be null
+        const valid = results.filter(r => r.data && r.data.title);
+
+        // Pick best item per field
+        const pick = (getter) => {
+          // First try language-preferred sources
+          if (preferredLang) {
+            const langMatch = valid.find(r => r.data.lang && String(r.data.lang).startsWith(preferredLang));
+            if (langMatch) { const v = getter(langMatch.data); if (v) return { value: v, source: langMatch.source, lang: langMatch.data.lang }; }
+          }
+          // Then any source with a value
+          for (const r of valid) {
+            const v = getter(r.data); if (v) return { value: v, source: r.source, lang: r.data.lang };
+          }
+          return null;
+        };
+
+        const titleR = pick(d => d.title);
+        const authorsR = pick(d => d.authors?.length ? d.authors : null);
+        const categoryR = pick(d => d.category);
+        const descR = pick(d => d.description);
+        const yearR = pick(d => d.year);
+        const coverR = pick(d => d.coverUrl);
+        const langR = pick(d => d.lang);
+
+        const sourceSet = new Set();
+        [titleR, authorsR, categoryR, yearR].forEach(r => r && sourceSet.add(r.source));
+
+        return {
+          title: titleR?.value || '',
+          authors: authorsR?.value || [],
+          category: categoryR?.value || '',
+          description: descR?.value || '',
+          year: yearR?.value || '',
+          coverUrl: coverR?.value || '',
+          lang: langR?.value || preferredLang || null,
+          sources: [...sourceSet]
+        };
+      }
+
+      const compact = String(isbn).replace(/[^0-9Xx]/g, '');
+      const altIsbn = compact.length === 13 ? isbn13to10(compact) : isbn10to13(compact);
+      const preferredLang = inferLang(compact);
 
       setNotice('warn', `已识别 ISBN：${isbn}，正在查询书名、作者、分类和简介…`);
+
       try {
-        let languageHint = inferPreferredLanguageFromIsbn(isbn);
-        const olResp = await fetch(`https://openlibrary.org/api/books?bibkeys=ISBN:${encodeURIComponent(isbn)}&format=json&jscmd=data`);
-        if (olResp.ok) {
-          const olData = await olResp.json();
-          languageHint = applyOpenLibrary(olData[`ISBN:${isbn}`]);
-        }
+        // Build all fetch URLs
+        const olUrl = `https://openlibrary.org/api/books?bibkeys=ISBN:${encodeURIComponent(compact)}&format=json&jscmd=data`;
+        const gbUrl = `https://www.googleapis.com/books/v1/volumes?q=isbn:${encodeURIComponent(compact)}&maxResults=5`;
+        const gbLangUrl = preferredLang
+          ? `https://www.googleapis.com/books/v1/volumes?q=isbn:${encodeURIComponent(compact)}&langRestrict=${encodeURIComponent(preferredLang)}&maxResults=5`
+          : null;
+        const crUrl = `https://api.crossref.org/works?filter=isbn:${encodeURIComponent(compact)}&rows=3`;
+        // Alt ISBN queries (ISBN-10 ↔ 13 conversion)
+        const olAltUrl = altIsbn ? `https://openlibrary.org/api/books?bibkeys=ISBN:${encodeURIComponent(altIsbn)}&format=json&jscmd=data` : null;
+        const gbAltUrl = altIsbn ? `https://www.googleapis.com/books/v1/volumes?q=isbn:${encodeURIComponent(altIsbn)}&maxResults=3` : null;
 
-        let sourceHits = [];
-        if (els.title.value || els.author.value || els.category.value || (els.description && els.description.value) || els.publishedYear.value) sourceHits.push(`Open Library${languageHint ? `:${languageHint}` : ''}`);
+        // Fire all requests in parallel
+        const urls = [olUrl, gbUrl, gbLangUrl, crUrl, olAltUrl, gbAltUrl].filter(Boolean);
+        const responses = await Promise.allSettled(urls.map(u => fetch(u).then(r => r.ok ? r.json() : null)));
 
-        let stillMissing = !els.title.value || !els.author.value || !els.category.value || !(els.description && els.description.value) || !els.publishedYear.value;
-        if (stillMissing) {
-          const gbResp = await fetch(`https://www.googleapis.com/books/v1/volumes?q=isbn:${encodeURIComponent(isbn)}`);
-          if (gbResp.ok) {
-            const gbData = await gbResp.json();
-            if (Array.isArray(gbData.items) && gbData.items.length) {
-              const preferred = languageHint
-                ? gbData.items.find(item => String(item?.volumeInfo?.language || '').toLowerCase().startsWith(String(languageHint).toLowerCase())) || gbData.items[0]
-                : gbData.items[0];
-              const gbLang = applyGoogleBooks(preferred);
-              languageHint = languageHint || gbLang;
-              sourceHits.push(`Google Books${gbLang ? `:${gbLang}` : ''}`);
-            }
+        const [olRes, gbRes, gbLangRes, crRes, olAltRes, gbAltRes] = responses.map(r => r.status === 'fulfilled' ? r.value : null);
+
+        // Parse Open Library results
+        const olData = olRes ? (olRes[`ISBN:${compact}`] || null) : null;
+        const olAltData = olAltRes ? (olAltRes[`ISBN:${altIsbn}`] || null) : null;
+        const olParsed = parseOpenLibrary(olData) || parseOpenLibrary(olAltData);
+
+        // Parse Google Books — prefer language-matched item
+        function bestGbItem(data) {
+          if (!data?.items?.length) return null;
+          if (preferredLang) {
+            return data.items.find(i => String(i?.volumeInfo?.language || '').startsWith(preferredLang)) || data.items[0];
           }
+          return data.items[0];
         }
+        const gbLangParsed = parseGoogleBooks(bestGbItem(gbLangRes));
+        const gbParsed = parseGoogleBooks(bestGbItem(gbRes));
+        const gbAltParsed = parseGoogleBooks(bestGbItem(gbAltRes));
 
-        stillMissing = !els.title.value || !els.author.value || !els.publishedYear.value;
-        if (stillMissing) {
-          const crResp = await fetch(`https://api.crossref.org/works?filter=isbn:${encodeURIComponent(isbn)}&rows=1`);
-          if (crResp.ok) {
-            const crData = await crResp.json();
-            const item = crData?.message?.items?.[0];
-            if (item) {
-              applyCrossref(item);
-              sourceHits.push('Crossref');
-            }
-          }
-        }
+        // Parse Crossref
+        const crParsed = parseCrossref(crRes?.message?.items?.[0]);
+
+        // Assemble result list, language-preferred sources first
+        const resultList = [];
+        if (gbLangParsed) resultList.push({ source: 'Google Books', data: gbLangParsed });
+        if (olParsed) resultList.push({ source: 'Open Library', data: olParsed });
+        if (gbParsed) resultList.push({ source: 'Google Books', data: gbParsed });
+        if (gbAltParsed) resultList.push({ source: 'Google Books', data: gbAltParsed });
+        if (crParsed) resultList.push({ source: 'Crossref', data: crParsed });
+
+        const merged = mergeResults(resultList, preferredLang);
+
+        // Apply merged data to form fields
+        if (merged.title) els.title.value = merged.title;
+        if (merged.authors.length) els.author.value = merged.authors.join(', ');
+        if (merged.category && !els.category.value) els.category.value = merged.category;
+        if (merged.year && !els.publishedYear.value) els.publishedYear.value = merged.year;
+        if (merged.description && els.description && !els.description.value) els.description.value = merged.description;
+        if (merged.coverUrl) els.manualCard.dataset.pendingCoverUrl = merged.coverUrl;
+        if (merged.lang) els.manualCard.dataset.bookLang = merged.lang;
+        if (merged.sources.length) els.manualCard.dataset.bookSources = merged.sources.join(' / ');
 
         const titleFilled = Boolean(els.title.value);
-        const anyFilled = Boolean(els.title.value || els.author.value || els.category.value || els.publishedYear.value || (els.description && els.description.value));
-        if (!titleFilled && !anyFilled) {
-          setNotice('warn', `${sourceLabel}：${isbn}，但暂时没有查到完整书目信息，请手动补充后保存。`);
+        const anyFilled = Boolean(els.title.value || els.author.value || els.category.value || els.publishedYear.value);
+        if (!anyFilled) {
+          setNotice('warn', `${sourceLabel}：${isbn}，暂未查到书目信息，请手动补充后保存。`);
           return { found: false };
         }
-        const authorFilled = Boolean(els.author.value);
-        const categoryFilled = Boolean(els.category.value);
-        const yearFilled = Boolean(els.publishedYear.value);
-        const sourceText = sourceHits.length ? `（来源：${sourceHits.join(' / ')}${languageHint ? `；语言：${languageHint}` : ''}）` : '';
-        if (languageHint) els.manualCard.dataset.bookLang = languageHint;
-        if (sourceHits.length) els.manualCard.dataset.bookSources = sourceHits.join(' / ');
-        setNotice('ok', `${sourceLabel}：${isbn}${titleFilled ? ` · ${escapeHtml(els.title.value)}` : ''}${authorFilled ? ` · ${escapeHtml(els.author.value)}` : ''}${categoryFilled ? ` · ${escapeHtml(els.category.value)}` : ''}${yearFilled ? ` · ${escapeHtml(els.publishedYear.value)}` : ''} ${escapeHtml(sourceText)}`);
-        return { found: true, language: languageHint, sources: sourceHits };
+
+        const parts = [
+          els.title.value,
+          els.author.value,
+          merged.category,
+          merged.year
+        ].filter(Boolean).map(escapeHtml);
+        const srcText = merged.sources.length ? `（来源：${merged.sources.join(' / ')}${merged.lang ? `；${merged.lang}` : ''}）` : '';
+        setNotice('ok', `${sourceLabel}：${isbn} · ${parts.join(' · ')} ${escapeHtml(srcText)}`);
+        return { found: true, language: merged.lang, sources: merged.sources };
+
       } catch (e) {
-        const partialFound = Boolean(els.title.value || els.author.value || els.category.value || els.publishedYear.value || (els.description && els.description.value));
-        setNotice('warn', `${sourceLabel}：${isbn}，${partialFound ? '已拿到部分书目信息，你可以继续审阅后导入。' : '但联网查询书目信息失败，请手动补充后保存。'}`);
+        const partialFound = Boolean(els.title.value || els.author.value || els.category.value || els.publishedYear.value);
+        setNotice('warn', `${sourceLabel}：${isbn}，${partialFound ? '已拿到部分书目信息，审阅后可导入。' : '联网查询失败，请手动补充后保存。'}`);
         return { found: partialFound, error: e };
       }
     }
