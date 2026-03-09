@@ -1,0 +1,7 @@
+name = "maomao-books-proxy"
+main = "books-proxy.js"
+compatibility_date = "2024-01-01"
+
+# 你的 API Key 不要写在这里！
+# 用命令设置：npx wrangler secret put GBOOKS_API_KEY
+# 然后粘贴你的 key
