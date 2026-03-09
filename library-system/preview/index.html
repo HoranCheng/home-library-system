@@ -828,7 +828,7 @@
         else els.manualNotice.innerHTML = html;
       };
       const applyOpenLibrary = (book) => {
-        if (!book) return;
+        if (!book) return null;
         if (!els.title.value && book.title) els.title.value = book.title;
         if (!els.author.value && Array.isArray(book.authors) && book.authors.length) {
           els.author.value = book.authors.map(a => a.name).filter(Boolean).join(', ');
@@ -845,6 +845,10 @@
           const match = String(book.publish_date).match(/(19|20)\d{2}/);
           if (match) els.publishedYear.value = match[0];
         }
+        const olLang = Array.isArray(book.languages) && book.languages.length
+          ? String(book.languages[0]?.key || '').split('/').pop()
+          : '';
+        return olLang || null;
       };
       const applyGoogleBooks = (item) => {
         const info = item?.volumeInfo || {};
@@ -856,6 +860,7 @@
           const match = String(info.publishedDate).match(/(19|20)\d{2}/);
           if (match) els.publishedYear.value = match[0];
         }
+        return info.language || null;
       };
       const applyCrossref = (item) => {
         if (!item) return;
@@ -871,23 +876,28 @@
 
       setNotice('warn', `已识别 ISBN：${isbn}，正在查询书名、作者、分类和简介…`);
       try {
+        let languageHint = null;
         const olResp = await fetch(`https://openlibrary.org/api/books?bibkeys=ISBN:${encodeURIComponent(isbn)}&format=json&jscmd=data`);
         if (olResp.ok) {
           const olData = await olResp.json();
-          applyOpenLibrary(olData[`ISBN:${isbn}`]);
+          languageHint = applyOpenLibrary(olData[`ISBN:${isbn}`]);
         }
 
         let sourceHits = [];
-        if (els.title.value || els.author.value || els.category.value || els.description.value || els.publishedYear.value) sourceHits.push('Open Library');
+        if (els.title.value || els.author.value || els.category.value || (els.description && els.description.value) || els.publishedYear.value) sourceHits.push(`Open Library${languageHint ? `:${languageHint}` : ''}`);
 
-        let stillMissing = !els.title.value || !els.author.value || !els.category.value || !els.description.value || !els.publishedYear.value;
+        let stillMissing = !els.title.value || !els.author.value || !els.category.value || !(els.description && els.description.value) || !els.publishedYear.value;
         if (stillMissing) {
           const gbResp = await fetch(`https://www.googleapis.com/books/v1/volumes?q=isbn:${encodeURIComponent(isbn)}`);
           if (gbResp.ok) {
             const gbData = await gbResp.json();
             if (Array.isArray(gbData.items) && gbData.items.length) {
-              applyGoogleBooks(gbData.items[0]);
-              sourceHits.push('Google Books');
+              const preferred = languageHint
+                ? gbData.items.find(item => item?.volumeInfo?.language === languageHint) || gbData.items[0]
+                : gbData.items[0];
+              const gbLang = applyGoogleBooks(preferred);
+              languageHint = languageHint || gbLang;
+              sourceHits.push(`Google Books${gbLang ? `:${gbLang}` : ''}`);
             }
           }
         }
@@ -914,7 +924,7 @@
         const authorFilled = Boolean(els.author.value);
         const categoryFilled = Boolean(els.category.value);
         const yearFilled = Boolean(els.publishedYear.value);
-        const sourceText = sourceHits.length ? `（来源：${sourceHits.join(' / ')}）` : '';
+        const sourceText = sourceHits.length ? `（来源：${sourceHits.join(' / ')}${languageHint ? `；语言：${languageHint}` : ''}）` : '';
         setNotice('ok', `${sourceLabel}：${isbn}${titleFilled ? ` · ${escapeHtml(els.title.value)}` : ''}${authorFilled ? ` · ${escapeHtml(els.author.value)}` : ''}${categoryFilled ? ` · ${escapeHtml(els.category.value)}` : ''}${yearFilled ? ` · ${escapeHtml(els.publishedYear.value)}` : ''} ${escapeHtml(sourceText)}`);
         return { found: true };
       } catch (e) {
