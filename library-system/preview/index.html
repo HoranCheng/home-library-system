@@ -672,6 +672,7 @@
         els.saveBtn.textContent = '导入库中';
         clearDraftFields({ keepIsbn: false, keepLocation: false, clearNotices: false });
         setPage(editReturnPage, { mode: editReturnMode });
+        setTimeout(() => window.scrollTo({ top: editReturnScrollY, behavior: 'auto' }), 0);
         return true;
       } else {
         books.push({
@@ -873,6 +874,7 @@
           scannerIntent = 'entry';
           editReturnPage = getPage();
           editReturnMode = getMode();
+          editReturnScrollY = window.scrollY || window.pageYOffset || 0;
           editingBookId = id;
           els.isbn.value = book.isbn || '';
           els.title.value = book.title || '';
@@ -1000,6 +1002,7 @@
     let entrySessionCount = 0;
     let editReturnPage = 'home';
     let editReturnMode = 'dashboard';
+    let editReturnScrollY = 0;
 
     function stopScanner() {
       scannerActive = false;
