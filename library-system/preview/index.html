@@ -169,9 +169,10 @@
       <div class="sticky-actions">
         <div class="actions">
           <button class="btn primary" id="saveBtn">导入库中</button>
+          <button class="btn ghost" id="finishEntryBtn">完成录入</button>
         </div>
       </div>
-      <div class="hint">建议流程：输入或扫描 ISBN → 自动补全信息 → 审阅/补充 → 导入库中。</div>
+      <div class="hint" id="entrySessionHint">建议流程：输入或扫描 ISBN → 自动补全信息 → 审阅/补充 → 导入库中。连续录入时会自动留在当前界面，方便继续下一本。</div>
       <div id="manualNotice"></div>
     </div>
 
@@ -329,6 +330,8 @@
       description: null,
       notes: null,
       saveBtn: document.getElementById('saveBtn'),
+      finishEntryBtn: document.getElementById('finishEntryBtn'),
+      entrySessionHint: document.getElementById('entrySessionHint'),
       manualNotice: document.getElementById('manualNotice'),
       reviewCard: document.getElementById('reviewCard'),
       currentReadingCard: document.getElementById('currentReadingCard'),
@@ -435,6 +438,9 @@
       const currentDraftYear = String(els.publishedYear?.value || '').trim();
       const currentDraftLocation = String(els.location?.value || '').trim();
       const canImport = Boolean(currentDraftTitle && currentDraftAuthor);
+      els.entrySessionHint.textContent = mode === 'entry'
+        ? `连续录入中：本轮已导入 ${entrySessionCount} 本。导入成功后会自动留在当前界面，继续下一本。`
+        : '建议流程：输入或扫描 ISBN → 自动补全信息 → 审阅/补充 → 导入库中。连续录入时会自动留在当前界面，方便继续下一本。';
       els.reviewCard.innerHTML = (lookupCompleted || currentDraftTitle || currentDraftAuthor)
         ? `<div><strong>${escapeHtml(currentDraftTitle || '待补充书名')}</strong></div>
            <div class="muted" style="margin-top:6px">${escapeHtml(currentDraftAuthor || '待补充作者')} · ${escapeHtml(currentDraftCategory || '待补充分类')} ${currentDraftYear ? `· ${escapeHtml(currentDraftYear)}` : ''}</div>
@@ -516,8 +522,9 @@
     els.navSearch.onclick = () => setPage('search');
     els.navOrganize.onclick = () => setPage('organize');
     els.navSettings.onclick = () => setPage('settings');
-    els.openEntryBtn.onclick = () => { setPage('home', { mode: 'entry' }); window.scrollTo({ top: 0, behavior: 'smooth' }); };
+    els.openEntryBtn.onclick = () => { entrySessionCount = 0; setPage('home', { mode: 'entry' }); window.scrollTo({ top: 0, behavior: 'smooth' }); };
     els.jumpOrganizeBtn.onclick = () => setPage('organize');
+    els.finishEntryBtn.onclick = () => { entrySessionCount = 0; clearDraftFields({ keepIsbn: false, keepLocation: false }); setPage('home', { mode: 'dashboard' }); };
 
     els.isbnScanBtn.onclick = (event) => {
       event.preventDefault();
@@ -539,12 +546,13 @@
 
     function clearDraftFields(options = {}) {
       const keepIsbn = options.keepIsbn === true;
+      const keepLocation = options.keepLocation === true;
       if (!keepIsbn) els.isbn.value = '';
       els.title.value = '';
       els.author.value = '';
       els.category.value = '';
       els.publishedYear.value = '';
-      els.location.value = '';
+      if (!keepLocation) els.location.value = '';
       if (els.description) els.description.value = '';
       if (els.readingStatus) els.readingStatus.value = '';
       if (els.readingProgress) els.readingProgress.value = '';
@@ -639,18 +647,12 @@
           status: isCompleteRecord ? 'in_library' : 'to_be_sorted', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString()
         });
         saveBooks(books);
-        els.manualNotice.innerHTML = makeNotice('ok', `已导入：${title}${isCompleteRecord ? '（已入库）' : '（已放入待整理，后续可补信息）'}`);
+        entrySessionCount += 1;
+        els.manualNotice.innerHTML = makeNotice('ok', `已导入：${title}${isCompleteRecord ? '（已入库）' : '（已放入待整理，后续可补信息）'}。继续下一本吧。`);
       }
-      els.isbn.value = ''; els.title.value = ''; els.author.value = ''; els.category.value = '';
-      if (els.readingStatus) els.readingStatus.value = ''; if (els.readingProgress) els.readingProgress.value = '';
-      els.publishedYear.value = ''; els.location.value = '';
-      if (els.description) els.description.value = ''; if (els.notes) els.notes.value = '';
+      clearDraftFields({ keepIsbn: false, keepLocation: true });
       lookupCompleted = false;
-      if (!options.next) setMode('dashboard');
-      if (options.next) {
-        els.manualNotice.innerHTML = makeNotice('ok', '已加入图书，继续下一本。');
-        els.isbn.focus();
-      }
+      els.isbn.focus();
       render();
       return true;
     }
@@ -949,6 +951,7 @@
     let isbnLookupTimer = null;
     let selectedCategoryFilter = '';
     let scannerIntent = 'entry';
+    let entrySessionCount = 0;
 
     function stopScanner() {
       scannerActive = false;
