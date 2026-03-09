@@ -8,6 +8,11 @@ export type CreateBookResult =
   | { ok: false; code: "DUPLICATE_CANDIDATE"; candidates: Book[] }
   | { ok: false; code: "INVALID_ISBN"; reason: string };
 
+/**
+ * Validates input and creates a new Book object.
+ * Does NOT mutate state — the caller is responsible for appending the
+ * returned book to state.books and persisting.
+ */
 export function createBook(state: LibraryState, input: CreateBookInput): CreateBookResult {
   let isbn10 = input.isbn10;
   let isbn13 = input.isbn13;
@@ -36,6 +41,5 @@ export function createBook(state: LibraryState, input: CreateBookInput): CreateB
     createdAt: now,
     updatedAt: now
   };
-  state.books.push(book);
   return { ok: true, book };
 }

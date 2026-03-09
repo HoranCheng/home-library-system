@@ -28,15 +28,36 @@ export function exportCsv(state: LibraryState): string {
 
 export function validateImportJson(raw: string): ImportValidation {
   try {
-    const parsed = JSON.parse(raw) as LibraryState;
-    if (!parsed || !Array.isArray(parsed.books) || !parsed.meta) {
-      return { ok: false, errors: ["Invalid schema shape"] };
+    const parsed = JSON.parse(raw);
+
+    if (!parsed || typeof parsed !== "object") {
+      return { ok: false, errors: ["Invalid schema shape: expected object at root"] };
     }
-    const bad = parsed.books.find((b) => !b.id || !b.title || !Array.isArray(b.authors));
-    if (bad) return { ok: false, errors: ["Book item missing required fields"] };
+    if (!Array.isArray(parsed.books)) {
+      return { ok: false, errors: ["Invalid schema shape: books must be an array"] };
+    }
+    if (!parsed.meta || typeof parsed.meta !== "object") {
+      return { ok: false, errors: ["Invalid schema shape: meta must be an object"] };
+    }
+    if (typeof parsed.meta.schemaVersion !== "number") {
+      return { ok: false, errors: ["meta.schemaVersion must be a number"] };
+    }
+    if (typeof parsed.meta.updatedAt !== "string") {
+      return { ok: false, errors: ["meta.updatedAt must be a string"] };
+    }
+
+    const errors: string[] = [];
+    (parsed.books as any[]).forEach((b, i) => {
+      if (!b.id || typeof b.id !== "string") errors.push(`Book[${i}]: id must be a non-empty string`);
+      if (!b.title || typeof b.title !== "string") errors.push(`Book[${i}]: title must be a non-empty string`);
+      if (!Array.isArray(b.authors)) errors.push(`Book[${i}]: authors must be an array`);
+      if (b.status && !["in_library", "to_be_sorted"].includes(b.status)) errors.push(`Book[${i}]: invalid status "${b.status}"`);
+    });
+    if (errors.length > 0) return { ok: false, errors };
+
     return { ok: true, errors: [], bookCount: parsed.books.length };
-  } catch {
-    return { ok: false, errors: ["Invalid JSON"] };
+  } catch (e) {
+    return { ok: false, errors: [`Invalid JSON${e instanceof Error ? `: ${e.message}` : ""}`] };
   }
 }
 

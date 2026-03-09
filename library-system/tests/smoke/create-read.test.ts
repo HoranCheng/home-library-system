@@ -9,6 +9,7 @@ describe("create/read smoke", () => {
     const result = createBook(state, { title: "Refactoring", authors: ["Martin Fowler"], status: "in_library" });
     expect(result.ok).toBe(true);
     if (!result.ok) return;
+    state.books.push(result.book);
     expect(getBookById(state, result.book.id)?.title).toBe("Refactoring");
   });
 });

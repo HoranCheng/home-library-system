@@ -27,9 +27,11 @@
       background-size: 12px 12px, auto;
     }
     .app { max-width:480px; margin:0 auto; min-height:100vh; padding:18px 16px calc(var(--safe-bottom) + 96px); }
+    @media (min-width:768px) { .app { max-width:600px; padding:24px 32px calc(var(--safe-bottom) + 96px); } }
+    @media (min-width:1024px) { .app { max-width:900px; } }
     .topbar { display:flex; align-items:center; justify-content:space-between; }
     .pill { display:inline-flex; align-items:center; gap:6px; padding:6px 10px; background:var(--surface-2); border:1px solid rgba(163,177,138,.28); border-radius:999px; color:#697458; font-size:12px; }
-    h1 { margin:12px 0 6px; font-size:30px; font-family:"Noto Serif SC","Songti SC","STSong",serif; letter-spacing:.02em; }
+    h1 { margin:12px 0 6px; font-size:26px; font-family:"Noto Serif SC","Songti SC","STSong",serif; letter-spacing:.02em; }
     .muted { color:var(--muted); }
     .card {
       margin-top:16px; background:var(--card); border:1px solid rgba(255,255,255,.75);
@@ -42,8 +44,8 @@
     }
     .segmented button.active { background:var(--accent); color:#091122; }
     .hero { margin-top:14px; padding:18px; border-radius:28px; background:linear-gradient(180deg,#fcfaf6,#f3eee7); border:1px solid rgba(255,255,255,.85); box-shadow:var(--shadow); }
-    .hero h2 { margin:0 0 8px; font-size:22px; font-family:"Noto Serif SC","Songti SC","STSong",serif; }
-    .hero p { margin:0; color:#7e6f6f; line-height:1.55; }
+    .hero h2 { margin:0 0 6px; font-size:18px; font-family:"Noto Serif SC","Songti SC","STSong",serif; }
+    .hero p { margin:0; color:var(--muted); font-size:14px; line-height:1.5; }
     .actions { display:flex; gap:10px; margin-top:14px; }
     button.btn {
       width:100%; border:0; border-radius:14px; padding:14px 16px; font-size:16px; font-weight:700;
@@ -56,9 +58,9 @@
     #saveBtn::after { content:' ᓚ'; font-size:12px; opacity:.85; }
     #finishEntryBtn { background:#eef1e8 !important; color:#627052 !important; border:1px solid rgba(163,177,138,.22) !important; }
     .ghost { background:transparent; color:var(--text); border:1px solid var(--line); }
-    .section-title { font-size:18px; margin:0 0 10px; }
+    .section-title { font-size:17px; margin:0 0 10px; font-weight:700; }
     .field { margin-top:12px; }
-    .field label { display:block; margin-bottom:6px; font-size:14px; color:#d7e0ff; }
+    .field label { display:block; margin-bottom:6px; font-size:14px; color:var(--muted); font-weight:600; }
     .field input, .field textarea {
       width:100%; border-radius:18px; border:1px solid rgba(255,255,255,.75); background:var(--surface); color:var(--text);
       padding:13px 14px; font-size:16px; outline:none; box-shadow:var(--inset-shadow);
@@ -79,7 +81,8 @@
     .notice.err { background:rgba(255,122,122,.14); color:#ffd0d0; }
     .summary { display:grid; grid-template-columns:repeat(3,1fr); gap:10px; margin-top:12px; }
     .metric { background:#fffdfa; border:1px solid rgba(61,44,46,.06); border-radius:20px; padding:14px 12px; text-align:center; box-shadow:0 6px 18px rgba(61,44,46,.04); }
-    .metric strong { display:block; font-size:22px; }
+    .metric strong { display:block; font-size:26px; font-weight:800; color:var(--text); }
+    .metric .muted { font-size:11px; }
     .book-list { margin-top:12px; }
     .book-item { padding:12px 0; border-top:1px solid var(--line); position:relative; }
     .book-item:first-child { border-top:0; padding-top:0; }
@@ -88,7 +91,7 @@
     .chip { display:inline-flex; align-items:center; gap:6px; padding:8px 10px; border-radius:999px; background:#fffaf0; border:1px solid rgba(61,44,46,.08); color:#6e5c5e; font-size:13px; }
     button.chip { cursor:pointer; }
     .chip.active { background:var(--accent); color:#081120; border-color:transparent; font-weight:700; }
-    .subsection-title { margin:16px 0 8px; font-size:15px; color:#d7e0ff; }
+    .subsection-title { margin:16px 0 8px; font-size:13px; color:var(--muted); font-weight:600; letter-spacing:.03em; text-transform:uppercase; }
     .book-head { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; }
     .menu-wrap { position:relative; }
     .menu-btn { width:auto !important; padding:8px 10px !important; border-radius:12px !important; background:#fffaf0; color:#6e5c5e; border:1px solid rgba(61,44,46,.08); font-size:18px; line-height:1; }
@@ -97,7 +100,7 @@
     .menu-panel button:hover { background:#fff4d6; }
     pre { margin:12px 0 0; padding:12px; border-radius:14px; background:#0a1128; color:#d7e0ff; white-space:pre-wrap; word-break:break-word; font-size:12px; }
     .bottom-nav {
-      position:fixed; left:50%; transform:translateX(-50%); bottom:calc(var(--safe-bottom) + 8px); width:min(448px, calc(100vw - 24px));
+      position:fixed; left:50%; transform:translateX(-50%); bottom:calc(var(--safe-bottom) + 8px); width:min(568px, calc(100vw - 24px));
       display:flex; gap:8px; margin-top:18px; padding:10px;
       background:rgba(255,255,255,.94); border:1px solid rgba(61,44,46,.05); border-radius:22px; backdrop-filter:blur(10px); box-shadow:0 -2px 20px rgba(61,44,46,.06); z-index:40;
     }
@@ -108,7 +111,14 @@
     .scanner-aim-inner { width:220px; height:90px; border:2.5px solid var(--accent); border-radius:10px; box-shadow:0 0 0 9999px rgba(0,0,0,.45); }
     .scanner-cancel { position:absolute; top:10px; right:10px; background:rgba(0,0,0,.65); color:#fff; border:0; border-radius:10px; padding:7px 14px; font-size:14px; cursor:pointer; font-weight:600; }
     .hidden { display:none !important; }
-    .bottom-nav button { flex:1; text-align:center; padding:10px 8px; color:#8a7a7b; font-size:13px; background:transparent; border:0; border-radius:14px; min-height:44px; transition:none; -webkit-tap-highlight-color: transparent; appearance:none; }
+    .page-header { transition:max-height .25s ease, opacity .25s ease; overflow:hidden; }
+    .page-header.collapsed { max-height:0; opacity:0; margin:0; padding:0; }
+    .book-grid { display:grid; grid-template-columns:repeat(3, 1fr); gap:12px; margin-top:12px; }
+    .book-grid-item { text-align:center; cursor:pointer; }
+    .book-grid-item img { width:100%; aspect-ratio:2/3; object-fit:cover; border-radius:12px; background:var(--surface-2); border:1px solid var(--line); }
+    .book-grid-item .book-grid-title { font-size:13px; margin-top:6px; line-height:1.3; overflow:hidden; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; }
+    .book-grid-item .book-grid-author { font-size:11px; color:var(--muted); margin-top:2px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .bottom-nav button { flex:1; text-align:center; padding:12px 8px; color:#8a7a7b; font-size:12px; background:transparent; border:0; border-radius:14px; min-height:52px; transition:none; -webkit-tap-highlight-color: transparent; appearance:none; }
     .bottom-nav button.active { background:#fff4d6; color:#6a5030; font-weight:700; }
     .cover-card { display:flex; gap:14px; align-items:flex-start; }
     .cover-thumb { width:86px; height:122px; border-radius:14px; object-fit:cover; background:#0b1430; border:1px solid var(--line); }
@@ -136,8 +146,10 @@
       <div class="pill" id="modePill">当前模式：扫码</div>
     </div>
 
-    <h1>毛毛图书管理系统</h1>
-    <p class="muted">把家里的书一本本收进来，随手查、随手整理，手机上就能完成。</p>
+    <div class="page-header" id="pageHeader">
+      <h1>毛毛图书管理系统</h1>
+      <p class="muted">把家里的书一本本收进来，随手查、随手整理，手机上就能完成。</p>
+    </div>
 
     <div class="card hidden" id="scanSection"></div>
 
@@ -213,7 +225,7 @@
       <div id="currentReadingCard"></div>
       <div class="subsection-title">分类分布</div>
       <div class="chips" id="categoryChips"></div>
-      <div class="subsection-title">最近新增</div>
+      <div class="subsection-title">我的书架</div>
       <div class="book-list" id="bookList"></div>
     </div>
 
@@ -442,11 +454,13 @@
       els.navOrganize.classList.toggle('active', page === 'organize');
       els.navSettings.classList.toggle('active', page === 'settings');
       els.scanSection.classList.add('hidden');
-      els.manualCard.classList.toggle('hidden', !(page === 'home' && mode === 'entry'));
-      els.homeSection.classList.toggle('hidden', page !== 'home');
+      const isEntry = page === 'home' && mode === 'entry';
+      els.manualCard.classList.toggle('hidden', !isEntry);
+      els.homeSection.classList.toggle('hidden', page !== 'home' || isEntry);
       els.searchSection.classList.toggle('hidden', page !== 'search');
       els.organizeSection.classList.toggle('hidden', page !== 'organize');
       els.settingsSection.classList.toggle('hidden', page !== 'settings');
+      document.getElementById('pageHeader').classList.toggle('collapsed', page !== 'home' || isEntry);
 
       const currentDraftTitle = String(els.title?.value || '').trim();
       const currentDraftAuthor = String(els.author?.value || '').trim();
@@ -499,8 +513,16 @@
         ? sortedCategories.map(([name, count]) => `<button class="chip category-filter-chip ${selectedCategoryFilter === name ? 'active' : ''}" data-category="${escapeHtml(name)}">${escapeHtml(name)} · ${count}</button>`).join('') + (selectedCategoryFilter ? `<button class="chip category-filter-chip" data-category="">清除筛选</button>` : '')
         : '<div class="muted">还没有分类数据，先录入几本书试试。</div>';
 
-      els.bookList.innerHTML = books.length
-        ? books.slice().sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || ''))).slice(0, 8).map(b => renderBookRow(b)).join('')
+      const sortedBooks = books.slice().sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || '')));
+      els.bookList.innerHTML = sortedBooks.length
+        ? `<div class="book-grid">${sortedBooks.map(b => {
+            const cover = coverUrl(b);
+            return `<div class="book-grid-item book-detail-btn" data-id="${escapeHtml(b.id)}">
+              <img src="${cover ? escapeHtml(cover) : ''}" alt="${escapeHtml(b.title || '')}" onerror="this.style.background='var(--surface-2)';this.alt='无封面'" />
+              <div class="book-grid-title">${escapeHtml(b.title || '未命名')}</div>
+              <div class="book-grid-author">${escapeHtml(b.author || '未知作者')}</div>
+            </div>`;
+          }).join('')}</div>`
         : '<div class="muted" style="margin-top:12px">还没有图书，先录入一本试试。</div>';
 
       const locationPresets = loadLocationPresets();
@@ -515,17 +537,20 @@
         return queryMatched && categoryMatched;
       });
       const exactIsbnMatches = query ? books.filter(b => String(b.isbn || '').replace(/[^0-9Xx]/g, '') === query.replace(/[^0-9Xx]/g, '')) : [];
-      els.searchSummary.innerHTML = books.length
-        ? `${exactIsbnMatches.length ? `<div class="chip active">已在库中：${exactIsbnMatches.length} 本</div>` : ''}<div class="chip">共 ${books.length} 本</div><div class="chip">匹配 ${matchedBooks.length} 本</div>${selectedCategoryFilter ? `<button class="chip category-filter-chip active" data-category="">分类：${escapeHtml(selectedCategoryFilter)} ×</button>` : ''}`
-        : '<div class="muted">当前还没有图书数据。</div>';
-      els.searchResults.innerHTML = matchedBooks.length
-        ? matchedBooks.map(b => {
-            const exactMatch = query && String(b.isbn || '').replace(/[^0-9Xx]/g, '') === query.replace(/[^0-9Xx]/g, '');
-            return renderBookRow(b, {
-              actionHtml: exactMatch ? '<div class="chips" style="margin-top:10px"><div class="chip active">这本书已在库中</div></div>' : ''
-            });
-          }).join('')
-        : '<div class="muted" style="margin-top:12px">没有找到匹配的图书。</div>';
+      if (!books.length) {
+        els.searchSummary.innerHTML = '';
+        els.searchResults.innerHTML = '<div class="muted" style="margin-top:12px">还没有图书数据，先去录入几本吧。</div>';
+      } else {
+        els.searchSummary.innerHTML = `${exactIsbnMatches.length ? `<div class="chip active">已在库中：${exactIsbnMatches.length} 本</div>` : ''}<div class="chip">共 ${books.length} 本</div><div class="chip">匹配 ${matchedBooks.length} 本</div>${selectedCategoryFilter ? `<button class="chip category-filter-chip active" data-category="">分类：${escapeHtml(selectedCategoryFilter)} ×</button>` : ''}`;
+        els.searchResults.innerHTML = matchedBooks.length
+          ? matchedBooks.map(b => {
+              const exactMatch = query && String(b.isbn || '').replace(/[^0-9Xx]/g, '') === query.replace(/[^0-9Xx]/g, '');
+              return renderBookRow(b, {
+                actionHtml: exactMatch ? '<div class="chips" style="margin-top:10px"><div class="chip active">这本书已在库中</div></div>' : ''
+              });
+            }).join('')
+          : '<div class="muted" style="margin-top:12px">没有找到匹配的图书。</div>';
+      }
 
       const todoBooks = books.filter(b => b.status === 'to_be_sorted');
       els.organizeList.innerHTML = todoBooks.length

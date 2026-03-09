@@ -11,7 +11,10 @@ export function createFromManual(
   const state = loadState(storage);
   const draft = buildManualEntryDraft(partial);
   const result = createBook(state, draft);
-  if (result.ok) saveState(state, storage);
+  if (result.ok) {
+    state.books.push(result.book);
+    saveState(state, storage);
+  }
   return result;
 }
 

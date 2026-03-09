@@ -4,7 +4,8 @@ export const STORAGE_KEYS = {
   books: "lib:books:v1",
   isbnIndex: "lib:index:isbn:v1",
   fpIndex: "lib:index:fp:v1",
-  meta: "lib:meta:v1"
+  meta: "lib:meta:v1",
+  homeMode: "lib:home:mode:v1"
 } as const;
 
 export type LibraryMeta = {

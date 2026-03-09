@@ -55,7 +55,7 @@ describe("P0-4: validateImportJson 损坏 JSON 返回 ok:false", () => {
   it("传入非 JSON 字符串", () => {
     const result = validateImportJson("not json");
     expect(result.ok).toBe(false);
-    expect(result.errors).toContain("Invalid JSON");
+    expect(result.errors.some(e => e.startsWith("Invalid JSON"))).toBe(true);
   });
 
   it("传入空字符串", () => {

@@ -1,4 +1,6 @@
-export function normalizeText(v: string): string {
+/** Normalize arbitrary text for comparison: NFKC + lowercase + single-space collapse. */
+export function normalizeText(v: string | undefined | null): string {
+  if (!v) return "";
   return v
     .normalize("NFKC")
     .trim()
@@ -6,6 +8,10 @@ export function normalizeText(v: string): string {
     .replace(/\s+/g, " ");
 }
 
+/**
+ * Validate and normalize an ISBN string (10 or 13 digits).
+ * Strips hyphens/spaces and upper-cases before validation.
+ */
 export function normalizeIsbn(v: string): { ok: true; value: string } | { ok: false; reason: string } {
   const cleaned = v.replace(/[-\s]/g, "").toUpperCase();
   if (cleaned.length !== 10 && cleaned.length !== 13) {
@@ -30,6 +36,10 @@ export function normalizeIsbn(v: string): { ok: true; value: string } | { ok: fa
   return { ok: true, value: cleaned };
 }
 
+/**
+ * ISBN-10 check digit: sum of digit[i] * (10 - i) for i=0..9 must be divisible by 11.
+ * The last digit may be 'X' representing 10.
+ */
 function isValidIsbn10(v: string): boolean {
   let sum = 0;
   for (let i = 0; i < 9; i += 1) sum += (10 - i) * Number(v[i]);
@@ -38,6 +48,10 @@ function isValidIsbn10(v: string): boolean {
   return sum % 11 === 0;
 }
 
+/**
+ * ISBN-13 check digit: alternating weights 1 and 3 for the first 12 digits.
+ * The 13th digit is (10 - (sum % 10)) % 10.
+ */
 function isValidIsbn13(v: string): boolean {
   let sum = 0;
   for (let i = 0; i < 12; i += 1) {

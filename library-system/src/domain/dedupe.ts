@@ -8,5 +8,5 @@ export function dedupeByIsbn(books: Book[], isbn?: string): Book[] {
 
 export function dedupeByFingerprint(books: Book[], title: string, firstAuthor: string, edition?: string): Book[] {
   const fp = buildFingerprint(title, firstAuthor, edition);
-  return books.filter((b) => buildFingerprint(b.title, b.authors[0] ?? "", b.edition) === fp);
+  return books.filter((b) => buildFingerprint(b.title, b.authors?.[0] ?? "", b.edition) === fp);
 }

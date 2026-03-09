@@ -46,7 +46,8 @@ describe("handleManualEntrySubmit wiring", () => {
 
   it("returns invalid isbn error for bad isbn", () => {
     const s = mem();
-    const result = handleManualEntrySubmit({ title: "Bad ISBN Book", author: "Author", isbn: "123" }, s);
+    // Use a 10-digit ISBN with bad checksum to trigger INVALID_ISBN
+    const result = handleManualEntrySubmit({ title: "Bad ISBN Book", author: "Author", isbn: "0000000001" }, s);
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.code).toBe("INVALID_ISBN");
   });

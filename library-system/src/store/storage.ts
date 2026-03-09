@@ -7,8 +7,14 @@ function hasStorage(): boolean {
   return typeof globalThis !== "undefined" && !!(globalThis as any).localStorage;
 }
 
+/** Returns the platform localStorage or null when unavailable (e.g. SSR / tests). */
+export function getStorageAdapter(override?: StorageLike): StorageLike | null {
+  if (override) return override;
+  return hasStorage() ? (globalThis as any).localStorage : null;
+}
+
 export function loadState(storage?: StorageLike): LibraryState {
-  const s = storage ?? (hasStorage() ? (globalThis as any).localStorage : undefined);
+  const s = getStorageAdapter(storage);
   if (!s) return DEFAULT_STATE;
   try {
     const booksRaw = s.getItem(STORAGE_KEYS.books);
@@ -30,36 +36,36 @@ export class StorageWriteError extends Error {
 }
 
 export function saveState(state: LibraryState, storage?: StorageLike): void {
-  const s = storage ?? (hasStorage() ? (globalThis as any).localStorage : undefined);
+  const s = getStorageAdapter(storage);
   if (!s) return;
 
   const nextBooks = JSON.stringify(state.books);
   const nextMeta = JSON.stringify({ ...state.meta, updatedAt: new Date().toISOString() });
-  const prevBooks = s.getItem(STORAGE_KEYS.books);
-  const prevMeta = s.getItem(STORAGE_KEYS.meta);
+
+  // Snapshot current values for rollback (fall back to defaults if never written)
+  const prevBooks = s.getItem(STORAGE_KEYS.books) ?? JSON.stringify(DEFAULT_STATE.books);
+  const prevMeta = s.getItem(STORAGE_KEYS.meta) ?? JSON.stringify(DEFAULT_STATE.meta);
 
   try {
     s.setItem(STORAGE_KEYS.books, nextBooks);
+  } catch (error: any) {
+    // books write failed — storage unchanged, no rollback needed
+    throw new StorageWriteError(
+      error?.name === "QuotaExceededError" ? "本地存储空间已满，未能保存数据" : "写入本地存储失败"
+    );
+  }
+
+  try {
     s.setItem(STORAGE_KEYS.meta, nextMeta);
   } catch (error: any) {
+    // meta write failed but books already written — rollback books
     try {
-      if (prevBooks === null) {
-        s.setItem(STORAGE_KEYS.books, JSON.stringify(DEFAULT_STATE.books));
-      } else {
-        s.setItem(STORAGE_KEYS.books, prevBooks);
-      }
-      if (prevMeta === null) {
-        s.setItem(STORAGE_KEYS.meta, JSON.stringify(DEFAULT_STATE.meta));
-      } else {
-        s.setItem(STORAGE_KEYS.meta, prevMeta);
-      }
+      s.setItem(STORAGE_KEYS.books, prevBooks);
     } catch {
-      // best-effort rollback only
+      console.error("Storage rollback failed — books and meta may be inconsistent");
     }
-
-    const message = error?.name === "QuotaExceededError"
-      ? "本地存储空间已满，未能保存数据"
-      : "写入本地存储失败";
-    throw new StorageWriteError(message);
+    throw new StorageWriteError(
+      error?.name === "QuotaExceededError" ? "本地存储空间已满，未能保存数据" : "写入本地存储失败"
+    );
   }
 }

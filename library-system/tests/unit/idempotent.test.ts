@@ -7,6 +7,7 @@ describe("saveBookIdempotent", () => {
     const state = structuredClone(DEFAULT_STATE);
     const first = createBook(state, { title: "TDD", authors: ["Kent Beck"], isbn13: "9780321146533", status: "in_library" });
     expect(first.ok).toBe(true);
+    if (first.ok) state.books.push(first.book);
 
     const second = createBook(state, { title: "TDD", authors: ["Kent Beck"], isbn13: "9780321146533", status: "in_library" });
     expect(second.ok).toBe(false);
