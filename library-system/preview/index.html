@@ -834,6 +834,14 @@
         if (noticeTarget === 'scan') els.scanNotice.innerHTML = html;
         else els.manualNotice.innerHTML = html;
       };
+      function inferPreferredLanguageFromIsbn(isbn) {
+        const compact = String(isbn || '').replace(/[^0-9Xx]/g, '');
+        if (compact.startsWith('9787') || compact.startsWith('9797')) return 'zh';
+        if (compact.startsWith('9784') || compact.startsWith('9794')) return 'ja';
+        if (compact.startsWith('97889')) return 'ko';
+        return null;
+      }
+
       const applyOpenLibrary = (book) => {
         if (!book) return null;
         if (!els.title.value && book.title) els.title.value = book.title;
@@ -883,7 +891,7 @@
 
       setNotice('warn', `已识别 ISBN：${isbn}，正在查询书名、作者、分类和简介…`);
       try {
-        let languageHint = null;
+        let languageHint = inferPreferredLanguageFromIsbn(isbn);
         const olResp = await fetch(`https://openlibrary.org/api/books?bibkeys=ISBN:${encodeURIComponent(isbn)}&format=json&jscmd=data`);
         if (olResp.ok) {
           const olData = await olResp.json();
@@ -900,7 +908,7 @@
             const gbData = await gbResp.json();
             if (Array.isArray(gbData.items) && gbData.items.length) {
               const preferred = languageHint
-                ? gbData.items.find(item => item?.volumeInfo?.language === languageHint) || gbData.items[0]
+                ? gbData.items.find(item => String(item?.volumeInfo?.language || '').toLowerCase().startsWith(String(languageHint).toLowerCase())) || gbData.items[0]
                 : gbData.items[0];
               const gbLang = applyGoogleBooks(preferred);
               languageHint = languageHint || gbLang;
