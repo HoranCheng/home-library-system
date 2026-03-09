@@ -484,6 +484,8 @@
       if (els.readingStatus) els.readingStatus.value = '';
       if (els.readingProgress) els.readingProgress.value = '';
       if (els.notes) els.notes.value = '';
+      delete els.manualCard.dataset.bookLang;
+      delete els.manualCard.dataset.bookSources;
       lookupCompleted = false;
     }
 
@@ -512,6 +514,8 @@
       let location = els.location.value.trim();
       let description = String(els.description?.value || '').trim();
       let notes = String(els.notes?.value || '').trim();
+      let bookLang = String(els.manualCard.dataset.bookLang || '').trim();
+      let metadataSources = String(els.manualCard.dataset.bookSources || '').trim();
 
       if (!validIsbn(isbn)) {
         els.manualNotice.innerHTML = makeNotice('err', 'ISBN 格式不合法，请输入 10 位或 13 位。');
@@ -556,6 +560,8 @@
         target.location = location;
         target.description = description;
         target.notes = notes;
+        target.bookLang = bookLang;
+        target.metadataSources = metadataSources;
         target.status = isCompleteRecord ? 'in_library' : 'to_be_sorted';
         target.updatedAt = new Date().toISOString();
         saveBooks(books);
@@ -564,7 +570,7 @@
         els.saveBtn.textContent = '保存图书';
       } else {
         books.push({
-          id: makeId(), isbn, title, author, category, readingStatus, readingProgress, publishedYear, location, description, notes,
+          id: makeId(), isbn, title, author, category, readingStatus, readingProgress, publishedYear, location, description, notes, bookLang, metadataSources,
           status: isCompleteRecord ? 'in_library' : 'to_be_sorted', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString()
         });
         saveBooks(books);
@@ -637,6 +643,7 @@
                   <h2 style="margin:10px 0 6px">${escapeHtml(book.title || '未命名图书')}</h2>
                   <div class="muted">${escapeHtml(book.author || '未知作者')}</div>
                   <div class="muted" style="margin-top:8px">分类：${escapeHtml(book.category || '未分类')} · 出版年份：${escapeHtml(book.publishedYear || '未知')} · 存放位置：${escapeHtml(book.location || '未填写')}</div>
+                  <div class="muted" style="margin-top:8px">语言：${escapeHtml(book.bookLang || '未识别')} · 来源：${escapeHtml(book.metadataSources || '手动录入')}</div>
                   <div class="progress-bar"><div class="progress-fill" style="width:${Math.max(0, Math.min(100, Number(book.readingProgress || 0)))}%"></div></div>
                   <div class="muted" style="margin-top:8px">阅读进度：${Math.max(0, Math.min(100, Number(book.readingProgress || 0)))}%</div>
                 </div>
@@ -925,8 +932,10 @@
         const categoryFilled = Boolean(els.category.value);
         const yearFilled = Boolean(els.publishedYear.value);
         const sourceText = sourceHits.length ? `（来源：${sourceHits.join(' / ')}${languageHint ? `；语言：${languageHint}` : ''}）` : '';
+        if (languageHint) els.manualCard.dataset.bookLang = languageHint;
+        if (sourceHits.length) els.manualCard.dataset.bookSources = sourceHits.join(' / ');
         setNotice('ok', `${sourceLabel}：${isbn}${titleFilled ? ` · ${escapeHtml(els.title.value)}` : ''}${authorFilled ? ` · ${escapeHtml(els.author.value)}` : ''}${categoryFilled ? ` · ${escapeHtml(els.category.value)}` : ''}${yearFilled ? ` · ${escapeHtml(els.publishedYear.value)}` : ''} ${escapeHtml(sourceText)}`);
-        return { found: true };
+        return { found: true, language: languageHint, sources: sourceHits };
       } catch (e) {
         const partialFound = Boolean(els.title.value || els.author.value || els.category.value || els.publishedYear.value || (els.description && els.description.value));
         setNotice('warn', `${sourceLabel}：${isbn}，${partialFound ? '已拿到部分书目信息，你可以继续审阅后导入。' : '但联网查询书目信息失败，请手动补充后保存。'}`);
