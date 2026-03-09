@@ -1254,6 +1254,9 @@
                 <button class="btn secondary" data-action="edit" data-id="${escapeHtml(book.id)}" style="cursor:pointer">编辑</button>
                 <button class="btn ghost" id="closeDetailBtn">关闭</button>
               </div>
+              <div style="margin-top:16px;padding-top:16px;border-top:1px solid var(--line);text-align:center">
+                <button class="btn ghost delete-book-btn" data-id="${escapeHtml(book.id)}" style="color:#d44;font-size:13px;cursor:pointer">删除此书</button>
+              </div>
             </div>
           </div>
         </div>`;
@@ -1277,6 +1280,38 @@
 
       if (event.target.closest('#closeDetailBtn') || (event.target.id === 'detailBackdrop')) {
         els.detailModalRoot.innerHTML = '';
+        return;
+      }
+
+      // Delete book
+      const deleteBtn = event.target.closest('.delete-book-btn');
+      if (deleteBtn) {
+        const id = deleteBtn.dataset.id;
+        const book = loadBooks().find(b => b.id === id);
+        if (!book) return;
+        if (!confirm(`确定要删除「${book.title || '未命名图书'}」吗？`)) return;
+        const books = loadBooks().filter(b => b.id !== id);
+        saveBooks(books);
+        els.detailModalRoot.innerHTML = '';
+        render();
+        showToast('已删除');
+        return;
+      }
+
+      // ⋯ menu on book cards
+      const menuBtn = event.target.closest('.menu-btn[data-menu-id]');
+      if (menuBtn && !menuBtn.dataset.action) {
+        const bookId = menuBtn.dataset.menuId;
+        document.querySelectorAll('.menu-panel').forEach(el => el.remove());
+        if (openMenuBookId === bookId) { openMenuBookId = null; return; }
+        openMenuBookId = bookId;
+        const panel = document.createElement('div');
+        panel.className = 'menu-panel';
+        panel.innerHTML = `
+          <button data-action="edit" data-id="${bookId}">✏️ 编辑</button>
+          <button class="delete-book-btn" data-id="${bookId}" style="color:#d44">🗑 删除</button>
+        `;
+        menuBtn.closest('.menu-wrap').appendChild(panel);
         return;
       }
 
@@ -1777,6 +1812,7 @@
       }
     }
 
+    function showToast(text) { showScanToast(text); }
     function showScanToast(text) {
       const existing = document.querySelector('.scan-toast');
       if (existing) existing.remove();
