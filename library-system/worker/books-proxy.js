@@ -1,14 +1,22 @@
 /**
- * 毛毛图书管理系统 — Google Books API 代理
- * 部署到 Cloudflare Workers，API Key 安全存在 Worker 环境变量里
+ * 毛毛图书管理系统 — Cloudflare Worker
  *
- * 环境变量：
- *   GBOOKS_API_KEY — 你的 Google Books API Key
+ * 功能：
+ *   1. Google Books API 代理 (GET /?q=...)
+ *   2. 用户认证 (POST /auth/*)
+ *   3. 数据同步 (POST /sync/*)
  *
- * 用法：
- *   GET https://your-worker.workers.dev/?q=isbn:9787108056184&maxResults=5
- *   Worker 会把请求转发到 Google Books API 并附上你的 key
+ * 环境变量（通过 wrangler secret put 设置）：
+ *   GBOOKS_API_KEY  — Google Books API Key
+ *   JWT_SECRET      — JWT 签名密钥
+ *   GOOGLE_CLIENT_ID — Google OAuth Client ID
+ *
+ * D1 绑定：
+ *   DB — maomao-library 数据库
  */
+
+import { handleAuth } from './auth.js';
+import { handleSync } from './sync.js';
 
 const ALLOWED_ORIGINS = [
   'https://horancheng.github.io',
@@ -22,11 +30,11 @@ function isAllowedOrigin(origin) {
   return ALLOWED_ORIGINS.some(allowed => origin.startsWith(allowed));
 }
 
-function corsHeaders(origin) {
+function makeCorsHeaders(origin) {
   return {
     'Access-Control-Allow-Origin': isAllowedOrigin(origin) ? origin : ALLOWED_ORIGINS[0],
-    'Access-Control-Allow-Methods': 'GET, OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type',
+    'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
     'Access-Control-Max-Age': '86400',
   };
 }
@@ -34,27 +42,40 @@ function corsHeaders(origin) {
 export default {
   async fetch(request, env) {
     const origin = request.headers.get('Origin') || '';
+    const cors = makeCorsHeaders(origin);
 
     // Handle CORS preflight
     if (request.method === 'OPTIONS') {
-      return new Response(null, { status: 204, headers: corsHeaders(origin) });
-    }
-
-    if (request.method !== 'GET') {
-      return new Response(JSON.stringify({ error: 'Method not allowed' }), {
-        status: 405,
-        headers: { ...corsHeaders(origin), 'Content-Type': 'application/json' },
-      });
+      return new Response(null, { status: 204, headers: cors });
     }
 
     const url = new URL(request.url);
+    const path = url.pathname;
+
+    // ── Auth routes: /auth/* ──
+    if (path.startsWith('/auth/')) {
+      return handleAuth(request, env, path, cors);
+    }
+
+    // ── Sync routes: /sync/* ──
+    if (path.startsWith('/sync/')) {
+      return handleSync(request, env, path, cors);
+    }
+
+    // ── Google Books proxy: GET / ──
+    if (request.method !== 'GET') {
+      return new Response(JSON.stringify({ error: 'Method not allowed' }), {
+        status: 405,
+        headers: { ...cors, 'Content-Type': 'application/json' },
+      });
+    }
+
     const searchParams = new URLSearchParams(url.search);
 
-    // Must have a query
     if (!searchParams.has('q')) {
       return new Response(JSON.stringify({ error: 'Missing ?q= parameter' }), {
         status: 400,
-        headers: { ...corsHeaders(origin), 'Content-Type': 'application/json' },
+        headers: { ...cors, 'Content-Type': 'application/json' },
       });
     }
 
@@ -63,7 +84,6 @@ export default {
     for (const [key, value] of searchParams) {
       gbUrl.searchParams.set(key, value);
     }
-    // Inject the secret API key
     gbUrl.searchParams.set('key', env.GBOOKS_API_KEY || '');
 
     try {
@@ -75,15 +95,15 @@ export default {
       return new Response(body, {
         status: resp.status,
         headers: {
-          ...corsHeaders(origin),
+          ...cors,
           'Content-Type': 'application/json',
-          'Cache-Control': 'public, max-age=3600',  // 缓存 1 小时，减少 API 调用
+          'Cache-Control': 'public, max-age=3600',
         },
       });
     } catch (err) {
       return new Response(JSON.stringify({ error: 'Upstream request failed' }), {
         status: 502,
-        headers: { ...corsHeaders(origin), 'Content-Type': 'application/json' },
+        headers: { ...cors, 'Content-Type': 'application/json' },
       });
     }
   },
