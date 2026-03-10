@@ -1912,7 +1912,10 @@
       }
       // 3. Junk filter (only after translation attempts fail)
       if (JUNK_CAT_RE.test(trimmed) || JUNK_CAT_RE2.test(trimmed)) return '';
-      // 4. If still English and no match, return empty (will show as 未分类)
+      // 4. Library classification codes (call numbers, Dewey, LOC, etc.)
+      if (/^[A-Z]{0,2}\d/.test(trimmed)) return ''; // starts with optional letters then digit: "853", "Pq4817..."
+      if (/^\d{1,3}$/.test(trimmed)) return ''; // pure short numbers
+      // 5. If still English and no match, return empty (will show as 未分类)
       if (/^[a-zA-Z\s&,.()\-\/]+$/.test(trimmed)) return '';
       return trimmed;
     }
@@ -1925,6 +1928,8 @@
       if (/,\s*$/.test(s)) return false;
       if (/^\d{4}\s*[-–]\s*\d{4}$/.test(s)) return false;
       if (/^[A-Z]{1,3}$/.test(s)) return false;
+      if (/^[A-Z]{0,2}\d/.test(s)) return false; // classification codes like "853", "Pq4817.i5"
+      if (/^\d{1,3}$/.test(s)) return false;
       // Use translateCategory as the authority — if it returns non-empty, it's good
       const translated = translateCategory(s);
       return Boolean(translated);
@@ -1979,7 +1984,20 @@
       function parseGoogleBooks(item) {
         if (!item) return null;
         const info = item.volumeInfo || {};
-        const title = info.title || '';
+        let title = info.title || '';
+        // Append subtitle if it contains volume/part info (Vol, Book, Part, 第X册/卷/部, #N)
+        const sub = (info.subtitle || '').trim();
+        if (sub) {
+          const volRe = /\b(vol\.?|volume|book|part|tome|band)\s*\d/i;
+          const zhVolRe = /第.{1,4}[册卷部集篇]/;
+          const numRe = /^#?\d{1,3}$/;
+          if (volRe.test(sub) || zhVolRe.test(sub) || numRe.test(sub)) {
+            title = `${title}（${sub}）`;
+          } else if (sub.length <= 40 && !title.toLowerCase().includes(sub.toLowerCase())) {
+            // Short subtitle that's not redundant — append with colon
+            title = `${title}: ${sub}`;
+          }
+        }
         const authors = Array.isArray(info.authors) ? info.authors : [];
         const cats = Array.isArray(info.categories) ? info.categories : [];
         const category = pickBestCategory(cats);
@@ -2030,7 +2048,12 @@
       function parseOLSearch(data) {
         if (!data?.docs?.length) return null;
         const doc = data.docs[0];
-        const title = doc.title || '';
+        let title = doc.title || '';
+        // OL sometimes puts volume info in subtitle
+        const sub = (doc.subtitle || '').trim();
+        if (sub && sub.length <= 40 && !title.toLowerCase().includes(sub.toLowerCase())) {
+          title = `${title}: ${sub}`;
+        }
         const authors = Array.isArray(doc.author_name) ? doc.author_name : [];
         const subjects = Array.isArray(doc.subject) ? doc.subject : [];
         const category = pickBestCategory(subjects);
