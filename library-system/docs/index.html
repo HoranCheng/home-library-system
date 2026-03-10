@@ -198,6 +198,12 @@
     .scanner-ctrl-btn { background:rgba(0,0,0,.65); color:#fff; border:0; border-radius:10px; padding:7px 14px; font-size:14px; cursor:pointer; font-weight:600; }
     .scanner-ctrl-btn.active { background:rgba(255,200,0,.85); color:#000; }
     @keyframes camBounce { 0%,100% { transform:translateY(0) scale(1); } 50% { transform:translateY(-10px) scale(1.1); } }
+    .scanner-pro-panel { position:absolute; bottom:0; left:0; right:0; background:rgba(0,0,0,.85); backdrop-filter:blur(10px); -webkit-backdrop-filter:blur(10px); color:#fff; padding:16px; border-radius:16px 16px 0 0; animation:slideUp .25s ease; z-index:10; }
+    .pro-panel-title { font-size:14px; font-weight:700; margin-bottom:12px; text-align:center; }
+    .pro-row { display:flex; align-items:center; gap:10px; margin-bottom:10px; }
+    .pro-row label { font-size:12px; color:rgba(255,255,255,.7); min-width:52px; flex-shrink:0; }
+    .pro-row select { flex:1; background:rgba(255,255,255,.15); color:#fff; border:1px solid rgba(255,255,255,.2); border-radius:8px; padding:8px 10px; font-size:13px; -webkit-appearance:none; appearance:none; }
+    .pro-row input[type=range] { flex:1; accent-color:var(--accent); }
 
     /* Duplicate book modal */
     .dup-overlay { position:fixed; inset:0; background:rgba(0,0,0,.4); z-index:2000; display:flex; align-items:center; justify-content:center; padding:20px; animation:fadeIn .2s ease; }
@@ -395,7 +401,29 @@
           <div class="scanner-aim"><div class="scanner-aim-inner"></div></div>
           <div class="scanner-controls">
             <button class="scanner-ctrl-btn" id="torchBtn" title="闪光灯">🔦 关</button>
+            <button class="scanner-ctrl-btn" id="proBtn" title="专业模式">⚙ Pro</button>
             <button class="scanner-cancel" id="scannerCancelBtn">取消</button>
+          </div>
+          <div class="scanner-pro-panel" id="proPanelBox" style="display:none">
+            <div class="pro-panel-title">📷 专业模式</div>
+            <div class="pro-row">
+              <label>镜头</label>
+              <select id="proCameraSelect"></select>
+            </div>
+            <div class="pro-row">
+              <label>对焦</label>
+              <select id="proFocusSelect">
+                <option value="continuous">自动连续</option>
+                <option value="manual">锁定对焦</option>
+              </select>
+            </div>
+            <div class="pro-row" id="proFocusDistRow" style="display:none">
+              <label>对焦距离</label>
+              <input type="range" id="proFocusDist" min="0" max="1" step="0.01" />
+            </div>
+            <div class="pro-row">
+              <button class="btn primary" id="proApplyBtn" style="width:100%;padding:10px;font-size:13px">应用</button>
+            </div>
           </div>
         </div>
         <div id="scanNotice"></div>
@@ -687,7 +715,14 @@
       scannerBox: document.getElementById('scannerBox'),
       scannerVideo: document.getElementById('scannerVideo'),
       scannerCancelBtn: document.getElementById('scannerCancelBtn'),
-      torchBtn: document.getElementById('torchBtn')
+      torchBtn: document.getElementById('torchBtn'),
+      proBtn: document.getElementById('proBtn'),
+      proPanelBox: document.getElementById('proPanelBox'),
+      proCameraSelect: document.getElementById('proCameraSelect'),
+      proFocusSelect: document.getElementById('proFocusSelect'),
+      proFocusDist: document.getElementById('proFocusDist'),
+      proFocusDistRow: document.getElementById('proFocusDistRow'),
+      proApplyBtn: document.getElementById('proApplyBtn')
     };
 
     function normalizeReadingStatus(v) {
@@ -1210,8 +1245,8 @@
         overlay.querySelector('.dup-btn-stop').onclick = () => cleanup('stop');
         overlay.querySelector('.dup-btn-continue').onclick = () => cleanup('continue');
 
-        // Auto-dismiss after 8 seconds → treat as "stop"
-        const timer = setTimeout(() => cleanup('stop'), 8000);
+        // Auto-dismiss after 6 seconds → continue scanning
+        const timer = setTimeout(() => cleanup('continue'), 6000);
         overlay.addEventListener('click', (e) => {
           if (e.target === overlay) { clearTimeout(timer); cleanup('stop'); }
         });
@@ -1686,6 +1721,9 @@
       els.scannerBox.style.display = 'none';
       els.torchBtn.textContent = '🔦 关';
       els.torchBtn.classList.remove('active');
+      els.proPanelBox.style.display = 'none';
+      els.proBtn.classList.remove('active');
+      proVisible = false;
       render();
     }
 
@@ -2235,6 +2273,87 @@
     }
 
     els.torchBtn.onclick = toggleTorch;
+
+    // Pro mode panel
+    let proVisible = false;
+    els.proBtn.onclick = async () => {
+      proVisible = !proVisible;
+      els.proPanelBox.style.display = proVisible ? '' : 'none';
+      els.proBtn.classList.toggle('active', proVisible);
+      if (!proVisible) return;
+
+      // Populate camera list
+      try {
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        const cams = devices.filter(d => d.kind === 'videoinput');
+        const currentDeviceId = scannerStream?.getVideoTracks()[0]?.getSettings?.()?.deviceId;
+        els.proCameraSelect.innerHTML = cams.map((c, i) => {
+          const label = c.label || `摄像头 ${i + 1}`;
+          return `<option value="${c.deviceId}" ${c.deviceId === currentDeviceId ? 'selected' : ''}>${label.length > 35 ? label.slice(0, 35) + '…' : label}</option>`;
+        }).join('');
+      } catch (_) {}
+
+      // Show focus controls based on current camera capabilities
+      if (scannerStream) {
+        const track = scannerStream.getVideoTracks()[0];
+        const caps = track?.getCapabilities ? track.getCapabilities() : {};
+        if (caps.focusDistance) {
+          els.proFocusDistRow.style.display = els.proFocusSelect.value === 'manual' ? '' : 'none';
+          els.proFocusDist.min = caps.focusDistance.min;
+          els.proFocusDist.max = caps.focusDistance.max;
+          els.proFocusDist.step = (caps.focusDistance.max - caps.focusDistance.min) / 100;
+          const settings = track.getSettings?.() || {};
+          els.proFocusDist.value = settings.focusDistance || caps.focusDistance.min;
+        } else {
+          els.proFocusDistRow.style.display = 'none';
+        }
+      }
+    };
+
+    els.proFocusSelect.onchange = () => {
+      els.proFocusDistRow.style.display = els.proFocusSelect.value === 'manual' ? '' : 'none';
+      // Apply focus mode change immediately
+      if (!scannerStream) return;
+      const track = scannerStream.getVideoTracks()[0];
+      if (!track) return;
+      try {
+        if (els.proFocusSelect.value === 'manual') {
+          track.applyConstraints({ advanced: [{ focusMode: 'manual', focusDistance: parseFloat(els.proFocusDist.value) }] });
+        } else {
+          track.applyConstraints({ advanced: [{ focusMode: 'continuous' }] });
+        }
+      } catch (_) {}
+    };
+
+    els.proFocusDist.oninput = () => {
+      if (!scannerStream) return;
+      const track = scannerStream.getVideoTracks()[0];
+      if (!track) return;
+      try {
+        track.applyConstraints({ advanced: [{ focusMode: 'manual', focusDistance: parseFloat(els.proFocusDist.value) }] });
+      } catch (_) {}
+    };
+
+    els.proApplyBtn.onclick = async () => {
+      const selectedDeviceId = els.proCameraSelect.value;
+      const focusMode = els.proFocusSelect.value;
+
+      // Save as preferred camera
+      localStorage.setItem(BEST_CAM_KEY, JSON.stringify({ deviceId: selectedDeviceId }));
+
+      // Restart scanner with selected camera
+      stopScanner();
+      proVisible = false;
+      await startScanner();
+
+      // Apply focus after camera starts
+      if (scannerStream && focusMode === 'manual') {
+        const track = scannerStream.getVideoTracks()[0];
+        try {
+          await track.applyConstraints({ advanced: [{ focusMode: 'manual', focusDistance: parseFloat(els.proFocusDist.value) }] });
+        } catch (_) {}
+      }
+    };
 
     function showCameraDetectAnim() {
       els.scannerBox.style.display = 'block';
