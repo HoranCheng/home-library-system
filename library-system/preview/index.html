@@ -421,8 +421,12 @@
           </div>
         </div>
         <div id="scanNotice"></div>
+        <div id="formFields">
         <div class="review-card" id="reviewCard">
           <div class="muted">先输入或扫描 ISBN，系统会自动补全信息。</div>
+        </div>
+        <div style="display:flex;justify-content:flex-end;margin-bottom:4px">
+          <button class="btn ghost" id="clearFieldsBtn" style="font-size:12px;padding:4px 10px;display:none">🗑 清空预填</button>
         </div>
         <div class="field">
           <label>书名</label>
@@ -453,6 +457,7 @@
             <button class="btn primary" id="saveBtn">导入库中</button>
             <button class="btn ghost" id="finishEntryBtn">结束扫描</button>
           </div>
+        </div>
         </div>
         <div class="hint" id="entrySessionHint">自动从 Open Library · Google Books 补全书目信息</div>
         <div id="manualNotice"></div>
@@ -691,6 +696,8 @@
       bookList: document.getElementById('bookList'),
       scanSection: document.getElementById('scanSection'),
       manualCard: document.getElementById('manualCard'),
+      formFields: document.getElementById('formFields'),
+      clearFieldsBtn: document.getElementById('clearFieldsBtn'),
       homeSection: document.getElementById('homeSection'),
       searchSection: document.getElementById('searchSection'),
       organizeSection: document.getElementById('organizeSection'),
@@ -1141,7 +1148,9 @@
     // Nav tab: tap current tab → scroll to top; tap other tab → switch page
     function handleNavTap(btn, page, opts) {
       btn.addEventListener('click', () => {
-        if (getPage() === page) {
+        // Always stop scanner when tapping nav (regardless of page)
+        try { if (scannerActive) stopScanner(); } catch (_) {}
+        if (getPage() === page && !(page === 'home' && getMode() !== (opts?.mode || 'dashboard'))) {
           window.scrollTo({ top: 0, behavior: 'smooth' });
         } else {
           setPage(page, opts);
@@ -1256,6 +1265,45 @@
       });
     }
 
+    function showSuccessModal(title, author, coverUrl, count, onContinue, onFinish) {
+      const overlay = document.createElement('div');
+      overlay.className = 'dup-overlay';
+      const coverEl = coverUrl
+        ? `<div style="width:60px;height:90px;border-radius:8px;overflow:hidden;margin:0 auto 12px;box-shadow:0 4px 12px rgba(0,0,0,.12)"><img src="${escapeHtml(coverUrl)}" style="width:100%;height:100%;object-fit:cover" /></div>`
+        : '';
+      const emoji = count <= 1 ? '🎉' : count <= 5 ? '🔥' : count <= 10 ? '⚡' : '🏆';
+      const cheers = count <= 1 ? '第一本！' : count <= 3 ? `已录入 ${count} 本！` : count <= 10 ? `${count} 本了，继续！` : `${count} 本！停不下来！`;
+      overlay.innerHTML = `
+        <div class="dup-modal">
+          <div class="dup-icon">${emoji}</div>
+          ${coverEl}
+          <div class="dup-title">${escapeHtml(title)}</div>
+          <div class="dup-book-author" style="color:var(--muted);font-size:13px;margin-bottom:6px">${escapeHtml(author || '')}</div>
+          <div style="font-size:20px;font-weight:800;color:var(--accent);margin-bottom:16px">${cheers}</div>
+          <div class="dup-btns">
+            <button class="dup-btn-stop">结束录入</button>
+            <button class="dup-btn-continue">继续扫码 📷</button>
+          </div>
+        </div>`;
+
+      overlay.querySelector('.dup-btn-stop').onclick = () => {
+        overlay.style.animation = 'fadeIn .15s ease reverse';
+        setTimeout(() => { overlay.remove(); onFinish(); }, 150);
+      };
+      overlay.querySelector('.dup-btn-continue').onclick = () => {
+        overlay.style.animation = 'fadeIn .15s ease reverse';
+        setTimeout(() => { overlay.remove(); onContinue(); }, 150);
+      };
+      overlay.addEventListener('click', (e) => {
+        if (e.target === overlay) {
+          overlay.style.animation = 'fadeIn .15s ease reverse';
+          setTimeout(() => { overlay.remove(); onFinish(); }, 150);
+        }
+      });
+
+      document.body.appendChild(overlay);
+    }
+
     async function saveCurrentBook(options = {}) {
       const isbn = els.isbn.value.trim();
       let title = els.title.value.trim();
@@ -1359,18 +1407,32 @@
         });
         saveBooks(books);
         entrySessionCount += 1;
-        els.manualNotice.innerHTML = makeNotice('ok', `已导入：${title}${isCompleteRecord ? '（已入库）' : '（信息待补充，后续可完善）'}。继续下一本吧。`);
+
+        // Stop scanner during modal
+        if (scannerActive) stopScanner();
+
+        // Show success modal (dopamine!)
+        return new Promise(resolve => {
+          showSuccessModal(title, author, coverUrl, entrySessionCount, () => {
+            // Continue scanning
+            clearDraftFields({ keepIsbn: false, keepLocation: true });
+            lookupCompleted = false;
+            lastEntryMethod = 'scan';
+            scannerIntent = 'entry';
+            startScanner();
+            render();
+            resolve(true);
+          }, () => {
+            // Finish entry
+            entrySessionCount = 0;
+            clearDraftFields({ keepIsbn: false, keepLocation: false });
+            lookupCompleted = false;
+            setPage('home', { mode: 'dashboard' });
+            resolve(true);
+          });
+        });
       }
-      const shouldResumeScan = !wasEditing && lastEntryMethod === 'scan';
-      clearDraftFields({ keepIsbn: false, keepLocation: true, clearNotices: shouldResumeScan });
-      lookupCompleted = false;
-      if (shouldResumeScan) {
-        scannerIntent = 'entry';
-        startScanner();
-      } else {
-        els.isbn.focus();
-      }
-      render();
+      // Edit path already returned above
       return true;
     }
 
@@ -1711,6 +1773,7 @@
     function stopScanner() {
       scannerActive = false;
       torchOn = false;
+      if (els.formFields) els.formFields.style.display = '';
       if (scannerAnimFrame) { cancelAnimationFrame(scannerAnimFrame); scannerAnimFrame = null; }
       if (zxingScanControl) {
         try { zxingScanControl.stop(); } catch (_) {}
@@ -2201,7 +2264,23 @@
           el.addEventListener('input', function handler() { el.classList.remove('auto-filled'); el.removeEventListener('input', handler); }, { once: true });
         }
       });
+      // Show clear button if any field was auto-filled
+      if (els.clearFieldsBtn) els.clearFieldsBtn.style.display = '';
     }
+
+    // Clear all pre-filled fields
+    els.clearFieldsBtn.onclick = () => {
+      ['title', 'author', 'category', 'publishedYear'].forEach(id => {
+        if (els[id]) { els[id].value = ''; els[id].classList.remove('auto-filled'); }
+      });
+      if (els.description) els.description.value = '';
+      delete els.manualCard.dataset.pendingCoverUrl;
+      delete els.manualCard.dataset.bookLang;
+      delete els.manualCard.dataset.bookSources;
+      els.clearFieldsBtn.style.display = 'none';
+      lookupCompleted = false;
+      els.manualNotice.innerHTML = makeNotice('warn', '已清空预填信息，请手动输入。');
+    };
 
     function handleScanResult(rawValue) {
       stopScanner();
@@ -2423,6 +2502,7 @@
           await video.play();
           scannerActive = true;
           els.scannerBox.style.display = 'block';
+          els.formFields.style.display = 'none'; // Hide form while scanning
           render();
 
           // Try to enable continuous autofocus for barcode scanning
@@ -2498,6 +2578,7 @@
         zxingReader = new window.ZXingBrowser.BrowserMultiFormatReader();
         scannerActive = true;
         els.scannerBox.style.display = 'block';
+        els.formFields.style.display = 'none'; // Hide form while scanning
         render();
         els.scanNotice.innerHTML = '';
         // 6-second hint timer for ZXing path
