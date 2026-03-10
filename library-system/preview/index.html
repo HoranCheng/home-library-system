@@ -190,10 +190,13 @@
 
     /* ── Scanner ── */
     .scanner-box { display:none; margin-top:14px; border-radius:16px; overflow:hidden; position:relative; background:#000; }
-    .scanner-video { width:100%; display:block; max-height:360px; object-fit:cover; }
-    .scanner-aim { position:absolute; inset:0; pointer-events:none; display:flex; align-items:center; justify-content:center; }
-    .scanner-aim-inner { width:220px; height:90px; border:2.5px solid var(--accent); border-radius:10px; box-shadow:0 0 0 9999px rgba(0,0,0,.45); }
-    .scanner-controls { position:absolute; top:10px; right:10px; display:flex; gap:8px; }
+    .scanner-video { width:100%; display:block; max-height:420px; object-fit:cover; }
+    .scanner-aim { position:absolute; inset:0; pointer-events:none; display:flex; align-items:center; justify-content:center; flex-direction:column; gap:8px; }
+    .scanner-aim-inner { width:240px; height:100px; border:2.5px solid var(--accent); border-radius:12px; box-shadow:0 0 0 9999px rgba(0,0,0,.45); position:relative; overflow:hidden; }
+    .scanner-aim-inner::after { content:''; position:absolute; left:8px; right:8px; height:2px; background:linear-gradient(90deg, transparent, var(--accent), transparent); animation:scanLine 2s ease-in-out infinite; }
+    @keyframes scanLine { 0% { top:10%; opacity:.3; } 50% { top:90%; opacity:1; } 100% { top:10%; opacity:.3; } }
+    .scanner-hint { color:rgba(255,255,255,.85); font-size:13px; font-weight:500; text-shadow:0 1px 3px rgba(0,0,0,.5); margin-top:4px; }
+    .scanner-controls { position:absolute; top:10px; right:10px; display:flex; gap:8px; z-index:5; }
     .scanner-cancel { background:rgba(0,0,0,.65); color:#fff; border:0; border-radius:10px; padding:7px 14px; font-size:14px; cursor:pointer; font-weight:600; }
     .scanner-ctrl-btn { background:rgba(0,0,0,.65); color:#fff; border:0; border-radius:10px; padding:7px 14px; font-size:14px; cursor:pointer; font-weight:600; }
     .scanner-ctrl-btn.active { background:rgba(255,200,0,.85); color:#000; }
@@ -398,14 +401,17 @@
         </div>
         <div class="scanner-box" id="scannerBox">
           <video id="scannerVideo" autoplay playsinline muted class="scanner-video"></video>
-          <div class="scanner-aim"><div class="scanner-aim-inner"></div></div>
+          <div class="scanner-aim">
+            <div class="scanner-aim-inner"></div>
+            <div class="scanner-hint">将条码对准框内</div>
+          </div>
           <div class="scanner-controls">
             <button class="scanner-ctrl-btn" id="torchBtn" title="闪光灯">🔦 关</button>
             <button class="scanner-ctrl-btn" id="proBtn" title="专业模式">⚙ Pro</button>
             <button class="scanner-cancel" id="scannerCancelBtn">取消</button>
           </div>
           <div class="scanner-pro-panel" id="proPanelBox" style="display:none">
-            <div class="pro-panel-title">📷 专业模式</div>
+            <div class="pro-panel-title">📷 镜头设置</div>
             <div class="pro-row">
               <label>镜头</label>
               <select id="proCameraSelect"></select>
@@ -413,16 +419,18 @@
             <div class="pro-row">
               <label>对焦</label>
               <select id="proFocusSelect">
-                <option value="continuous">自动连续</option>
-                <option value="manual">锁定对焦</option>
+                <option value="continuous">自动</option>
+                <option value="manual">手动锁定</option>
               </select>
             </div>
             <div class="pro-row" id="proFocusDistRow" style="display:none">
-              <label>对焦距离</label>
+              <label>距离</label>
               <input type="range" id="proFocusDist" min="0" max="1" step="0.01" />
+              <span id="proFocusDistLabel" style="font-size:11px;color:rgba(255,255,255,.6);min-width:36px;text-align:right">—</span>
             </div>
+            <div style="font-size:11px;color:rgba(255,255,255,.5);text-align:center;margin-bottom:10px">💡 条码模糊？试试切换到超广角（微距）</div>
             <div class="pro-row">
-              <button class="btn primary" id="proApplyBtn" style="width:100%;padding:10px;font-size:13px">应用</button>
+              <button class="btn primary" id="proApplyBtn" style="width:100%;padding:10px;font-size:13px;border-radius:10px">切换镜头</button>
             </div>
           </div>
         </div>
@@ -2282,14 +2290,27 @@
       els.proBtn.classList.toggle('active', proVisible);
       if (!proVisible) return;
 
-      // Populate camera list
+      // Populate camera list (rear cameras only, friendly labels)
       try {
         const devices = await navigator.mediaDevices.enumerateDevices();
-        const cams = devices.filter(d => d.kind === 'videoinput');
+        const cams = devices.filter(d => {
+          if (d.kind !== 'videoinput') return false;
+          const l = (d.label || '').toLowerCase();
+          // Filter out front/selfie cameras
+          return !l.includes('front') && !l.includes('facetime') && !l.includes('selfie') && !l.includes('前置');
+        });
         const currentDeviceId = scannerStream?.getVideoTracks()[0]?.getSettings?.()?.deviceId;
         els.proCameraSelect.innerHTML = cams.map((c, i) => {
-          const label = c.label || `摄像头 ${i + 1}`;
-          return `<option value="${c.deviceId}" ${c.deviceId === currentDeviceId ? 'selected' : ''}>${label.length > 35 ? label.slice(0, 35) + '…' : label}</option>`;
+          const raw = c.label || '';
+          // Friendly label translation
+          let label = raw;
+          const rl = raw.toLowerCase();
+          if (rl.includes('ultra wide') || rl.includes('超广角')) label = '超广角（微距）';
+          else if (rl.includes('telephoto') || rl.includes('长焦')) label = '长焦';
+          else if (rl.includes('wide') || rl.includes('广角')) label = '主摄（广角）';
+          else if (rl.includes('back') || rl.includes('rear') || rl.includes('后置')) label = `后置 ${i + 1}`;
+          else if (!raw) label = `镜头 ${i + 1}`;
+          return `<option value="${c.deviceId}" ${c.deviceId === currentDeviceId ? 'selected' : ''}>${label}</option>`;
         }).join('');
       } catch (_) {}
 
@@ -2326,11 +2347,14 @@
     };
 
     els.proFocusDist.oninput = () => {
+      const val = parseFloat(els.proFocusDist.value);
+      const label = document.getElementById('proFocusDistLabel');
+      if (label) label.textContent = val < 0.1 ? `${Math.round(val * 100)}cm` : `${val.toFixed(1)}m`;
       if (!scannerStream) return;
       const track = scannerStream.getVideoTracks()[0];
       if (!track) return;
       try {
-        track.applyConstraints({ advanced: [{ focusMode: 'manual', focusDistance: parseFloat(els.proFocusDist.value) }] });
+        track.applyConstraints({ advanced: [{ focusMode: 'manual', focusDistance: val }] });
       } catch (_) {}
     };
 
@@ -2421,7 +2445,7 @@
           // Show torch button only if supported
           els.torchBtn.style.display = caps.torch ? '' : 'none';
 
-          els.scanNotice.innerHTML = makeNotice('warn', '将书背面条码对准框内…');
+          els.scanNotice.innerHTML = '';
 
           const detector = new BarcodeDetector({ formats: ['ean_13', 'ean_8', 'code_128', 'code_39', 'itf', 'upc_a', 'upc_e', 'qr_code'] });
           const scan = async () => {
@@ -2457,7 +2481,7 @@
         scannerActive = true;
         els.scannerBox.style.display = 'block';
         render();
-        els.scanNotice.innerHTML = makeNotice('warn', '将书背面条码对准框内…');
+        els.scanNotice.innerHTML = '';
         // Use best camera if found, otherwise let ZXing pick
         zxingScanControl = await zxingReader.decodeFromVideoDevice(
           bestDeviceId || null, els.scannerVideo,
