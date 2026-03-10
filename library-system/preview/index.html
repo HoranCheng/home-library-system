@@ -197,6 +197,7 @@
     .scanner-cancel { background:rgba(0,0,0,.65); color:#fff; border:0; border-radius:10px; padding:7px 14px; font-size:14px; cursor:pointer; font-weight:600; }
     .scanner-ctrl-btn { background:rgba(0,0,0,.65); color:#fff; border:0; border-radius:10px; padding:7px 14px; font-size:14px; cursor:pointer; font-weight:600; }
     .scanner-ctrl-btn.active { background:rgba(255,200,0,.85); color:#000; }
+    @keyframes camBounce { 0%,100% { transform:translateY(0) scale(1); } 50% { transform:translateY(-10px) scale(1.1); } }
     /* Auto-filled field highlight */
     input.auto-filled {
       background:var(--accent-light) !important; border-color:var(--accent) !important;
@@ -2086,9 +2087,23 @@
     }
 
     let torchOn = false;
+    const BEST_CAM_KEY = 'lib:best-camera:v1';
 
     // Select the best camera for barcode scanning (prefer macro/shortest focus distance)
+    // Caches result in localStorage so subsequent scans are instant.
     async function pickBestCamera() {
+      // Return cached camera if available
+      const cached = localStorage.getItem(BEST_CAM_KEY);
+      if (cached) {
+        try {
+          const { deviceId } = JSON.parse(cached);
+          // Verify it still exists
+          const devices = await navigator.mediaDevices.enumerateDevices();
+          if (devices.some(d => d.deviceId === deviceId)) return { deviceId, fromCache: true };
+        } catch (_) {}
+        localStorage.removeItem(BEST_CAM_KEY);
+      }
+
       try {
         // First get permission with any rear camera
         const tempStream = await navigator.mediaDevices.getUserMedia({
@@ -2098,7 +2113,11 @@
 
         const devices = await navigator.mediaDevices.enumerateDevices();
         const videoCams = devices.filter(d => d.kind === 'videoinput');
-        if (videoCams.length <= 1) return videoCams[0]?.deviceId || null;
+        if (videoCams.length <= 1) {
+          const id = videoCams[0]?.deviceId || null;
+          if (id) localStorage.setItem(BEST_CAM_KEY, JSON.stringify({ deviceId: id }));
+          return { deviceId: id, fromCache: false };
+        }
 
         // Probe each camera for capabilities (focus distance, torch, etc.)
         let best = null;
@@ -2117,27 +2136,21 @@
             if (facing.includes('user') || label.includes('front') || label.includes('facetime')) continue;
 
             let score = 0;
-            // Prefer cameras with shorter minimum focus distance (macro capability)
             if (caps.focusDistance && caps.focusDistance.min !== undefined) {
-              // Lower min focus distance = better for close-up barcode scanning
-              // Score inversely: min 0.02m gets high score, min 0.3m gets low score
               score += Math.max(0, 100 - (caps.focusDistance.min * 500));
             }
-            // Bonus for macro/ultra-wide labels (iPhone Pro)
             if (label.includes('ultra') || label.includes('wide') || label.includes('macro') || label.includes('0.5')) score += 50;
-            // Bonus for torch support
             if (caps.torch) score += 10;
-            // Bonus for higher resolution
             if (caps.width && caps.width.max) score += caps.width.max / 10000;
-            // Rear-facing bonus
             if (facing.includes('environment') || label.includes('back') || label.includes('rear')) score += 20;
 
             if (score > bestScore) { bestScore = score; best = cam.deviceId; }
           } catch (_) {}
         }
-        return best;
+        if (best) localStorage.setItem(BEST_CAM_KEY, JSON.stringify({ deviceId: best }));
+        return { deviceId: best, fromCache: false };
       } catch (_) {
-        return null;
+        return { deviceId: null, fromCache: false };
       }
     }
 
@@ -2159,19 +2172,46 @@
 
     els.torchBtn.onclick = toggleTorch;
 
+    function showCameraDetectAnim() {
+      els.scannerBox.style.display = 'block';
+      els.scannerVideo.style.display = 'none';
+      const overlay = document.createElement('div');
+      overlay.id = 'camDetectOverlay';
+      overlay.innerHTML = `
+        <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:280px;background:var(--bg);border-radius:16px;gap:16px">
+          <div style="font-size:48px;animation:camBounce 1.2s ease-in-out infinite">🔍📷</div>
+          <div style="color:var(--muted);font-size:14px;font-weight:600">正在寻找最佳镜头…</div>
+          <div style="color:var(--muted);font-size:12px;opacity:.7">首次使用需要检测，之后会记住</div>
+        </div>`;
+      els.scannerBox.appendChild(overlay);
+    }
+    function hideCameraDetectAnim() {
+      els.scannerVideo.style.display = '';
+      const overlay = document.getElementById('camDetectOverlay');
+      if (overlay) overlay.remove();
+    }
+
     async function startScanner() {
       if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
         els.scanNotice.innerHTML = makeNotice('err', '该浏览器不支持摄像头访问（需要 HTTPS 或本地环境）。请手动录入 ISBN。');
         return;
       }
 
-      els.scanNotice.innerHTML = makeNotice('warn', '正在检测最佳摄像头…');
       torchOn = false;
       els.torchBtn.textContent = '🔦 关';
       els.torchBtn.classList.remove('active');
 
-      // Smart camera selection — prefer macro/shortest focus distance
-      const bestDeviceId = await pickBestCamera();
+      // Check if we need first-time camera detection
+      const hasCachedCam = !!localStorage.getItem(BEST_CAM_KEY);
+      if (!hasCachedCam) {
+        showCameraDetectAnim();
+        render();
+      }
+
+      // Smart camera selection — prefer macro/shortest focus distance (cached after first use)
+      const { deviceId: bestDeviceId, fromCache } = await pickBestCamera();
+      if (!hasCachedCam) hideCameraDetectAnim();
+
       const videoConstraints = bestDeviceId
         ? { deviceId: { exact: bestDeviceId }, width: { ideal: 1920 }, height: { ideal: 1080 } }
         : { facingMode: { ideal: 'environment' }, width: { ideal: 1920 }, height: { ideal: 1080 } };
@@ -2198,8 +2238,7 @@
           // Show torch button only if supported
           els.torchBtn.style.display = caps.torch ? '' : 'none';
 
-          const camLabel = track.label || '默认摄像头';
-          els.scanNotice.innerHTML = makeNotice('warn', `📷 ${camLabel.length > 30 ? camLabel.slice(0, 30) + '…' : camLabel} — 将条码对准框内`);
+          els.scanNotice.innerHTML = makeNotice('warn', '将书背面条码对准框内…');
 
           const detector = new BarcodeDetector({ formats: ['ean_13', 'ean_8', 'code_128', 'code_39', 'itf', 'upc_a', 'upc_e', 'qr_code'] });
           const scan = async () => {
