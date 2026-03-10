@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
   <title>毛毛图书管理系统</title>
   <link rel="manifest" href="./manifest.json">
   <link rel="apple-touch-icon" href="./icon-192.svg">
@@ -24,6 +24,7 @@
       --serif:"Noto Serif SC","Songti SC","STSong","Georgia",serif;
     }
     * { box-sizing:border-box; margin:0; }
+    html { touch-action:manipulation; -ms-touch-action:manipulation; }
     body {
       margin:0; color:var(--text);
       font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","PingFang SC","Noto Sans SC",sans-serif;
@@ -1028,10 +1029,31 @@
       return s.length === 0 || s.length === 10 || s.length === 13;
     }
 
-    els.navHome.onclick = () => setPage('home', { mode: 'dashboard' });
-    els.navSearch.onclick = () => setPage('search');
-    els.navOrganize.onclick = () => setPage('organize');
-    els.navSettings.onclick = () => setPage('settings');
+    // Double-tap nav tab → scroll to top; single tap → switch page
+    let lastNavTap = { target: null, time: 0 };
+    function handleNavTap(btn, page, opts) {
+      btn.onclick = () => {
+        const now = Date.now();
+        const currentPage = getPage();
+        if (currentPage === page && lastNavTap.target === btn && now - lastNavTap.time < 400) {
+          // Double-tap on current page → scroll to top
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+          lastNavTap = { target: null, time: 0 };
+        } else {
+          if (currentPage === page) {
+            // Already on this page, single tap → also scroll to top
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+          } else {
+            setPage(page, opts);
+          }
+          lastNavTap = { target: btn, time: now };
+        }
+      };
+    }
+    handleNavTap(els.navHome, 'home', { mode: 'dashboard' });
+    handleNavTap(els.navSearch, 'search');
+    handleNavTap(els.navOrganize, 'organize');
+    handleNavTap(els.navSettings, 'settings');
     els.modeDashboard.onclick = () => { setPage('home', { mode: 'dashboard' }); };
     els.modeEntry.onclick = () => { entrySessionCount = 0; setPage('home', { mode: 'entry' }); window.scrollTo({ top: 0, behavior: 'smooth' }); };
     document.getElementById('shelfSortToggle').onclick = () => {
