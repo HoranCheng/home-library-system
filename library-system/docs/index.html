@@ -640,6 +640,15 @@
       localStorage.setItem(PAGE_KEY, page);
       if (options.mode) localStorage.setItem(MODE_KEY, options.mode);
       render();
+      // Stop camera when navigating away from entry mode (deferred to avoid TDZ)
+      queueMicrotask(() => {
+        try {
+          if (scannerActive) {
+            const stayingInEntry = page === 'home' && options.mode === 'entry';
+            if (!stayingInEntry) stopScanner();
+          }
+        } catch (_) {}
+      });
     }
     function makeNotice(kind, text) { return `<div class="notice ${kind}">${text}</div>`; }
     function escapeHtml(v) {
@@ -1150,7 +1159,7 @@
       bookSortMode = bookSortMode === 'alpha' ? 'time' : 'alpha';
       render();
     };
-    els.finishEntryBtn.onclick = () => { entrySessionCount = 0; clearDraftFields({ keepIsbn: false, keepLocation: false }); setPage('home', { mode: 'dashboard' }); };
+    els.finishEntryBtn.onclick = () => { entrySessionCount = 0; if (scannerActive) stopScanner(); clearDraftFields({ keepIsbn: false, keepLocation: false }); setPage('home', { mode: 'dashboard' }); };
     els.searchClearBtn.onclick = () => { els.searchInput.value = ''; render(); };
 
     els.isbnScanBtn.onclick = (event) => {
@@ -2432,7 +2441,13 @@
           // ROI canvas — crop center strip for faster/more accurate barcode detection
           const roiCanvas = document.createElement('canvas');
           const roiCtx = roiCanvas.getContext('2d');
-          let scanFlip = false; // alternate between ROI and full-frame
+          let scanFlip = false;
+          // 6-second hint timer
+          const scanHintTimer = setTimeout(() => {
+            if (scannerActive) {
+              els.scanNotice.innerHTML = makeNotice('warn', '💡 条码识别较慢？试试对准书背面的 ISBN 数字（978 开头），或手动输入。');
+            }
+          }, 6000);
 
           const scan = async () => {
             if (!scannerActive) return;
@@ -2485,6 +2500,12 @@
         els.scannerBox.style.display = 'block';
         render();
         els.scanNotice.innerHTML = '';
+        // 6-second hint timer for ZXing path
+        setTimeout(() => {
+          if (scannerActive) {
+            els.scanNotice.innerHTML = makeNotice('warn', '💡 条码识别较慢？试试对准书背面的 ISBN 数字（978 开头），或手动输入。');
+          }
+        }, 6000);
         // Use best camera if found, otherwise let ZXing pick
         zxingScanControl = await zxingReader.decodeFromVideoDevice(
           bestDeviceId || null, els.scannerVideo,
