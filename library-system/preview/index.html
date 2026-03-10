@@ -1192,6 +1192,20 @@
         return false;
       }
 
+      // If we have ISBN but no cover, try Bookcover API
+      if (!coverUrl && isbn) {
+        const compact = isbn.replace(/[^0-9Xx]/g, '');
+        if (compact) {
+          try {
+            const bcRes = await fetch(`https://bookcover.longitood.com/bookcover/${encodeURIComponent(compact)}`);
+            if (bcRes.ok) {
+              const bcData = await bcRes.json();
+              if (bcData.url) coverUrl = bcData.url;
+            }
+          } catch (_) {}
+        }
+      }
+
       const wasEditing = Boolean(editingBookId);
       const books = loadBooks();
       const duplicate = books.find(b => b.id !== editingBookId && ((isbn && b.isbn === isbn) || (b.title === title && b.author === author)));
