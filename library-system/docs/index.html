@@ -190,12 +190,13 @@
 
     /* ── Scanner ── */
     .scanner-box { display:none; margin-top:14px; border-radius:16px; overflow:hidden; position:relative; background:#000; }
-    .scanner-video { width:100%; display:block; max-height:420px; object-fit:cover; }
-    .scanner-aim { position:absolute; inset:0; pointer-events:none; display:flex; align-items:center; justify-content:center; flex-direction:column; gap:8px; }
-    .scanner-aim-inner { width:240px; height:100px; border:2.5px solid var(--accent); border-radius:12px; box-shadow:0 0 0 9999px rgba(0,0,0,.45); position:relative; overflow:hidden; }
+    .scanner-video { width:100%; display:block; max-height:300px; object-fit:cover; }
+    .scanner-aim { position:absolute; inset:0; pointer-events:none; display:flex; align-items:center; justify-content:center; flex-direction:column; gap:6px; }
+    .scanner-aim-inner { width:260px; height:56px; border:2px solid var(--accent); border-radius:8px; box-shadow:0 0 0 9999px rgba(0,0,0,.5); position:relative; overflow:hidden; }
     .scanner-aim-inner::after { content:''; position:absolute; left:8px; right:8px; height:2px; background:linear-gradient(90deg, transparent, var(--accent), transparent); animation:scanLine 2s ease-in-out infinite; }
-    @keyframes scanLine { 0% { top:10%; opacity:.3; } 50% { top:90%; opacity:1; } 100% { top:10%; opacity:.3; } }
-    .scanner-hint { color:rgba(255,255,255,.85); font-size:13px; font-weight:500; text-shadow:0 1px 3px rgba(0,0,0,.5); margin-top:4px; }
+    @keyframes scanLine { 0% { top:15%; opacity:.3; } 50% { top:85%; opacity:1; } 100% { top:15%; opacity:.3; } }
+    .scanner-hint { color:rgba(255,255,255,.8); font-size:12px; font-weight:500; text-shadow:0 1px 3px rgba(0,0,0,.6); margin-top:2px; }
+    .scanner-pro-backdrop { position:absolute; inset:0; background:transparent; z-index:9; }
     .scanner-controls { position:absolute; top:10px; right:10px; display:flex; gap:8px; z-index:5; }
     .scanner-cancel { background:rgba(0,0,0,.65); color:#fff; border:0; border-radius:10px; padding:7px 14px; font-size:14px; cursor:pointer; font-weight:600; }
     .scanner-ctrl-btn { background:rgba(0,0,0,.65); color:#fff; border:0; border-radius:10px; padding:7px 14px; font-size:14px; cursor:pointer; font-weight:600; }
@@ -403,13 +404,14 @@
           <video id="scannerVideo" autoplay playsinline muted class="scanner-video"></video>
           <div class="scanner-aim">
             <div class="scanner-aim-inner"></div>
-            <div class="scanner-hint">将条码对准框内</div>
+            <div class="scanner-hint">将条形码或 ISBN 数字对准框内</div>
           </div>
           <div class="scanner-controls">
             <button class="scanner-ctrl-btn" id="torchBtn" title="闪光灯">🔦 关</button>
-            <button class="scanner-ctrl-btn" id="proBtn" title="专业模式">⚙ Pro</button>
+            <button class="scanner-ctrl-btn" id="proBtn" title="镜头设置">⚙</button>
             <button class="scanner-cancel" id="scannerCancelBtn">取消</button>
           </div>
+          <div class="scanner-pro-backdrop" id="proBackdrop" style="display:none"></div>
           <div class="scanner-pro-panel" id="proPanelBox" style="display:none">
             <div class="pro-panel-title">📷 镜头设置</div>
             <div class="pro-row">
@@ -725,6 +727,7 @@
       scannerCancelBtn: document.getElementById('scannerCancelBtn'),
       torchBtn: document.getElementById('torchBtn'),
       proBtn: document.getElementById('proBtn'),
+      proBackdrop: document.getElementById('proBackdrop'),
       proPanelBox: document.getElementById('proPanelBox'),
       proCameraSelect: document.getElementById('proCameraSelect'),
       proFocusSelect: document.getElementById('proFocusSelect'),
@@ -1730,6 +1733,7 @@
       els.torchBtn.textContent = '🔦 关';
       els.torchBtn.classList.remove('active');
       els.proPanelBox.style.display = 'none';
+      els.proBackdrop.style.display = 'none';
       els.proBtn.classList.remove('active');
       proVisible = false;
       render();
@@ -2319,9 +2323,17 @@
 
     // Pro mode panel
     let proVisible = false;
+    function closePro() {
+      proVisible = false;
+      els.proPanelBox.style.display = 'none';
+      els.proBackdrop.style.display = 'none';
+      els.proBtn.classList.remove('active');
+    }
+    els.proBackdrop.onclick = closePro;
     els.proBtn.onclick = async () => {
       proVisible = !proVisible;
       els.proPanelBox.style.display = proVisible ? '' : 'none';
+      els.proBackdrop.style.display = proVisible ? '' : 'none';
       els.proBtn.classList.toggle('active', proVisible);
       if (!proVisible) return;
 
