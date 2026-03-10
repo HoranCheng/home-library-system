@@ -190,7 +190,10 @@
 
     /* ── Scanner ── */
     .scanner-box { display:none; margin-top:10px; border-radius:14px; overflow:hidden; position:relative; background:#000; }
-    .scanner-video { width:100%; display:block; max-height:200px; object-fit:cover; }
+    .scanner-video { width:100%; display:block; max-height:200px; object-fit:cover; transition:filter .15s ease; }
+    .scanner-video.freeze { filter:brightness(1.15) contrast(1.05); }
+    .scanner-freeze-flash { position:absolute; inset:0; background:rgba(255,255,255,.25); pointer-events:none; opacity:0; z-index:4; transition:opacity .12s ease; }
+    .scanner-freeze-flash.active { opacity:1; }
     .scanner-aim { position:absolute; inset:0; pointer-events:none; display:flex; align-items:center; justify-content:center; flex-direction:column; gap:4px; }
     .scanner-aim-inner { width:240px; height:48px; border:2px solid var(--accent); border-radius:6px; box-shadow:0 0 0 9999px rgba(0,0,0,.55); position:relative; overflow:hidden; }
     .scanner-aim-inner::after { content:''; position:absolute; left:8px; right:8px; height:2px; background:linear-gradient(90deg, transparent, var(--accent), transparent); animation:scanLine 1.8s ease-in-out infinite; }
@@ -406,6 +409,7 @@
         </div>
         <div class="scanner-box" id="scannerBox">
           <video id="scannerVideo" autoplay playsinline muted class="scanner-video"></video>
+          <div class="scanner-freeze-flash" id="scannerFlash"></div>
           <div class="scanner-aim">
             <div class="scanner-aim-inner"></div>
             <div class="scanner-hint">将条形码或 ISBN 数字对准框内</div>
@@ -656,6 +660,17 @@
       });
     }
     function makeNotice(kind, text) { return `<div class="notice ${kind}">${text}</div>`; }
+
+    // ── Haptic feedback helpers ──────────────────────────────────────────
+    function hapticScan() {
+      // Short single tap — "I see a barcode"
+      if (navigator.vibrate) navigator.vibrate(40);
+    }
+    function hapticSaved() {
+      // Double-tap pattern — "Book saved!"
+      if (navigator.vibrate) navigator.vibrate([50, 60, 90]);
+    }
+    // ── End haptic helpers ───────────────────────────────────────────────
     function escapeHtml(v) {
       return String(v ?? '').replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;').replaceAll("'", '&#39;');
     }
@@ -724,6 +739,7 @@
       exportOutput: document.getElementById('exportOutput'),
       scannerBox: document.getElementById('scannerBox'),
       scannerVideo: document.getElementById('scannerVideo'),
+      scannerFlash: document.getElementById('scannerFlash'),
       scannerCancelBtn: document.getElementById('scannerCancelBtn'),
       torchBtn: document.getElementById('torchBtn'),
       proBtn: document.getElementById('proBtn'),
@@ -1392,6 +1408,7 @@
         target.status = isCompleteRecord ? 'in_library' : 'to_be_sorted';
         target.updatedAt = new Date().toISOString();
         saveBooks(books);
+        hapticSaved();
         els.manualNotice.innerHTML = makeNotice('ok', `已更新：${title}${isCompleteRecord ? '（已入库）' : '（信息待补充）'}`);
         editingBookId = null;
         els.saveBtn.textContent = '导入库中';
@@ -1407,6 +1424,7 @@
         });
         saveBooks(books);
         entrySessionCount += 1;
+        hapticSaved();
 
         // Stop scanner during modal
         if (scannerActive) stopScanner();
@@ -1773,6 +1791,9 @@
     function stopScanner() {
       scannerActive = false;
       torchOn = false;
+      // Clean up freeze-frame state
+      els.scannerVideo.classList.remove('freeze');
+      els.scannerFlash.classList.remove('active');
       if (els.formFields) els.formFields.style.display = '';
       if (scannerAnimFrame) { cancelAnimationFrame(scannerAnimFrame); scannerAnimFrame = null; }
       if (zxingScanControl) {
@@ -2584,9 +2605,19 @@
                 }
                 scanFlip = !scanFlip;
                 if (barcodes.length > 0) {
-                  // Haptic feedback on success
-                  if (navigator.vibrate) navigator.vibrate(100);
-                  handleScanResult(barcodes[0].rawValue); return;
+                  hapticScan();
+                  // Freeze-frame effect: pause video visually + flash
+                  video.classList.add('freeze');
+                  els.scannerFlash.classList.add('active');
+                  video.pause();
+                  // Hold the freeze briefly, then process
+                  setTimeout(() => {
+                    handleScanResult(barcodes[0].rawValue);
+                    // Clean up freeze state (stopScanner or next startScanner will also reset)
+                    video.classList.remove('freeze');
+                    els.scannerFlash.classList.remove('active');
+                  }, 350);
+                  return;
                 }
               }
             } catch (_) {}
@@ -2626,7 +2657,21 @@
         // Use best camera if found, otherwise let ZXing pick
         zxingScanControl = await zxingReader.decodeFromVideoDevice(
           bestDeviceId || null, els.scannerVideo,
-          (result, err) => { if (result && result.text) handleScanResult(result.text); }
+          (result, err) => {
+            if (result && result.text) {
+              hapticScan();
+              // Freeze-frame effect for ZXing path
+              const vid = els.scannerVideo;
+              vid.classList.add('freeze');
+              els.scannerFlash.classList.add('active');
+              vid.pause();
+              setTimeout(() => {
+                handleScanResult(result.text);
+                vid.classList.remove('freeze');
+                els.scannerFlash.classList.remove('active');
+              }, 350);
+            }
+          }
         );
         // Try to show torch button for ZXing path
         if (els.scannerVideo.srcObject) {
