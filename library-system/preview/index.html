@@ -2043,13 +2043,26 @@
       }
 
       // Merge multiple results, preferring language-matched sources
+      // Detect if text contains CJK characters (Chinese/Japanese/Korean)
+      function hasCJK(text) {
+        return /[\u4e00-\u9fff\u3400-\u4dbf\u3040-\u309f\u30a0-\u30ff\uac00-\ud7af]/.test(text || '');
+      }
+
       function mergeResults(results, preferredLang) {
         // results is array of {source, data} where data may be null
         const valid = results.filter(r => r.data && r.data.title);
 
         // Pick best item per field
-        const pick = (getter) => {
-          // First try language-preferred sources
+        const pick = (getter, preferCJK = false) => {
+          // For CJK-preferred ISBNs: prefer results with actual CJK characters
+          if (preferCJK && preferredLang === 'zh') {
+            const cjkMatch = valid.find(r => {
+              const v = getter(r.data);
+              return v && (typeof v === 'string' ? hasCJK(v) : Array.isArray(v) && v.some(hasCJK));
+            });
+            if (cjkMatch) { const v = getter(cjkMatch.data); if (v) return { value: v, source: cjkMatch.source, lang: cjkMatch.data.lang }; }
+          }
+          // Then try language-preferred sources
           if (preferredLang) {
             const langMatch = valid.find(r => r.data.lang && String(r.data.lang).startsWith(preferredLang));
             if (langMatch) { const v = getter(langMatch.data); if (v) return { value: v, source: langMatch.source, lang: langMatch.data.lang }; }
@@ -2061,8 +2074,8 @@
           return null;
         };
 
-        const titleR = pick(d => d.title);
-        const authorsR = pick(d => d.authors?.length ? d.authors : null);
+        const titleR = pick(d => d.title, true);
+        const authorsR = pick(d => d.authors?.length ? d.authors : null, true);
         const categoryR = pick(d => d.category);
         const descR = pick(d => d.description);
         const yearR = pick(d => d.year);
@@ -2142,8 +2155,8 @@
         if (!merged.coverUrl) merged.coverUrl = bcCover || extractAnyCover(gbLangRes) || extractAnyCover(gbRes) || '';
         if (merged.category) merged.category = translateCategory(merged.category);
 
-        // Must have title + author + category to show results instantly
-        const hasEnough = Boolean(merged.title && merged.authors.length && merged.category);
+        // Title + author is enough to show immediately; category filled in background
+        const hasEnough = Boolean(merged.title && merged.authors.length);
 
         if (hasEnough) {
           // ✅ Fast path — show results immediately, enrich in background
