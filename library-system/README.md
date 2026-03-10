@@ -1,66 +1,73 @@
-# Home Library System
+# 📚 毛毛图书管理系统
 
-Personal home library management app (mobile-first), focused on:
-- ISBN scan-in
-- classification and shelf location
-- tidy-up workflow with daily mode + bulk mode
+> 一款移动优先的个人藏书管理 PWA，扫码即录、自动补全、优雅管理。
 
-## Workflow
-- `🧠 orchestrator-hub` (coordination)
-- `🤖 gpt-builder` (implementation)
-- `🧩 claude-review` (review)
-- `✨ gemini-explore` (alternatives/testing)
-- `🚀 release-log` (release notes)
-
-## Versioning
-Use Semantic Versioning: `MAJOR.MINOR.PATCH`.
-
-- feat -> MINOR
-- fix -> PATCH
-- breaking changes -> MAJOR
-
-## Changelog
-See `CHANGELOG.md`.
+**在线体验** → [horancheng.github.io/home-library-system](https://horancheng.github.io/home-library-system/)
 
 ---
 
-## iPhone / PWA 使用说明
+## ✨ 核心功能
 
-### 添加到主屏幕（Add to Home Screen）
+- **📷 扫码录入** — 对准条形码自动识别 ISBN，秒级入库
+- **🔍 智能补全** — 自动从 Google Books / Open Library 获取书名、作者、分类、封面
+- **🀄 中文优先** — 所有分类自动翻译为中文，中文书优先中文元数据
+- **📖 阅读追踪** — 想读 / 在读 / 读完，首页显示当前在读
+- **🗂 分类管理** — 按字母/时间排序，分类 chip 筛选
+- **📍 存放位置** — 记录每本书的物理位置，支持自定义预设
+- **🔎 搜索** — 全文搜索书名、作者、ISBN、分类、状态
+- **📤 数据备份** — 导出/导入 JSON/CSV，数据完全在你手中
+- **📱 PWA** — 添加到主屏幕，全屏运行，接近原生 App 体验
 
-1. 用 **Safari** 打开本应用网址（其他浏览器无法触发 iOS 安装提示）。
-2. 点击底部工具栏中间的 **分享** 按钮（方框加箭头图标）。
-3. 下拉菜单，找到 **"添加到主屏幕"（Add to Home Screen）**，点击。
-4. 确认名称后点击右上角 **"添加"**，图标即出现在桌面。
-5. 从桌面图标启动后，应用以全屏模式运行（无 Safari 地址栏）。
+## 📱 安装使用
 
-> 提示：仅 Safari 支持在 iOS 上安装 PWA；Chrome/Firefox 会打开普通网页标签，不会安装。
+### iPhone / iPad（推荐）
+1. 用 **Safari** 打开 → [在线地址](https://horancheng.github.io/home-library-system/)
+2. 点底部 **分享按钮**（方框+箭头）
+3. 选择 **"添加到主屏幕"**
+4. 从桌面图标启动 → 全屏模式，无地址栏
 
-### 首页双模式
+> ⚠️ 仅 Safari 支持 iOS 上安装 PWA
 
-| 模式 | 入口 | 适用场景 |
-|------|------|----------|
-| 扫码入库（scan） | 默认启动模式 | 图书有条码，对准摄像头即录 |
-| 手动录入（manual） | 点击"无条码？去手动录入" | 旧书/无条码，手动填写 ISBN/书名/作者 |
+### Android
+1. Chrome 打开在线地址
+2. 点击地址栏或弹窗中的 **"安装"**
 
-模式切换通过底部 Nav 中的按钮完成，选择记忆在本地存储（localStorage），刷新或重启后保留。
+### 桌面浏览器
+直接访问在线地址即可使用。
 
-### 手动录入流程
+## 🏗 技术栈
 
-1. 切换到手动录入模式。
-2. 填写 **ISBN**（ISBN-10 或 ISBN-13 均可，会自动标准化）、**书名**、**作者**。
-3. 点击 **"保存图书"**。
-4. 系统自动去重：ISBN 重复或书名+作者相似时会提示候选项。
+| 组件 | 技术 |
+|------|------|
+| 前端 | 单文件 HTML + Vanilla JS（零依赖） |
+| 元数据 | Cloudflare Worker 代理 → Google Books API |
+| 备选源 | Open Library API（免费公开） |
+| 扫码 | BarcodeDetector API + ZXing fallback |
+| 存储 | localStorage（纯客户端） |
+| 部署 | GitHub Pages（自动） |
+| PWA | Service Worker + Web App Manifest |
 
-### 导出 / 导入（设置页）
+## 📋 版本历史
 
-- **导出 JSON**：完整备份，包含所有图书字段和元数据（`books + meta`）。
-- **导出 CSV**：可用 Excel/Numbers 打开，9 列（id, title, authors, isbn13, isbn10, edition, status, createdAt, updatedAt）。
-- **导入 JSON**：导入前会先校验 schema；校验失败时显示错误信息，不会覆盖现有数据。
-- **当前预览页说明**：预览页导出格式已与正式 JSON / CSV 结构对齐，但界面仍属于 v0.1.1 的轻量发布页，不代表最终完整前端工程结构。
+详见 [CHANGELOG.md](./CHANGELOG.md)
 
-### 离线使用
+| 版本 | 日期 | 亮点 |
+|------|------|------|
+| v0.5.0 | 2026-03-10 | Cloudflare Worker 代理、分类中文化、封面统一、缩放锁定 |
+| v0.4.0 | 2026-03-09 | 首页仪表盘、连续录入、搜索页、阅读追踪 |
+| v0.1.1 | 2026-03-08 | 双模式录入、导入导出、去重校验 |
+| v0.1.0 | 2026-03-08 | 项目初始化 |
 
-- 当前版本 **尚未实现完整 Service Worker / 离线缓存**。
-- 添加到主屏幕后可获得接近 App 的启动体验，但 **断网可用性不做保证**。
-- 完整离线支持计划在 v0.3.0 实现。
+## 🤝 开发
+
+```bash
+# 本地预览
+cd preview && python3 -m http.server 8080
+
+# 部署 Cloudflare Worker（需要 wrangler）
+cd worker && npx wrangler deploy
+```
+
+## 📄 License
+
+MIT
