@@ -1567,34 +1567,106 @@
       'business & economics': '商业', 'language arts & disciplines': '语言文学',
       'foreign language study': '外语学习', 'study aids': '学习辅导',
     };
+    // Pattern-based category rules (checked in order after exact match fails)
+    const CATEGORY_PATTERNS = [
+      [/\bfiction\b/i, '小说'],
+      [/\bnovel/i, '小说'],
+      [/\bpoetry\b|poems?\b/i, '诗歌'],
+      [/\bessay/i, '散文'],
+      [/\bbiograph/i, '传记'],
+      [/\bmemoir/i, '回忆录'],
+      [/\bhistor/i, '历史'],
+      [/\bphilosoph/i, '哲学'],
+      [/\bpsycholog/i, '心理学'],
+      [/\bsociolog/i, '社会学'],
+      [/\beconomic/i, '经济'],
+      [/\bbusiness/i, '商业'],
+      [/\bpolitic/i, '政治'],
+      [/\bscience\b/i, '科学'],
+      [/\bphysic/i, '物理'],
+      [/\bchemist/i, '化学'],
+      [/\bbiolog/i, '生物'],
+      [/\bmedicin/i, '医学'],
+      [/\bhealth/i, '健康'],
+      [/\bcomputer|programming|software/i, '计算机'],
+      [/\btechnolog/i, '科技'],
+      [/\bengineer/i, '工程'],
+      [/\beducat|teaching/i, '教育'],
+      [/\bart\b|artist/i, '艺术'],
+      [/\bmusic/i, '音乐'],
+      [/\bdesign/i, '设计'],
+      [/\bphoto/i, '摄影'],
+      [/\barchitect/i, '建筑'],
+      [/\bcook|food|culinar/i, '烹饪'],
+      [/\btravel/i, '旅行'],
+      [/\bsport/i, '体育'],
+      [/\blaw\b|legal/i, '法律'],
+      [/\breligio/i, '宗教'],
+      [/\bspiritual/i, '身心灵'],
+      [/\bself.?help/i, '自助'],
+      [/\bchildren|juvenile/i, '儿童文学'],
+      [/\byoung adult/i, '青少年'],
+      [/\bcomic|cartoon|manga|graphic novel/i, '漫画'],
+      [/\bcrime|detectiv/i, '犯罪'],
+      [/\bmystery\b/i, '悬疑'],
+      [/\bthriller/i, '惊悚'],
+      [/\bhorror/i, '恐怖'],
+      [/\bromance\b/i, '言情'],
+      [/\bfantas/i, '奇幻'],
+      [/\bsci.?fi|science fiction/i, '科幻'],
+      [/\bmilitar|war\b/i, '军事'],
+      [/\bliteratur/i, '文学'],
+      [/\bdrama\b/i, '戏剧'],
+      [/\bfilm|cinema|movie/i, '电影'],
+      [/\blinguist|language/i, '语言学'],
+      [/\banthropolog/i, '人类学'],
+      [/\bfamily|relationship/i, '家庭'],
+      [/\bparent/i, '育儿'],
+      [/\bnature|environment/i, '自然'],
+      [/\bgarden/i, '园艺'],
+      [/\bhumor|funny|comedy/i, '幽默'],
+      [/\badventur/i, '冒险'],
+      [/\breference/i, '工具书'],
+    ];
+
+    // Junk categories that should be discarded entirely
+    const JUNK_CAT_RE = /^(China|Chinese|Japan|Japanese|Korea|Korean|English|French|German|America|United States|Europe|Asia|Africa|India|Australia|Canadian|British|Irish|Russian|Latin|Italian|Spanish|Portuguese|Swedish|Norwegian|Danish|Dutch|Polish|Arab|Middle East|Beijing|Shanghai|Tokyo|Seoul|London|New York|Paris|Berlin|General|Collections|Miscellaneous|Nonfiction|Fiction and nonfiction|Accessible book|Protected DAISY|Internet Archive Wishlist|In library|OverDrive|Large type|Lending library|Place|People|Geography|Social|Will|Grief|Belief|Doubt|Influence|Totalitarian|[A-Z][a-z]+\s+(Xian|County|City|Province|Region)\b|[A-Z][a-z]+,\s*[A-Z]|\d{2,4}(th|st|nd|rd)?\s*(century|Century))$/i;
+
     function translateCategory(cat, _lang) {
-      if (!cat) return cat;
+      if (!cat) return '';
       // Already Chinese — keep as-is
       if (/[\u4e00-\u9fff]/.test(cat)) return cat;
-      const key = cat.toLowerCase().trim();
-      return EN_ZH_CATEGORY[key] || cat;
+      const trimmed = cat.trim();
+      // Filter junk
+      if (JUNK_CAT_RE.test(trimmed)) return '';
+      // Exact match
+      const key = trimmed.toLowerCase();
+      if (EN_ZH_CATEGORY[key]) return EN_ZH_CATEGORY[key];
+      // Pattern match
+      for (const [re, zh] of CATEGORY_PATTERNS) {
+        if (re.test(trimmed)) return zh;
+      }
+      // If still English and no match, return empty (will show as 未分类)
+      if (/^[a-zA-Z\s&,.()\-\/]+$/.test(trimmed)) return '';
+      return trimmed;
     }
 
     // Category quality filter — used in both render() and fillBookMetaByIsbn
-    const JUNK_CATEGORY_RE = /^(China|Chinese|Japan|Japanese|Korea|Korean|English|French|German|America|United States|Europe|Asia|Africa|India|Beijing|Shanghai|Tokyo|Seoul|London|New York|Paris|Berlin|General|Collections|Miscellaneous|Nonfiction|Fiction and nonfiction|Accessible book|Protected DAISY|Internet Archive Wishlist|In library|OverDrive|Large type|Lending library|Place|People|History|Geography|Social|Political|Biography|\d{2,4}(th|st|nd|rd)?\s*(century|Century)|[A-Z][a-z]+,\s*[A-Z])/i;
     function isGoodCategory(raw) {
       const s = String(raw || '').trim();
       if (!s) return false;
-      // CJK characters (Chinese/Japanese/Korean) are always valid as categories
-      if (/[\u4e00-\u9fff\u3040-\u30ff\uac00-\ud7af]/.test(s)) return true;
-      // Latin text: apply stricter checks
-      if (s.length <= 2) return false;                      // too short abbreviation
-      if (/[=:]/.test(s)) return false;                     // nyt:hardcover-fiction=20
-      if (/,\s*$/.test(s)) return false;                    // "Man-woman relationships,"
-      if (JUNK_CATEGORY_RE.test(s)) return false;
-      if (/^\d{4}\s*[-–]\s*\d{4}$/.test(s)) return false;  // date ranges
-      if (/^[A-Z]{1,3}$/.test(s)) return false;             // CN, PR etc.
-      return true;
+      if (/[=:]/.test(s)) return false;
+      if (/,\s*$/.test(s)) return false;
+      if (/^\d{4}\s*[-–]\s*\d{4}$/.test(s)) return false;
+      if (/^[A-Z]{1,3}$/.test(s)) return false;
+      // Use translateCategory as the authority — if it returns non-empty, it's good
+      const translated = translateCategory(s);
+      return Boolean(translated);
     }
     function pickBestCategory(items) {
       for (const raw of items) {
         const s = String(raw?.name || raw || '').split(' / ')[0].trim().slice(0, 32);
-        if (isGoodCategory(s)) return s;
+        if (isGoodCategory(s)) return translateCategory(s);
       }
       return '';
     }
@@ -1967,6 +2039,26 @@
 
     els.scannerCancelBtn.onclick = stopScanner;
     // ── End Scanner ───────────────────────────────────────────────────────────
+
+    // One-time migration: re-translate all existing categories to Chinese
+    (function migrateCategories() {
+      const MIGRATION_KEY = 'lib:cat-migration:v2';
+      if (localStorage.getItem(MIGRATION_KEY)) return;
+      const books = loadBooks();
+      let changed = false;
+      for (const b of books) {
+        if (b.category) {
+          const translated = translateCategory(b.category);
+          if (translated !== b.category) {
+            b.category = translated;
+            b.updatedAt = new Date().toISOString();
+            changed = true;
+          }
+        }
+      }
+      if (changed) saveBooks(books);
+      localStorage.setItem(MIGRATION_KEY, Date.now().toString());
+    })();
 
     render();
 
