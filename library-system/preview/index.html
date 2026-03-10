@@ -2085,7 +2085,8 @@
         if (!merged.coverUrl) merged.coverUrl = bcCover || extractAnyCover(gbLangRes) || extractAnyCover(gbRes) || '';
         if (merged.category) merged.category = translateCategory(merged.category);
 
-        const hasEnough = Boolean(merged.title && merged.authors.length);
+        // Must have title + author + category to show results instantly
+        const hasEnough = Boolean(merged.title && merged.authors.length && merged.category);
 
         if (hasEnough) {
           // ✅ Fast path — show results immediately, enrich in background
