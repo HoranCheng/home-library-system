@@ -674,9 +674,8 @@
     }
 
     function coverUrl(book) {
-      if (book?.coverUrl) return book.coverUrl;
-      const isbn = String(book?.isbn || '').replace(/[^0-9Xx]/g, '');
-      return isbn ? `https://covers.openlibrary.org/b/isbn/${encodeURIComponent(isbn)}-M.jpg` : '';
+      // Only use stored coverUrl — don't fallback to OL's 1x1 GIF placeholder
+      return book?.coverUrl || '';
     }
     // Detect 1x1 placeholder images from OpenLibrary and hide them
     function onCoverLoad(img) {
@@ -1954,11 +1953,22 @@
           merged.category = translateCategory(merged.category);
         }
 
-        // Cover fallback: aggressively search ALL GB results for any thumbnail
+        // Cover fallback chain
+        // 1. Google Books thumbnails from all queries
         if (!merged.coverUrl) {
           merged.coverUrl = extractAnyCover(gbLangRes) || extractAnyCover(gbRes) || extractAnyCover(gbAltRes) || extractAnyCover(gbTitleRes) || '';
         }
-        // Final cover fallback: OpenLibrary ISBN cover (may return placeholder but worth trying)
+        // 2. Bookcover API (Goodreads/Amazon covers, best coverage, free)
+        if (!merged.coverUrl && compact) {
+          try {
+            const bcRes = await fetch(`https://bookcover.longitood.com/bookcover/${encodeURIComponent(compact)}`);
+            if (bcRes.ok) {
+              const bcData = await bcRes.json();
+              if (bcData.url) merged.coverUrl = bcData.url;
+            }
+          } catch (_) {}
+        }
+        // 3. OpenLibrary ISBN cover (often returns 1x1 placeholder)
         if (!merged.coverUrl && compact) {
           merged.coverUrl = `https://covers.openlibrary.org/b/isbn/${compact}-M.jpg`;
         }
@@ -2137,6 +2147,31 @@
     })();
 
     render();
+
+    // One-time migration: fetch missing covers from Bookcover API
+    (async function migrateCovers() {
+      const COVER_MIG_KEY = 'lib:cover-migration:v1';
+      if (localStorage.getItem(COVER_MIG_KEY)) return;
+      const books = loadBooks();
+      const needCover = books.filter(b => !b.coverUrl && b.isbn);
+      if (!needCover.length) { localStorage.setItem(COVER_MIG_KEY, Date.now().toString()); return; }
+      let changed = false;
+      for (const b of needCover) {
+        const isbn = String(b.isbn).replace(/[^0-9Xx]/g, '');
+        if (!isbn) continue;
+        try {
+          const res = await fetch(`https://bookcover.longitood.com/bookcover/${encodeURIComponent(isbn)}`);
+          if (res.ok) {
+            const data = await res.json();
+            if (data.url) { b.coverUrl = data.url; b.updatedAt = new Date().toISOString(); changed = true; }
+          }
+        } catch (_) {}
+        // Small delay to be nice to the API
+        await new Promise(r => setTimeout(r, 300));
+      }
+      if (changed) { saveBooks(books); render(); }
+      localStorage.setItem(COVER_MIG_KEY, Date.now().toString());
+    })();
 
     // Register Service Worker
     if ('serviceWorker' in navigator) {
