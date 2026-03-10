@@ -198,6 +198,24 @@
     .scanner-ctrl-btn { background:rgba(0,0,0,.65); color:#fff; border:0; border-radius:10px; padding:7px 14px; font-size:14px; cursor:pointer; font-weight:600; }
     .scanner-ctrl-btn.active { background:rgba(255,200,0,.85); color:#000; }
     @keyframes camBounce { 0%,100% { transform:translateY(0) scale(1); } 50% { transform:translateY(-10px) scale(1.1); } }
+
+    /* Duplicate book modal */
+    .dup-overlay { position:fixed; inset:0; background:rgba(0,0,0,.4); z-index:2000; display:flex; align-items:center; justify-content:center; padding:20px; animation:fadeIn .2s ease; }
+    .dup-modal { background:var(--card); border-radius:20px; padding:28px 24px; max-width:320px; width:100%; text-align:center; box-shadow:0 16px 40px rgba(0,0,0,.15); animation:slideUp .3s ease; }
+    .dup-modal .dup-icon { font-size:40px; margin-bottom:12px; }
+    .dup-modal .dup-title { font-size:16px; font-weight:700; color:var(--text); margin-bottom:8px; }
+    .dup-modal .dup-detail { font-size:13px; color:var(--muted); line-height:1.5; margin-bottom:20px; }
+    .dup-modal .dup-book { background:var(--surface); border-radius:12px; padding:10px 14px; margin-bottom:16px; text-align:left; }
+    .dup-modal .dup-book-title { font-size:14px; font-weight:600; color:var(--text); }
+    .dup-modal .dup-book-author { font-size:12px; color:var(--muted); margin-top:2px; }
+    .dup-modal .dup-btns { display:flex; gap:10px; }
+    .dup-modal .dup-btns button { flex:1; border:none; border-radius:12px; padding:12px; font-size:14px; font-weight:600; cursor:pointer; transition:all .15s; }
+    .dup-modal .dup-btn-stop { background:var(--surface-2); color:var(--text); }
+    .dup-modal .dup-btn-stop:active { background:var(--line); }
+    .dup-modal .dup-btn-continue { background:var(--accent); color:#fff; }
+    .dup-modal .dup-btn-continue:active { background:#2e4a3a; }
+    @keyframes fadeIn { from { opacity:0; } to { opacity:1; } }
+    @keyframes slideUp { from { opacity:0; transform:translateY(30px); } to { opacity:1; transform:translateY(0); } }
     /* Auto-filled field highlight */
     input.auto-filled {
       background:var(--accent-light) !important; border-color:var(--accent) !important;
@@ -1165,6 +1183,43 @@
       return lookupCompleted;
     }
 
+    function showDuplicateModal(existingBook) {
+      return new Promise(resolve => {
+        const overlay = document.createElement('div');
+        overlay.className = 'dup-overlay';
+        overlay.innerHTML = `
+          <div class="dup-modal">
+            <div class="dup-icon">📚</div>
+            <div class="dup-title">这本书已经在库里了</div>
+            <div class="dup-book">
+              <div class="dup-book-title">${escapeHtml(existingBook.title || '未命名')}</div>
+              <div class="dup-book-author">${escapeHtml(existingBook.author || '未知作者')}</div>
+            </div>
+            <div class="dup-detail">不用重复导入哦，要继续扫下一本吗？</div>
+            <div class="dup-btns">
+              <button class="dup-btn-stop">到此为止</button>
+              <button class="dup-btn-continue">继续扫码</button>
+            </div>
+          </div>`;
+
+        const cleanup = (result) => {
+          overlay.style.animation = 'fadeIn .15s ease reverse';
+          setTimeout(() => { overlay.remove(); resolve(result); }, 150);
+        };
+
+        overlay.querySelector('.dup-btn-stop').onclick = () => cleanup('stop');
+        overlay.querySelector('.dup-btn-continue').onclick = () => cleanup('continue');
+
+        // Auto-dismiss after 8 seconds → treat as "stop"
+        const timer = setTimeout(() => cleanup('stop'), 8000);
+        overlay.addEventListener('click', (e) => {
+          if (e.target === overlay) { clearTimeout(timer); cleanup('stop'); }
+        });
+
+        document.body.appendChild(overlay);
+      });
+    }
+
     async function saveCurrentBook(options = {}) {
       const isbn = els.isbn.value.trim();
       let title = els.title.value.trim();
@@ -1219,8 +1274,17 @@
       const duplicate = books.find(b => b.id !== editingBookId && ((isbn && b.isbn === isbn) || (b.title === title && b.author === author)));
       const isCompleteRecord = Boolean(category && publishedYear && location);
       if (duplicate) {
-        els.manualNotice.innerHTML = makeNotice('warn', '疑似重复：系统发现相同 ISBN 或书名+作者组合。');
-        return false;
+        const dupAction = await showDuplicateModal(duplicate);
+        if (dupAction === 'stop') return false;
+        if (dupAction === 'continue') {
+          // User chose to continue scanning — clear fields and restart
+          const shouldResumeScan = lastEntryMethod === 'scan';
+          clearDraftFields({ keepIsbn: false, keepLocation: true, clearNotices: shouldResumeScan });
+          lookupCompleted = false;
+          if (shouldResumeScan) { scannerIntent = 'entry'; startScanner(); }
+          else { els.isbn.focus(); }
+          return false;
+        }
       }
 
       rememberLocationPreset(location);
