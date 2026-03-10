@@ -640,10 +640,24 @@
     }
     // Detect 1x1 placeholder images from OpenLibrary and hide them
     function onCoverLoad(img) {
+      // Open Library returns a 1x1 GIF for missing covers
       if (img.naturalWidth <= 2 && img.naturalHeight <= 2) {
-        img.style.background = 'var(--surface-2)';
-        img.removeAttribute('src');
+        showCoverPlaceholder(img);
+        return;
       }
+      // Very small images are usually "image not available" placeholders
+      if (img.naturalWidth <= 80 && img.naturalHeight <= 120) {
+        showCoverPlaceholder(img);
+        return;
+      }
+    }
+    function showCoverPlaceholder(img) {
+      const title = img.alt || '';
+      const initial = title.charAt(0) || '📖';
+      const wrapper = document.createElement('div');
+      wrapper.style.cssText = 'width:100%;aspect-ratio:2/3;border-radius:10px;background:var(--surface-2);border:1px solid var(--line);display:flex;align-items:center;justify-content:center;font-size:28px;color:var(--muted)';
+      wrapper.textContent = initial;
+      img.replaceWith(wrapper);
     }
 
     // ISBN-10 ↔ ISBN-13 conversion
@@ -870,7 +884,7 @@
         els.bookList.innerHTML = `<div class="book-grid">${byTime.map(b => {
           const cu = coverUrl(b);
           return `<div class="book-grid-item book-detail-btn" data-id="${escapeHtml(b.id)}">
-            <img src="${cu ? escapeHtml(cu) : ''}" alt="${escapeHtml(b.title || '')}" onload="onCoverLoad(this)" onerror="this.style.background='var(--surface-2)';this.removeAttribute('src')" />
+            <img src="${cu ? escapeHtml(cu) : ''}" alt="${escapeHtml(b.title || '')}" onload="onCoverLoad(this)" onerror="showCoverPlaceholder(this)" />
             <div class="book-grid-title">${escapeHtml(b.title || '未命名')}</div>
             <div class="book-grid-author">${escapeHtml(b.author || '未知作者')}</div>
           </div>`;
@@ -888,7 +902,7 @@
           }
           const cu = coverUrl(b);
           html += `<div class="book-grid-item book-detail-btn" data-id="${escapeHtml(b.id)}">
-            <img src="${cu ? escapeHtml(cu) : ''}" alt="${escapeHtml(b.title || '')}" onload="onCoverLoad(this)" onerror="this.style.background='var(--surface-2)';this.removeAttribute('src')" />
+            <img src="${cu ? escapeHtml(cu) : ''}" alt="${escapeHtml(b.title || '')}" onload="onCoverLoad(this)" onerror="showCoverPlaceholder(this)" />
             <div class="book-grid-title">${escapeHtml(b.title || '未命名')}</div>
             <div class="book-grid-author">${escapeHtml(b.author || '未知作者')}</div>
           </div>`;
@@ -1630,23 +1644,24 @@
     ];
 
     // Junk categories that should be discarded entirely
-    const JUNK_CAT_RE = /^(China|Chinese|Japan|Japanese|Korea|Korean|English|French|German|America|United States|Europe|Asia|Africa|India|Australia|Canadian|British|Irish|Russian|Latin|Italian|Spanish|Portuguese|Swedish|Norwegian|Danish|Dutch|Polish|Arab|Middle East|Beijing|Shanghai|Tokyo|Seoul|London|New York|Paris|Berlin|General|Collections|Miscellaneous|Nonfiction|Fiction and nonfiction|Accessible book|Protected DAISY|Internet Archive Wishlist|In library|OverDrive|Large type|Lending library|Place|People|Geography|Social|Will|Grief|Belief|Doubt|Influence|Totalitarian|[A-Z][a-z]+\s+(Xian|County|City|Province|Region)\b|[A-Z][a-z]+,\s*[A-Z]|\d{2,4}(th|st|nd|rd)?\s*(century|Century))$/i;
+    const JUNK_CAT_RE = /^(China|Chinese|Japan|Japanese|Korea|Korean|English|French|German|America|United States|Europe|Asia|Africa|India|Australia|Canadian|British|Irish|Russian|Latin|Italian|Spanish|Portuguese|Swedish|Norwegian|Danish|Dutch|Polish|Arab|Middle East|Beijing|Shanghai|Tokyo|Seoul|London|New York|Paris|Berlin|General|Collections|Miscellaneous|Nonfiction|Fiction and nonfiction|Accessible book|Protected DAISY|Internet Archive Wishlist|In library|OverDrive|Large type|Lending library|Place|People|Geography|Social|Will|Grief|Belief|Doubt|Influence|Totalitarian)(\b.*)?$/i;
+    const JUNK_CAT_RE2 = /language\s+materials|[A-Z][a-z]+\s+(Xian|County|City|Province|Region|Prefecture)\b|[A-Z][a-z]+,\s*[A-Z]|\d{2,4}(th|st|nd|rd)?\s*(century|Century)/i;
 
     function translateCategory(cat, _lang) {
       if (!cat) return '';
       // Already Chinese — keep as-is
       if (/[\u4e00-\u9fff]/.test(cat)) return cat;
       const trimmed = cat.trim();
-      // Filter junk
-      if (JUNK_CAT_RE.test(trimmed)) return '';
-      // Exact match
+      // 1. Exact match first (handles "Chinese fiction" → "中国小说" etc.)
       const key = trimmed.toLowerCase();
       if (EN_ZH_CATEGORY[key]) return EN_ZH_CATEGORY[key];
-      // Pattern match
+      // 2. Pattern match (handles "Biography & Autobiography" → "传记" etc.)
       for (const [re, zh] of CATEGORY_PATTERNS) {
         if (re.test(trimmed)) return zh;
       }
-      // If still English and no match, return empty (will show as 未分类)
+      // 3. Junk filter (only after translation attempts fail)
+      if (JUNK_CAT_RE.test(trimmed) || JUNK_CAT_RE2.test(trimmed)) return '';
+      // 4. If still English and no match, return empty (will show as 未分类)
       if (/^[a-zA-Z\s&,.()\-\/]+$/.test(trimmed)) return '';
       return trimmed;
     }
@@ -2042,7 +2057,7 @@
 
     // One-time migration: re-translate all existing categories to Chinese
     (function migrateCategories() {
-      const MIGRATION_KEY = 'lib:cat-migration:v2';
+      const MIGRATION_KEY = 'lib:cat-migration:v3';
       if (localStorage.getItem(MIGRATION_KEY)) return;
       const books = loadBooks();
       let changed = false;
