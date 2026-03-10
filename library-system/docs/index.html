@@ -679,16 +679,15 @@
     }
     // Detect 1x1 placeholder images from OpenLibrary and hide them
     function onCoverLoad(img) {
-      // Open Library returns a 1x1 GIF for missing covers
-      if (img.naturalWidth <= 2 && img.naturalHeight <= 2) {
-        showCoverPlaceholder(img);
-        return;
-      }
-      // Very small images are usually "image not available" placeholders
-      if (img.naturalWidth <= 80 && img.naturalHeight <= 120) {
-        showCoverPlaceholder(img);
-        return;
-      }
+      const w = img.naturalWidth, h = img.naturalHeight;
+      // 1x1 GIF from Open Library
+      if (w <= 2 && h <= 2) { showCoverPlaceholder(img); return; }
+      // Google Books "image not available" placeholder is exactly 128x196
+      // Catch any small cover from books.google.com (real covers are 300+px wide)
+      const src = img.src || '';
+      if (src.includes('books.google.com') && w <= 200) { showCoverPlaceholder(img); return; }
+      // Generic small placeholder detection
+      if (w <= 80 && h <= 120) { showCoverPlaceholder(img); return; }
     }
     function coverHtml(cu, title) {
       if (cu) return `<div class="cover-wrap"><img src="${escapeHtml(cu)}" alt="${escapeHtml(title || '')}" onload="onCoverLoad(this)" onerror="showCoverPlaceholder(this)" /></div>`;
@@ -1796,10 +1795,19 @@
         const yearMatch = String(info.publishedDate || '').match(/(19|20)\d{2}/);
         const year = yearMatch ? yearMatch[0] : '';
         const lang = info.language || null;
-        // Google Books thumbnail — ensure HTTPS, improve quality
+        // Google Books thumbnail — ensure HTTPS, improve quality, filter placeholders
         const thumb = info.imageLinks?.thumbnail || info.imageLinks?.smallThumbnail || '';
-        const coverUrl = thumb ? thumb.replace(/^http:/, 'https:').replace('&edge=curl', '').replace('zoom=1', 'zoom=2') : '';
+        let coverUrl = thumb ? thumb.replace(/^http:/, 'https:').replace('&edge=curl', '').replace('zoom=1', 'zoom=2') : '';
+        if (isGBPlaceholderUrl(coverUrl)) coverUrl = '';
         return { title, authors, category, description, year, lang, coverUrl };
+      }
+
+      // Check if a Google Books volume likely has no real cover
+      function isGBPlaceholderUrl(url) {
+        if (!url) return true;
+        // Volume IDs ending with ACAAJ typically have no real cover image
+        const m = url.match(/[?&]id=([^&]+)/);
+        return m && m[1].endsWith('ACAAJ');
       }
 
       // Extract cover from ANY Google Books item (not just best-language match)
@@ -1808,7 +1816,8 @@
         for (const item of gbData.items) {
           const imgs = item?.volumeInfo?.imageLinks;
           if (imgs?.thumbnail || imgs?.smallThumbnail) {
-            return (imgs.thumbnail || imgs.smallThumbnail).replace(/^http:/, 'https:').replace('&edge=curl', '').replace('zoom=1', 'zoom=2');
+            const url = (imgs.thumbnail || imgs.smallThumbnail).replace(/^http:/, 'https:').replace('&edge=curl', '').replace('zoom=1', 'zoom=2');
+            if (!isGBPlaceholderUrl(url)) return url;
           }
         }
         return '';
@@ -2148,12 +2157,14 @@
 
     render();
 
-    // One-time migration: fetch missing covers from Bookcover API
+    // One-time migration: fetch missing/placeholder covers from Bookcover API
     (async function migrateCovers() {
-      const COVER_MIG_KEY = 'lib:cover-migration:v1';
+      const COVER_MIG_KEY = 'lib:cover-migration:v2';
       if (localStorage.getItem(COVER_MIG_KEY)) return;
       const books = loadBooks();
-      const needCover = books.filter(b => !b.coverUrl && b.isbn);
+      // Need cover: no coverUrl, OR Google Books placeholder URL (often fake "image not available")
+      const isGBPlaceholder = (url) => url && url.includes('books.google.com') && url.includes('ACAAJ');
+      const needCover = books.filter(b => b.isbn && (!b.coverUrl || isGBPlaceholder(b.coverUrl)));
       if (!needCover.length) { localStorage.setItem(COVER_MIG_KEY, Date.now().toString()); return; }
       let changed = false;
       for (const b of needCover) {
