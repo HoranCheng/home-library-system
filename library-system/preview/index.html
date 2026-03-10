@@ -213,8 +213,8 @@
 
     /* ── Book grid ── */
     .book-list { margin-top:12px; }
-    .book-grid { display:grid; grid-template-columns:repeat(3, 1fr); gap:12px; margin-top:12px; }
-    .book-grid-item { text-align:center; cursor:pointer; }
+    .book-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(90px, 1fr)); gap:12px; margin-top:12px; }
+    .book-grid-item { text-align:center; cursor:pointer; max-width:140px; }
     .book-grid-item .cover-wrap { position:relative; width:100%; padding-top:150%; border-radius:10px; overflow:hidden; background:var(--surface-2); border:1px solid var(--line); }
     .book-grid-item .cover-wrap img { position:absolute; top:0; left:0; width:100%; height:100%; object-fit:cover; display:block; }
     .book-grid-item .cover-wrap .cover-placeholder { position:absolute; top:0; left:0; width:100%; height:100%; display:flex; align-items:center; justify-content:center; font-size:28px; color:var(--muted); }
@@ -442,7 +442,7 @@
           <svg width="16" height="16" fill="none" stroke="var(--muted)" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
           <input id="searchInput" placeholder="书名、作者、ISBN…" />
           <button class="clear-btn" id="searchClearBtn" style="display:none">&times;</button>
-          <button class="input-action-btn" id="searchScanBtn" title="扫码搜索" style="position:static;width:36px;height:36px;font-size:16px;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin:auto 0">📷</button>
+          <button id="searchScanBtn" title="扫码搜索" style="background:var(--surface);border:1px solid var(--line);border-radius:8px;width:36px;height:36px;font-size:16px;display:flex;align-items:center;justify-content:center;flex-shrink:0;cursor:pointer;padding:0">📷</button>
         </div>
         <div class="muted" style="font-size:11px;margin:-6px 0 8px 4px">💡 点击 📷 扫描条形码，快速查找已有图书</div>
         <div class="chips" id="searchCatChips" style="margin-top:0;margin-bottom:12px"></div>
