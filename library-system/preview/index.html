@@ -2031,40 +2031,24 @@
       const altIsbn = compact.length === 13 ? isbn13to10(compact) : isbn10to13(compact);
       const preferredLang = inferLang(compact);
 
-      setNotice('warn', `已识别 ISBN：${isbn}，正在查询书名、作者、分类和简介…`);
+      setNotice('warn', `已识别 ISBN：${isbn}，正在查询…`);
 
       try {
-        // Build all fetch URLs
-        const olUrl = `https://openlibrary.org/api/books?bibkeys=ISBN:${encodeURIComponent(compact)}&format=json&jscmd=data`;
-        const olSearchUrl = `https://openlibrary.org/search.json?isbn=${encodeURIComponent(compact)}&fields=title,author_name,subject,first_publish_year,cover_i,language,publisher&limit=3`;
         const _gb = GBOOKS_PROXY;
-        const gbUrl = `${_gb}/?q=isbn:${encodeURIComponent(compact)}&maxResults=5`;
-        const gbLangUrl = preferredLang
-          ? `${_gb}/?q=isbn:${encodeURIComponent(compact)}&langRestrict=${encodeURIComponent(preferredLang)}&maxResults=5`
-          : null;
-        const crUrl = `https://api.crossref.org/works?filter=isbn:${encodeURIComponent(compact)}&rows=3`;
-        // Alt ISBN queries (ISBN-10 ↔ 13 conversion)
-        const olAltUrl = altIsbn ? `https://openlibrary.org/api/books?bibkeys=ISBN:${encodeURIComponent(altIsbn)}&format=json&jscmd=data` : null;
-        const gbAltUrl = altIsbn ? `${_gb}/?q=isbn:${encodeURIComponent(altIsbn)}&maxResults=3` : null;
 
-        // Additional search for CJK books: title-based Google Books search with Chinese language
-        const gbTitleSearchUrl = preferredLang === 'zh'
-          ? `${_gb}/?q=isbn:${encodeURIComponent(compact)}&langRestrict=zh&printType=books&maxResults=5`
-          : null;
+        // Helper: apply data to form
+        function applyToForm(m) {
+          if (m.title) els.title.value = m.title;
+          if (m.authors.length) els.author.value = m.authors.join(', ');
+          if (m.category && !els.category.value) els.category.value = m.category;
+          if (m.year && !els.publishedYear.value) els.publishedYear.value = m.year;
+          if (m.description && els.description && !els.description.value) els.description.value = m.description;
+          markAutoFilled('title', 'author', 'category', 'publishedYear');
+          if (m.coverUrl) els.manualCard.dataset.pendingCoverUrl = m.coverUrl;
+          if (m.lang) els.manualCard.dataset.bookLang = m.lang;
+          if (m.sources.length) els.manualCard.dataset.bookSources = m.sources.join(' / ');
+        }
 
-        // Fire all requests in parallel (up to 8 sources)
-        const urls = [olUrl, olSearchUrl, gbUrl, gbLangUrl, crUrl, olAltUrl, gbAltUrl, gbTitleSearchUrl].filter(Boolean);
-        const responses = await Promise.allSettled(urls.map(u => fetch(u).then(r => r.ok ? r.json() : null)));
-
-        const [olRes, olSearchRes, gbRes, gbLangRes, crRes, olAltRes, gbAltRes, gbTitleRes] = responses.map(r => r.status === 'fulfilled' ? r.value : null);
-
-        // Parse Open Library results
-        const olData = olRes ? (olRes[`ISBN:${compact}`] || null) : null;
-        const olAltData = olAltRes ? (olAltRes[`ISBN:${altIsbn}`] || null) : null;
-        const olParsed = parseOpenLibrary(olData) || parseOpenLibrary(olAltData);
-        const olSearchParsed = parseOLSearch(olSearchRes);
-
-        // Parse Google Books — prefer language-matched item
         function bestGbItem(data) {
           if (!data?.items?.length) return null;
           if (preferredLang) {
@@ -2072,62 +2056,112 @@
           }
           return data.items[0];
         }
-        const gbLangParsed = parseGoogleBooks(bestGbItem(gbLangRes));
+
+        // ── Phase 1: Fast path — Google Books + Bookcover in parallel (~300-800ms) ──
+        const gbUrl = `${_gb}/?q=isbn:${encodeURIComponent(compact)}&maxResults=5`;
+        const gbLangUrl = preferredLang
+          ? `${_gb}/?q=isbn:${encodeURIComponent(compact)}&langRestrict=${encodeURIComponent(preferredLang)}&maxResults=5`
+          : null;
+        const bcUrl = `https://bookcover.longitood.com/bookcover/${encodeURIComponent(compact)}`;
+
+        const phase1Urls = [gbUrl, gbLangUrl, bcUrl].filter(Boolean);
+        const phase1 = await Promise.allSettled(phase1Urls.map(u =>
+          fetch(u).then(r => r.ok ? r.json() : null).catch(() => null)
+        ));
+
+        const gbRes = phase1[0].status === 'fulfilled' ? phase1[0].value : null;
+        const gbLangRes = gbLangUrl ? (phase1[1].status === 'fulfilled' ? phase1[1].value : null) : null;
+        const bcIdx = gbLangUrl ? 2 : 1;
+        const bcCover = (phase1[bcIdx]?.status === 'fulfilled' ? phase1[bcIdx].value : null)?.url || '';
+
         const gbParsed = parseGoogleBooks(bestGbItem(gbRes));
-        const gbAltParsed = parseGoogleBooks(bestGbItem(gbAltRes));
+        const gbLangParsed = parseGoogleBooks(bestGbItem(gbLangRes));
 
-        // Parse Crossref
-        const crParsed = parseCrossref(crRes?.message?.items?.[0]);
+        const fastResult = [];
+        if (gbLangParsed) fastResult.push({ source: 'Google Books', data: gbLangParsed });
+        if (gbParsed) fastResult.push({ source: 'Google Books', data: gbParsed });
 
-        // Assemble result list, language-preferred sources first
-        const resultList = [];
-        if (gbLangParsed) resultList.push({ source: 'Google Books', data: gbLangParsed });
-        if (olParsed) resultList.push({ source: 'Open Library', data: olParsed });
-        if (olSearchParsed) resultList.push({ source: 'Open Library', data: olSearchParsed });
-        if (gbParsed) resultList.push({ source: 'Google Books', data: gbParsed });
-        if (gbAltParsed) resultList.push({ source: 'Google Books', data: gbAltParsed });
-        const gbTitleParsed = parseGoogleBooks(bestGbItem(gbTitleRes));
-        if (gbTitleParsed) resultList.push({ source: 'Google Books', data: gbTitleParsed });
-        if (crParsed) resultList.push({ source: 'Crossref', data: crParsed });
+        let merged = mergeResults(fastResult, preferredLang);
+        if (!merged.coverUrl) merged.coverUrl = bcCover || extractAnyCover(gbLangRes) || extractAnyCover(gbRes) || '';
+        if (merged.category) merged.category = translateCategory(merged.category);
 
-        const merged = mergeResults(resultList, preferredLang);
+        const hasEnough = Boolean(merged.title && merged.authors.length);
 
-        // Translate English categories to Chinese (always, not just CJK books)
-        if (merged.category) {
-          merged.category = translateCategory(merged.category);
+        if (hasEnough) {
+          // ✅ Fast path — show results immediately, enrich in background
+          applyToForm(merged);
+
+          // Background enrichment (fills gaps without blocking user)
+          (async () => {
+            try {
+              const olSearchUrl = `https://openlibrary.org/search.json?isbn=${encodeURIComponent(compact)}&fields=title,author_name,subject,first_publish_year,cover_i,language&limit=3`;
+              const enrichUrls = [olSearchUrl];
+              if (altIsbn) enrichUrls.push(`${_gb}/?q=isbn:${encodeURIComponent(altIsbn)}&maxResults=3`);
+              const enrichRes = await Promise.allSettled(enrichUrls.map(u =>
+                fetch(u).then(r => r.ok ? r.json() : null).catch(() => null)
+              ));
+              const olSearchParsed = parseOLSearch(enrichRes[0].status === 'fulfilled' ? enrichRes[0].value : null);
+              if (!els.category.value && olSearchParsed?.category) {
+                const cat = translateCategory(olSearchParsed.category);
+                if (cat) { els.category.value = cat; markAutoFilled('category'); }
+              }
+              if (!els.publishedYear.value && olSearchParsed?.year) {
+                els.publishedYear.value = olSearchParsed.year; markAutoFilled('publishedYear');
+              }
+              if (!els.manualCard.dataset.pendingCoverUrl) {
+                const fallback = olSearchParsed?.coverUrl || '';
+                if (fallback) els.manualCard.dataset.pendingCoverUrl = fallback;
+              }
+            } catch (_) {}
+          })();
+
+        } else {
+          // ── Slow path: Google Books insufficient — query all sources ──
+          setNotice('warn', `正在查询更多数据源…`);
+
+          const slowUrls = [
+            `https://openlibrary.org/api/books?bibkeys=ISBN:${encodeURIComponent(compact)}&format=json&jscmd=data`,
+            `https://openlibrary.org/search.json?isbn=${encodeURIComponent(compact)}&fields=title,author_name,subject,first_publish_year,cover_i,language&limit=3`,
+            `https://api.crossref.org/works?filter=isbn:${encodeURIComponent(compact)}&rows=3`,
+            altIsbn ? `${_gb}/?q=isbn:${encodeURIComponent(altIsbn)}&maxResults=3` : null,
+            altIsbn ? `https://openlibrary.org/api/books?bibkeys=ISBN:${encodeURIComponent(altIsbn)}&format=json&jscmd=data` : null,
+            preferredLang === 'zh' ? `${_gb}/?q=isbn:${encodeURIComponent(compact)}&langRestrict=zh&printType=books&maxResults=5` : null
+          ].filter(Boolean);
+
+          const slowRes = await Promise.allSettled(slowUrls.map(u =>
+            fetch(u).then(r => r.ok ? r.json() : null).catch(() => null)
+          ));
+          const val = (i) => slowRes[i]?.status === 'fulfilled' ? slowRes[i].value : null;
+
+          let si = 0;
+          const olRes = val(si++);
+          const olSearchRes = val(si++);
+          const crRes = val(si++);
+          const gbAltRes = altIsbn ? val(si++) : null;
+          const olAltRes = altIsbn ? val(si++) : null;
+          const gbTitleRes = preferredLang === 'zh' ? val(si++) : null;
+
+          const olData = olRes ? (olRes[`ISBN:${compact}`] || null) : null;
+          const olAltData = olAltRes ? (olAltRes[`ISBN:${altIsbn}`] || null) : null;
+          const olParsed = parseOpenLibrary(olData) || parseOpenLibrary(olAltData);
+          const olSearchParsed = parseOLSearch(olSearchRes);
+          const gbAltParsed = parseGoogleBooks(bestGbItem(gbAltRes));
+          const gbTitleParsed = parseGoogleBooks(bestGbItem(gbTitleRes));
+          const crParsed = parseCrossref(crRes?.message?.items?.[0]);
+
+          const allResults = [...fastResult];
+          if (olParsed) allResults.push({ source: 'Open Library', data: olParsed });
+          if (olSearchParsed) allResults.push({ source: 'Open Library', data: olSearchParsed });
+          if (gbAltParsed) allResults.push({ source: 'Google Books', data: gbAltParsed });
+          if (gbTitleParsed) allResults.push({ source: 'Google Books', data: gbTitleParsed });
+          if (crParsed) allResults.push({ source: 'Crossref', data: crParsed });
+
+          merged = mergeResults(allResults, preferredLang);
+          if (!merged.coverUrl) merged.coverUrl = bcCover || extractAnyCover(gbAltRes) || extractAnyCover(gbTitleRes) || '';
+          if (!merged.coverUrl) merged.coverUrl = `https://covers.openlibrary.org/b/isbn/${compact}-M.jpg`;
+          if (merged.category) merged.category = translateCategory(merged.category);
+          applyToForm(merged);
         }
-
-        // Cover fallback chain
-        // 1. Google Books thumbnails from all queries
-        if (!merged.coverUrl) {
-          merged.coverUrl = extractAnyCover(gbLangRes) || extractAnyCover(gbRes) || extractAnyCover(gbAltRes) || extractAnyCover(gbTitleRes) || '';
-        }
-        // 2. Bookcover API (Goodreads/Amazon covers, best coverage, free)
-        if (!merged.coverUrl && compact) {
-          try {
-            const bcRes = await fetch(`https://bookcover.longitood.com/bookcover/${encodeURIComponent(compact)}`);
-            if (bcRes.ok) {
-              const bcData = await bcRes.json();
-              if (bcData.url) merged.coverUrl = bcData.url;
-            }
-          } catch (_) {}
-        }
-        // 3. OpenLibrary ISBN cover (often returns 1x1 placeholder)
-        if (!merged.coverUrl && compact) {
-          merged.coverUrl = `https://covers.openlibrary.org/b/isbn/${compact}-M.jpg`;
-        }
-
-        // Apply merged data to form fields
-        if (merged.title) els.title.value = merged.title;
-        if (merged.authors.length) els.author.value = merged.authors.join(', ');
-        if (merged.category && !els.category.value) els.category.value = merged.category;
-        if (merged.year && !els.publishedYear.value) els.publishedYear.value = merged.year;
-        if (merged.description && els.description && !els.description.value) els.description.value = merged.description;
-        // Mark auto-filled fields with highlight
-        markAutoFilled('title', 'author', 'category', 'publishedYear');
-        if (merged.coverUrl) els.manualCard.dataset.pendingCoverUrl = merged.coverUrl;
-        if (merged.lang) els.manualCard.dataset.bookLang = merged.lang;
-        if (merged.sources.length) els.manualCard.dataset.bookSources = merged.sources.join(' / ');
 
         const titleFilled = Boolean(els.title.value);
         const anyFilled = Boolean(els.title.value || els.author.value || els.category.value || els.publishedYear.value);
