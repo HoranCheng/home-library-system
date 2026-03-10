@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>毛毛书房 — 功能脑图</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #1a1a2e; color: #e0e0e0; }
+  .toolbar { position: fixed; top: 0; left: 0; right: 0; z-index: 100; background: rgba(26,26,46,0.95); backdrop-filter: blur(10px); padding: 12px 20px; display: flex; align-items: center; gap: 12px; border-bottom: 1px solid rgba(255,255,255,0.1); }
+  .toolbar h1 { font-size: 16px; font-weight: 700; flex: 1; }
+  .toolbar button { background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.15); color: #e0e0e0; padding: 6px 14px; border-radius: 8px; font-size: 13px; cursor: pointer; transition: all .15s; }
+  .toolbar button:hover { background: rgba(255,255,255,0.2); }
+  .toolbar button.primary { background: #6C5CE7; border-color: #6C5CE7; }
+  #editor-panel { position: fixed; top: 49px; left: 0; width: 400px; bottom: 0; z-index: 90; background: rgba(26,26,46,0.98); border-right: 1px solid rgba(255,255,255,0.1); display: flex; flex-direction: column; transition: transform .3s ease; }
+  #editor-panel.hidden { transform: translateX(-100%); }
+  #editor-panel textarea { flex: 1; background: #16213e; color: #a8dadc; border: none; padding: 16px; font-family: 'SF Mono', 'Fira Code', monospace; font-size: 13px; line-height: 1.7; resize: none; outline: none; tab-size: 2; }
+  #editor-panel .hint { padding: 8px 16px; font-size: 11px; color: #666; background: rgba(0,0,0,0.3); }
+  #mindmap { position: fixed; top: 49px; left: 0; right: 0; bottom: 0; }
+  #mindmap.with-editor { left: 400px; }
+  @media (max-width: 768px) {
+    #editor-panel { width: 100%; }
+    #mindmap.with-editor { left: 0; display: none; }
+  }
+</style>
+</head>
+<body>
+
+<div class="toolbar">
+  <h1>📚 毛毛书房 — 功能脑图</h1>
+  <button id="toggleEditor">📝 编辑</button>
+  <button id="fitBtn">🔍 适应</button>
+  <button id="exportBtn">💾 导出 SVG</button>
+</div>
+
+<div id="editor-panel">
+  <div class="hint">修改下方 Markdown（用缩进层级表示分支），脑图会实时更新</div>
+  <textarea id="mdSource"></textarea>
+</div>
+
+<div id="mindmap" class="with-editor">
+  <svg id="mindmap-svg" style="width:100%;height:100%"></svg>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
+<script src="https://cdn.jsdelivr.net/npm/markmap-view@0.17.2/dist/browser/index.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/markmap-lib@0.17.2/dist/browser/index.js"></script>
+
+<script>
+const DEFAULT_MD = `# 毛毛书房
+
+## 📖 图书录入
+### 条码扫描
+- BarcodeDetector（原生 API）
+- ZXing 本地兜底
+- ROI 裁剪（中心30%交替全帧）
+- 震动反馈
+### 智能镜头
+- 自动选择最佳摄像头
+- 微距/超广角/长焦 切换
+- 闪光灯控制
+- 首次检测动画 + 缓存
+### ISBN 元数据查询
+- 两阶段查询（快+慢）
+- Phase 1：Google Books + Bookcover API（<1s）
+- Phase 2：Open Library 后台补全
+- 中文 ISBN 自动推断语言偏好
+- CJK 优先（拼音降级）
+### 手动录入
+- ISBN 输入 → 自动补全
+- 书名/作者/分类/年份
+- 存放位置（预设标签）
+- 清空预填按钮
+### 封面获取
+- Google Books 缩略图
+- Bookcover API（Goodreads/Amazon）
+- Open Library 封面
+- 占位符检测与过滤
+- 首字母占位图
+### 录入体验
+- 成功弹窗（🎉🔥⚡🏆 多巴胺）
+- 扫码时隐藏表单
+- 重复检测弹窗
+- 连续扫码模式
+- 6秒超时提示
+
+## 🔍 搜索
+### 全文搜索
+- 书名/作者/ISBN/分类/位置
+- 状态标签搜索（已入库/待补充/在读）
+### 条码搜索
+- 扫码快速查找已有图书
+
+## 📊 总览（首页）
+### 仪表盘
+- 总藏书数
+- 已入库 / 待补充 / 在读
+- 统计卡片可点击跳转搜索
+### 书架浏览
+- 按拼音首字母分组
+- 按时间排序切换
+- 封面网格布局（自适应）
+### 图书详情
+- 底部弹出详情卡
+- 封面 + 书名 + 作者 + 分类
+- 编辑 / 删除操作
+
+## 🗂 整理
+### 待补充图书
+- 信息不完整的书单独列出
+- 可批量完善信息
+
+## ⚙ 设置
+### 数据管理
+- JSON 导出
+- JSON 导入
+- CSV 导出
+- 数据清空（确认弹窗）
+### 系统信息
+- 版本号
+- 藏书统计
+
+## 🏗 基础架构
+### 数据存储
+- localStorage 持久化
+- 迁移机制（版本化 key）
+### 分类系统
+- 3层翻译：精确 → 模式 → 过滤
+- 60+ 正则模式规则
+- 图书馆编码过滤
+- 一键迁移（v3）
+### 封面系统
+- 统一 2:3 容器（padding-top trick）
+- Google Books 占位图检测
+- 运行时加载失败降级
+- 一键封面回填迁移（v2）
+### PWA
+- Service Worker 离线缓存
+- manifest.json
+- 添加到主屏幕
+### 部署
+- GitHub Pages 自动部署
+- Cloudflare Worker 代理（API Key 安全）
+### iOS 适配
+- Safari 缩放锁定（7层）
+- 安全区适配
+- PWA 全屏模式
+- Capacitor iOS 项目（待发布）
+
+## 🗺 未来规划
+### 编辑优化
+- 抽屉/卡片式编辑（替代回填表单）
+### 数据同步
+- SQLite 本地数据库
+- CloudKit 同步（可选）
+### 更多元数据源
+- 豆瓣 API（如可用）
+- AI 识别兜底
+### 手动封面上传
+### App Store 发布
+- 毛毛书房 iOS App
+- Apple Developer 注册
+`;
+
+const textarea = document.getElementById('mdSource');
+const editorPanel = document.getElementById('editor-panel');
+const mindmapEl = document.getElementById('mindmap');
+const svgEl = document.getElementById('mindmap-svg');
+
+textarea.value = DEFAULT_MD;
+
+// Init markmap
+const { Transformer } = window.markmap;
+const { Markmap } = window.markmap;
+const transformer = new Transformer();
+
+let mm;
+
+function updateMindmap() {
+  const { root } = transformer.transform(textarea.value);
+  if (mm) {
+    mm.setData(root);
+    mm.fit();
+  } else {
+    mm = Markmap.create(svgEl, {
+      color: (node) => {
+        const colors = ['#6C5CE7', '#00B894', '#FDCB6E', '#E17055', '#74B9FF', '#A29BFE', '#FF7675', '#55EFC4'];
+        return colors[node.state?.depth % colors.length] || colors[0];
+      },
+      paddingX: 16,
+      autoFit: true,
+      duration: 300,
+    }, root);
+  }
+}
+
+updateMindmap();
+
+// Live update
+let debounce;
+textarea.addEventListener('input', () => {
+  clearTimeout(debounce);
+  debounce = setTimeout(updateMindmap, 300);
+});
+
+// Toggle editor
+document.getElementById('toggleEditor').onclick = () => {
+  editorPanel.classList.toggle('hidden');
+  mindmapEl.classList.toggle('with-editor');
+  setTimeout(() => mm && mm.fit(), 350);
+};
+
+// Fit
+document.getElementById('fitBtn').onclick = () => mm && mm.fit();
+
+// Export SVG
+document.getElementById('exportBtn').onclick = () => {
+  const svgClone = svgEl.cloneNode(true);
+  const blob = new Blob([new XMLSerializer().serializeToString(svgClone)], { type: 'image/svg+xml' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = '毛毛书房-功能脑图.svg';
+  a.click();
+  URL.revokeObjectURL(a.href);
+};
+
+// Tab key in textarea
+textarea.addEventListener('keydown', (e) => {
+  if (e.key === 'Tab') {
+    e.preventDefault();
+    const start = textarea.selectionStart;
+    const end = textarea.selectionEnd;
+    if (e.shiftKey) {
+      // Outdent
+      const lineStart = textarea.value.lastIndexOf('\n', start - 1) + 1;
+      const line = textarea.value.substring(lineStart, end);
+      if (line.startsWith('  ')) {
+        textarea.value = textarea.value.substring(0, lineStart) + line.substring(2) + textarea.value.substring(end);
+        textarea.selectionStart = textarea.selectionEnd = start - 2;
+      }
+    } else {
+      textarea.value = textarea.value.substring(0, start) + '  ' + textarea.value.substring(end);
+      textarea.selectionStart = textarea.selectionEnd = start + 2;
+    }
+    clearTimeout(debounce);
+    debounce = setTimeout(updateMindmap, 300);
+  }
+});
+</script>
+</body>
+</html>
