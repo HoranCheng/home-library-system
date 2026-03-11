@@ -74,7 +74,7 @@ export async function handleAuth(request, env, path, corsHeaders) {
     await env.DB.prepare(
       `INSERT INTO users (id, email, display_name, password_hash, password_salt, hash_iterations, created_at, updated_at, last_login_at)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
-    ).bind(id, email.toLowerCase(), displayName || '', hash, salt, 600000, now, now, now).run();
+    ).bind(id, email.toLowerCase(), displayName || '', hash, salt, 100000, now, now, now).run();
 
     // 初始化同步元数据
     await env.DB.prepare(

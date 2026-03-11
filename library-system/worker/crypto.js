@@ -3,7 +3,7 @@
  * 使用 Web Crypto API（Cloudflare Workers 原生支持）
  */
 
-const ITERATIONS = 600000; // OWASP 2023 推荐
+const ITERATIONS = 100000; // Cloudflare Workers 上限（OWASP 推荐 600k，但 Workers 运行时限制 100k）
 const HASH_ALGO = 'SHA-256';
 const SALT_BYTES = 16;
 const HASH_BITS = 256;

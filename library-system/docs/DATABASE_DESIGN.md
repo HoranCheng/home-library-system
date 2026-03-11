@@ -62,7 +62,7 @@ CREATE INDEX idx_users_google_sub ON users(google_sub);
 - Cloudflare Workers 原生支持 Web Crypto API
 - 使用 `crypto.subtle.deriveBits()` 做 PBKDF2-SHA256
 - 每个用户独立随机盐（`crypto.getRandomValues()`）
-- 迭代次数 600,000 次（OWASP 2023 推荐值）
+- 迭代次数 100,000 次（Cloudflare Workers 运行时上限；OWASP 推荐 600k 但 Workers 最高支持 100k）
 - **绝不存储明文密码**
 
 ### 2.2 书籍表 `books`

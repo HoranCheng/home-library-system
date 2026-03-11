@@ -11,7 +11,7 @@ CREATE TABLE IF NOT EXISTS users (
   -- 密码认证（仅平台账号）
   password_hash   TEXT,
   password_salt   TEXT,
-  hash_iterations INTEGER DEFAULT 600000,
+  hash_iterations INTEGER DEFAULT 100000,
 
   -- Google OAuth
   google_sub      TEXT UNIQUE,

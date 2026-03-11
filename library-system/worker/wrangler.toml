@@ -6,7 +6,7 @@ compatibility_date = "2024-01-01"
 [[d1_databases]]
 binding = "DB"
 database_name = "maomao-library"
-database_id = ""  # ← 创建 D1 后填入: npx wrangler d1 create maomao-library
+database_id = "af0f36e6-67ff-41d5-94ef-07f88601cb17"
 
 # 环境变量（通过 wrangler secret put 设置，不要写在这里！）
 # GBOOKS_API_KEY    — Google Books API Key（已有）

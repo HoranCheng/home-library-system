@@ -52,14 +52,21 @@ export default {
     const url = new URL(request.url);
     const path = url.pathname;
 
-    // ── Auth routes: /auth/* ──
-    if (path.startsWith('/auth/')) {
-      return handleAuth(request, env, path, cors);
-    }
+    try {
+      // ── Auth routes: /auth/* ──
+      if (path.startsWith('/auth/')) {
+        return await handleAuth(request, env, path, cors);
+      }
 
-    // ── Sync routes: /sync/* ──
-    if (path.startsWith('/sync/')) {
-      return handleSync(request, env, path, cors);
+      // ── Sync routes: /sync/* ──
+      if (path.startsWith('/sync/')) {
+        return await handleSync(request, env, path, cors);
+      }
+    } catch (err) {
+      return new Response(JSON.stringify({ error: 'INTERNAL_ERROR', message: err.message || 'Internal server error' }), {
+        status: 500,
+        headers: { ...cors, 'Content-Type': 'application/json' },
+      });
     }
 
     // ── Google Books proxy: GET / ──
