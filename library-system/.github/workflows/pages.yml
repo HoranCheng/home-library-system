@@ -1,0 +1,51 @@
+name: Deploy to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'preview/**'
+      - 'docs/**'
+      - '.github/workflows/pages.yml'
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Sync preview app into docs artifact root
+        run: |
+          mkdir -p .pages-dist
+          cp preview/index.html .pages-dist/index.html
+          cp preview/manifest.json .pages-dist/manifest.json
+          cp preview/sw.js .pages-dist/sw.js
+          cp preview/icon-192.svg .pages-dist/icon-192.svg
+          cp preview/icon-512.svg .pages-dist/icon-512.svg
+
+          # Keep existing docs pages (mindmap, etc.) available under /docs/
+          mkdir -p .pages-dist/docs
+          cp -R docs/. .pages-dist/docs/
+
+      - uses: actions/configure-pages@v5
+        with:
+          enablement: true
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: .pages-dist
+
+      - id: deployment
+        uses: actions/deploy-pages@v4
