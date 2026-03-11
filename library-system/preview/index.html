@@ -674,66 +674,80 @@
       _timer: null,
       _syncing: false,
 
-      async push() {
-        if (!auth.isLoggedIn() || this._syncing) return;
+      async push(force = false) {
+        if (!auth.isLoggedIn()) return;
+        if (this._syncing && !force) return;
         this._syncing = true;
+        this._updateUI('syncing');
         try {
           const books = loadBooks();
           const presets = loadLocationPresets();
-          const lastSync = localStorage.getItem(SYNC_LAST_KEY) || null;
-          await apiFetch('/sync/push', {
+          const resp = await apiFetch('/sync/push', {
             method: 'POST',
-            body: JSON.stringify({ lastSyncAt: lastSync, books, locationPresets: presets }),
+            body: JSON.stringify({ books, locationPresets: presets }),
           });
           localStorage.setItem(SYNC_LAST_KEY, new Date().toISOString());
-          this._updateUI('synced');
+          this._updateUI('synced', `已同步 ${resp.accepted || 0} 本书到云端`);
+          return resp;
         } catch (e) {
           console.warn('Sync push failed:', e);
           if (e.status === 401) { auth.clear(); render(); }
           this._updateUI('error');
+          throw e;
         } finally {
           this._syncing = false;
         }
       },
 
-      async pull() {
-        if (!auth.isLoggedIn() || this._syncing) return;
+      async pull(force = false) {
+        if (!auth.isLoggedIn()) return;
+        if (this._syncing && !force) return;
         this._syncing = true;
+        this._updateUI('syncing');
         try {
-          const lastSync = localStorage.getItem(SYNC_LAST_KEY) || null;
+          // Always do a full pull (no incremental) to ensure completeness
           const data = await apiFetch('/sync/pull', {
             method: 'POST',
-            body: JSON.stringify({ lastSyncAt: lastSync }),
+            body: JSON.stringify({}),
           });
 
-          if (data.books && data.books.length > 0) {
-            const localBooks = loadBooks();
-            const localMap = new Map(localBooks.map(b => [b.id, b]));
+          const localBooks = loadBooks();
+          const localMap = new Map(localBooks.map(b => [b.id, b]));
+          let cloudCount = 0;
 
+          if (data.books && data.books.length > 0) {
             for (const remote of data.books) {
               const local = localMap.get(remote.id);
               if (remote._deleted) {
                 localMap.delete(remote.id);
               } else if (!local || (remote.updatedAt > (local.updatedAt || ''))) {
                 localMap.set(remote.id, remote);
+                if (!local) cloudCount++;
               }
             }
-            const merged = Array.from(localMap.values());
-            localStorage.setItem(BOOKS_KEY, JSON.stringify(merged));
-            localStorage.setItem(META_KEY, JSON.stringify({ schemaVersion: 1, updatedAt: new Date().toISOString() }));
           }
 
-          if (data.locationPresets) {
-            localStorage.setItem(LOCATION_PRESETS_KEY, JSON.stringify(data.locationPresets));
+          const merged = Array.from(localMap.values());
+          localStorage.setItem(BOOKS_KEY, JSON.stringify(merged));
+          localStorage.setItem(META_KEY, JSON.stringify({ schemaVersion: 1, updatedAt: new Date().toISOString() }));
+
+          if (data.locationPresets && data.locationPresets.length > 0) {
+            // Merge: keep local presets + add cloud ones
+            const localPresets = loadLocationPresets();
+            const mergedPresets = [...new Set([...localPresets, ...data.locationPresets])].slice(0, 8);
+            localStorage.setItem(LOCATION_PRESETS_KEY, JSON.stringify(mergedPresets));
           }
 
           localStorage.setItem(SYNC_LAST_KEY, data.syncedAt || new Date().toISOString());
-          this._updateUI('synced');
+          const msg = cloudCount > 0 ? `从云端同步了 ${cloudCount} 本新书` : '数据已是最新';
+          this._updateUI('synced', msg);
           render();
+          return { merged: merged.length, newFromCloud: cloudCount };
         } catch (e) {
           console.warn('Sync pull failed:', e);
           if (e.status === 401) { auth.clear(); render(); }
           this._updateUI('error');
+          throw e;
         } finally {
           this._syncing = false;
         }
@@ -746,11 +760,15 @@
         this._updateUI('syncing');
       },
 
-      _updateUI(state) {
+      _updateUI(state, detail) {
         const el = document.getElementById('syncStatusDot');
         const label = document.getElementById('syncStatusLabel');
         if (!el || !label) return;
         el.className = 'sync-dot ' + state;
+        if (detail) {
+          label.textContent = detail;
+          return;
+        }
         const labels = { synced: '已同步', syncing: '同步中…', error: '同步失败' };
         const lastSync = localStorage.getItem(SYNC_LAST_KEY);
         if (state === 'synced' && lastSync) {
@@ -762,9 +780,18 @@
 
       async initialSync() {
         if (!auth.isLoggedIn()) return;
-        await this.pull();
-        // Also push any local-only data
-        await this.push();
+        // Step 1: Pull cloud data and merge into local
+        const pullResult = await this.pull(true);
+        // Step 2: Push ALL local data (including pre-existing local books) to cloud
+        const pushResult = await this.push(true);
+        // Show summary
+        const localTotal = loadBooks().length;
+        const pushed = pushResult?.accepted || 0;
+        const pulled = pullResult?.newFromCloud || 0;
+        let msg = `同步完成 · 共 ${localTotal} 本书`;
+        if (pulled > 0) msg += ` · 从云端拉取 ${pulled} 本`;
+        if (pushed > 0) msg += ` · 上传 ${pushed} 本`;
+        this._updateUI('synced', msg);
       },
     };
 
@@ -1088,8 +1115,9 @@
       const mode = getMode();
 
       // Top bar
+      const userName = auth.isLoggedIn() && auth.user?.display_name ? auth.user.display_name : '毛毛';
       const pageTitles = { home: '我的藏书', search: '找一本书', organize: '信息补充', settings: '设置' };
-      const pageSubs = { home: '毛毛的书房', search: '搜索', organize: '补充信息', settings: '设置' };
+      const pageSubs = { home: `${userName}的书房`, search: '搜索', organize: '补充信息', settings: '设置' };
       els.topbarTitle.textContent = pageTitles[page] || '我的藏书';
       els.modePill.textContent = pageSubs[page] || '';
 
@@ -1352,7 +1380,7 @@
               <span class="sync-dot synced" id="syncStatusDot"></span>
               <span id="syncStatusLabel">已同步 · ${escapeHtml(syncTime)}</span>
             </div>
-            <button class="auth-btn secondary" onclick="syncManager.push()" style="margin-top:10px">🔄 立即同步</button>
+            <button class="auth-btn secondary" onclick="syncManager.initialSync().then(()=>render()).catch(()=>{})" style="margin-top:10px">🔄 立即同步</button>
             <button class="auth-btn secondary" onclick="if(confirm('确定退出登录？本地数据不会丢失。'))authLogout()" style="margin-top:6px;color:var(--danger)">退出登录</button>
           </div>`;
       } else {
