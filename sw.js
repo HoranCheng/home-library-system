@@ -1,8 +1,45 @@
-const CACHE = 'library-v2';
-const ASSETS = ['./index.html', './manifest.json'];
-self.addEventListener('install', e => e.waitUntil(caches.open(CACHE).then(c => c.addAll(ASSETS)).then(() => self.skipWaiting())));
-self.addEventListener('activate', e => e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k => k !== CACHE).map(k => caches.delete(k)))).then(() => self.clients.claim())));
+const CACHE_VERSION = 'library-v3';
+const PRECACHE_ASSETS = ['./index.html', './manifest.json'];
+
+// Install: precache known app shell assets
+self.addEventListener('install', e => {
+  e.waitUntil(
+    caches.open(CACHE_VERSION)
+      .then(c => c.addAll(PRECACHE_ASSETS))
+      .then(() => self.skipWaiting())
+  );
+});
+
+// Activate: clean up old caches
+self.addEventListener('activate', e => {
+  e.waitUntil(
+    caches.keys()
+      .then(ks => Promise.all(ks.filter(k => k !== CACHE_VERSION).map(k => caches.delete(k))))
+      .then(() => self.clients.claim())
+  );
+});
+
+// Fetch: only cache same-origin GET requests, network-first strategy
 self.addEventListener('fetch', e => {
   if (e.request.method !== 'GET') return;
-  e.respondWith(fetch(e.request).then(r => { if (r.ok) { const c = r.clone(); caches.open(CACHE).then(cache => cache.put(e.request, c)); } return r; }).catch(() => caches.match(e.request)));
+
+  const url = new URL(e.request.url);
+
+  // Only cache same-origin requests (not third-party APIs, fonts, etc.)
+  if (url.origin !== self.location.origin) return;
+
+  // Skip API/worker requests even if same-origin
+  if (url.pathname.startsWith('/auth/') || url.pathname.startsWith('/sync/')) return;
+
+  e.respondWith(
+    fetch(e.request)
+      .then(r => {
+        if (r.ok) {
+          const clone = r.clone();
+          caches.open(CACHE_VERSION).then(cache => cache.put(e.request, clone));
+        }
+        return r;
+      })
+      .catch(() => caches.match(e.request))
+  );
 });

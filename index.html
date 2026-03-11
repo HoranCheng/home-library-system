@@ -2,12 +2,13 @@
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
   <title>毛毛图书管理系统</title>
   <link rel="manifest" href="./manifest.json">
   <link rel="apple-touch-icon" href="./icon-192.svg">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://unpkg.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' https: data:; connect-src 'self' https://maomao-books-proxy.henrycdev26.workers.dev https://www.googleapis.com;">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@600;700&display=swap" rel="stylesheet">
@@ -24,6 +25,7 @@
       --serif:"Noto Serif SC","Songti SC","STSong","Georgia",serif;
     }
     * { box-sizing:border-box; margin:0; }
+    html { touch-action:pan-x pan-y; -ms-touch-action:pan-x pan-y; -webkit-text-size-adjust:100%; }
     body {
       margin:0; color:var(--text);
       font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","PingFang SC","Noto Sans SC",sans-serif;
@@ -65,6 +67,8 @@
     /* ── Stats grid ── */
     .stat-grid { display:flex; justify-content:space-around; padding:16px 0; }
     .stat-item { text-align:center; }
+    .stat-clickable { border-radius:12px; padding:8px 4px; transition:background .15s; }
+    .stat-clickable:active { background:var(--accent-light); }
     .stat-num { font-size:26px; font-weight:800; line-height:1.1; color:var(--text); }
     .stat-num.green { color:var(--accent); }
     .stat-num.brown { color:var(--accent2); }
@@ -186,11 +190,50 @@
     .search-bar .clear-btn { background:none; border:none; color:var(--muted); cursor:pointer; font-size:16px; line-height:1; padding:0; }
 
     /* ── Scanner ── */
-    .scanner-box { display:none; margin-top:14px; border-radius:16px; overflow:hidden; position:relative; background:#000; }
-    .scanner-video { width:100%; display:block; max-height:300px; object-fit:cover; }
-    .scanner-aim { position:absolute; inset:0; pointer-events:none; display:flex; align-items:center; justify-content:center; }
-    .scanner-aim-inner { width:220px; height:90px; border:2.5px solid var(--accent); border-radius:10px; box-shadow:0 0 0 9999px rgba(0,0,0,.45); }
-    .scanner-cancel { position:absolute; top:10px; right:10px; background:rgba(0,0,0,.65); color:#fff; border:0; border-radius:10px; padding:7px 14px; font-size:14px; cursor:pointer; font-weight:600; }
+    .scanner-box { display:none; margin-top:10px; border-radius:14px; overflow:hidden; position:relative; background:#000; }
+    .scanner-video { width:100%; display:block; max-height:200px; object-fit:cover; transition:filter .15s ease; }
+    .scanner-video.freeze { filter:brightness(1.15) contrast(1.05); }
+    .scanner-freeze-flash { position:absolute; inset:0; background:rgba(255,255,255,.25); pointer-events:none; opacity:0; z-index:4; transition:opacity .12s ease; }
+    .scanner-freeze-flash.active { opacity:1; }
+    .scanner-aim { position:absolute; inset:0; pointer-events:none; display:flex; align-items:center; justify-content:center; flex-direction:column; gap:4px; }
+    .scanner-aim-inner { width:240px; height:48px; border:2px solid var(--accent); border-radius:6px; box-shadow:0 0 0 9999px rgba(0,0,0,.55); position:relative; overflow:hidden; }
+    .scanner-aim-inner::after { content:''; position:absolute; left:8px; right:8px; height:2px; background:linear-gradient(90deg, transparent, var(--accent), transparent); animation:scanLine 1.8s ease-in-out infinite; }
+    @keyframes scanLine { 0% { top:15%; opacity:.3; } 50% { top:85%; opacity:1; } 100% { top:15%; opacity:.3; } }
+    .scanner-hint { color:rgba(255,255,255,.75); font-size:11px; font-weight:500; text-shadow:0 1px 3px rgba(0,0,0,.6); margin-top:2px; }
+    .scanner-pro-backdrop { position:absolute; inset:0; background:rgba(0,0,0,.25); z-index:9; }
+    .scanner-controls { position:absolute; top:10px; right:10px; display:flex; gap:8px; z-index:5; }
+    .scanner-cancel { background:rgba(0,0,0,.65); color:#fff; border:0; border-radius:10px; padding:7px 14px; font-size:14px; cursor:pointer; font-weight:600; }
+    .scanner-ctrl-btn { background:rgba(0,0,0,.65); color:#fff; border:0; border-radius:10px; padding:7px 14px; font-size:14px; cursor:pointer; font-weight:600; }
+    .scanner-ctrl-btn.active { background:rgba(255,200,0,.85); color:#000; }
+    @keyframes camBounce { 0%,100% { transform:translateY(0) scale(1); } 50% { transform:translateY(-10px) scale(1.1); } }
+    .scanner-pro-panel { position:absolute; bottom:6px; left:6px; right:6px; background:rgba(0,0,0,.8); backdrop-filter:blur(8px); -webkit-backdrop-filter:blur(8px); color:#fff; padding:10px 12px; border-radius:10px; animation:slideUp .2s ease; z-index:10; }
+    .pro-panel-title { display:none; }
+    .pro-row { display:flex; align-items:center; gap:8px; margin-bottom:6px; }
+    .pro-row:last-child { margin-bottom:0; }
+    .pro-row label { font-size:11px; color:rgba(255,255,255,.6); min-width:36px; flex-shrink:0; }
+    .pro-row select { flex:1; background:rgba(255,255,255,.15); color:#fff; border:1px solid rgba(255,255,255,.2); border-radius:6px; padding:6px 8px; font-size:12px; -webkit-appearance:none; appearance:none; }
+    .pro-row input[type=range] { flex:1; accent-color:var(--accent); }
+    .pro-cam-chips { display:flex; gap:6px; flex-wrap:wrap; }
+    .pro-cam-chip { background:rgba(255,255,255,.15); color:#fff; border:1px solid rgba(255,255,255,.2); border-radius:6px; padding:5px 10px; font-size:11px; cursor:pointer; transition:all .15s; }
+    .pro-cam-chip.active { background:var(--accent); color:#fff; border-color:var(--accent); }
+
+    /* Duplicate book modal */
+    .dup-overlay { position:fixed; inset:0; background:rgba(0,0,0,.4); z-index:2000; display:flex; align-items:center; justify-content:center; padding:20px; animation:fadeIn .2s ease; }
+    .dup-modal { background:var(--card); border-radius:20px; padding:28px 24px; max-width:320px; width:100%; text-align:center; box-shadow:0 16px 40px rgba(0,0,0,.15); animation:slideUp .3s ease; }
+    .dup-modal .dup-icon { font-size:40px; margin-bottom:12px; }
+    .dup-modal .dup-title { font-size:16px; font-weight:700; color:var(--text); margin-bottom:8px; }
+    .dup-modal .dup-detail { font-size:13px; color:var(--muted); line-height:1.5; margin-bottom:20px; }
+    .dup-modal .dup-book { background:var(--surface); border-radius:12px; padding:10px 14px; margin-bottom:16px; text-align:left; }
+    .dup-modal .dup-book-title { font-size:14px; font-weight:600; color:var(--text); }
+    .dup-modal .dup-book-author { font-size:12px; color:var(--muted); margin-top:2px; }
+    .dup-modal .dup-btns { display:flex; gap:10px; }
+    .dup-modal .dup-btns button { flex:1; border:none; border-radius:12px; padding:12px; font-size:14px; font-weight:600; cursor:pointer; transition:all .15s; }
+    .dup-modal .dup-btn-stop { background:var(--surface-2); color:var(--text); }
+    .dup-modal .dup-btn-stop:active { background:var(--line); }
+    .dup-modal .dup-btn-continue { background:var(--accent); color:#fff; }
+    .dup-modal .dup-btn-continue:active { background:#2e4a3a; }
+    @keyframes fadeIn { from { opacity:0; } to { opacity:1; } }
+    @keyframes slideUp { from { opacity:0; transform:translateY(30px); } to { opacity:1; transform:translateY(0); } }
     /* Auto-filled field highlight */
     input.auto-filled {
       background:var(--accent-light) !important; border-color:var(--accent) !important;
@@ -210,9 +253,11 @@
 
     /* ── Book grid ── */
     .book-list { margin-top:12px; }
-    .book-grid { display:grid; grid-template-columns:repeat(3, 1fr); gap:12px; margin-top:12px; }
-    .book-grid-item { text-align:center; cursor:pointer; }
-    .book-grid-item img { width:100%; aspect-ratio:2/3; object-fit:cover; border-radius:10px; background:var(--surface-2); border:1px solid var(--line); }
+    .book-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(90px, 1fr)); gap:12px; margin-top:12px; }
+    .book-grid-item { text-align:center; cursor:pointer; max-width:140px; }
+    .book-grid-item .cover-wrap { position:relative; width:100%; padding-top:150%; border-radius:10px; overflow:hidden; background:var(--surface-2); border:1px solid var(--line); }
+    .book-grid-item .cover-wrap img { position:absolute; top:0; left:0; width:100%; height:100%; object-fit:cover; display:block; }
+    .book-grid-item .cover-wrap .cover-placeholder { position:absolute; top:0; left:0; width:100%; height:100%; display:flex; align-items:center; justify-content:center; font-size:28px; color:var(--muted); }
     .book-grid-item .book-grid-title { font-size:12px; margin-top:6px; line-height:1.3; overflow:hidden; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; }
     .book-grid-item .book-grid-author { font-size:11px; color:var(--muted); margin-top:2px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
     .shelf-letter-head { display:block; font-size:13px; font-weight:700; color:var(--accent); letter-spacing:.08em; padding:10px 2px 4px; margin-top:8px; border-bottom:1px solid var(--line); }
@@ -252,6 +297,36 @@
     .setting-sub { font-size:12px; color:var(--muted); margin-top:2px; }
     .setting-arrow { color:var(--muted); font-size:16px; }
     pre { margin:12px 0 0; padding:12px; border-radius:12px; background:#1E1A15; color:#D4CBB8; white-space:pre-wrap; word-break:break-word; font-size:12px; }
+
+    /* ── Auth UI ── */
+    .auth-card { background:var(--card); border-radius:16px; padding:20px; margin-bottom:14px; box-shadow:var(--shadow); }
+    .auth-card .auth-title { font-size:16px; font-weight:700; margin-bottom:4px; }
+    .auth-card .auth-sub { font-size:12px; color:var(--muted); margin-bottom:16px; }
+    .auth-card .auth-field { margin-bottom:12px; }
+    .auth-card .auth-field label { display:block; font-size:12px; color:var(--muted); margin-bottom:4px; font-weight:600; }
+    .auth-card .auth-field input { width:100%; padding:10px 12px; border:1px solid var(--line); border-radius:10px; font-size:14px; background:var(--surface); color:var(--text); outline:none; }
+    .auth-card .auth-field input:focus { border-color:var(--accent); }
+    .auth-btn { width:100%; padding:12px; border:none; border-radius:12px; font-size:14px; font-weight:700; cursor:pointer; transition:all .2s; }
+    .auth-btn.primary { background:var(--accent); color:#fff; }
+    .auth-btn.primary:disabled { opacity:.5; cursor:not-allowed; }
+    .auth-btn.secondary { background:var(--surface); color:var(--text); border:1px solid var(--line); margin-top:8px; }
+    /* .auth-btn.google reserved for future Google Sign-In */
+    .auth-btn.danger { background:var(--danger); color:#fff; margin-top:8px; }
+    .auth-toggle { text-align:center; margin-top:14px; font-size:13px; color:var(--muted); }
+    .auth-toggle a { color:var(--accent); text-decoration:none; font-weight:600; cursor:pointer; }
+    .auth-error { background:#FFF0F0; color:var(--danger); padding:10px 12px; border-radius:8px; font-size:13px; margin-bottom:12px; display:none; }
+    .auth-user-card { display:flex; align-items:center; gap:14px; }
+    .auth-avatar { width:48px; height:48px; border-radius:14px; background:var(--accent-light); display:flex; align-items:center; justify-content:center; font-size:24px; flex-shrink:0; overflow:hidden; }
+    .auth-avatar img { width:100%; height:100%; object-fit:cover; }
+    .auth-user-info { flex:1; }
+    .auth-user-name { font-size:15px; font-weight:700; }
+    .auth-user-email { font-size:12px; color:var(--muted); margin-top:2px; }
+    .sync-status { display:flex; align-items:center; gap:6px; font-size:12px; color:var(--muted); margin-top:12px; padding:10px 12px; background:var(--surface); border-radius:8px; }
+    .sync-dot { width:6px; height:6px; border-radius:50%; flex-shrink:0; }
+    .sync-dot.synced { background:var(--ok); }
+    .sync-dot.syncing { background:var(--warn); animation:pulse 1s infinite; }
+    .sync-dot.error { background:var(--danger); }
+    @keyframes pulse { 0%,100% { opacity:1; } 50% { opacity:.4; } }
 
     /* ── Menu ── */
     .menu-wrap { position:relative; }
@@ -365,12 +440,28 @@
         </div>
         <div class="scanner-box" id="scannerBox">
           <video id="scannerVideo" autoplay playsinline muted class="scanner-video"></video>
-          <div class="scanner-aim"><div class="scanner-aim-inner"></div></div>
-          <button class="scanner-cancel" id="scannerCancelBtn">取消</button>
+          <div class="scanner-freeze-flash" id="scannerFlash"></div>
+          <div class="scanner-aim">
+            <div class="scanner-aim-inner"></div>
+            <div class="scanner-hint">将条形码或 ISBN 数字对准框内</div>
+          </div>
+          <div class="scanner-controls">
+            <button class="scanner-ctrl-btn" id="torchBtn" title="闪光灯">🔦 关</button>
+            <button class="scanner-ctrl-btn" id="proBtn" title="镜头设置">⚙</button>
+            <button class="scanner-cancel" id="scannerCancelBtn">取消</button>
+          </div>
+          <div class="scanner-pro-backdrop" id="proBackdrop" style="display:none"></div>
+          <div class="scanner-pro-panel" id="proPanelBox" style="display:none">
+            <div class="pro-cam-chips" id="proCameraChips"></div>
+          </div>
         </div>
         <div id="scanNotice"></div>
+        <div id="formFields">
         <div class="review-card" id="reviewCard">
           <div class="muted">先输入或扫描 ISBN，系统会自动补全信息。</div>
+        </div>
+        <div style="display:flex;justify-content:flex-end;margin-bottom:4px">
+          <button class="btn ghost" id="clearFieldsBtn" style="font-size:12px;padding:4px 10px;display:none">🗑 清空预填</button>
         </div>
         <div class="field">
           <label>书名</label>
@@ -402,6 +493,7 @@
             <button class="btn ghost" id="finishEntryBtn">结束扫描</button>
           </div>
         </div>
+        </div>
         <div class="hint" id="entrySessionHint">自动从 Open Library · Google Books 补全书目信息</div>
         <div id="manualNotice"></div>
       </div>
@@ -410,10 +502,10 @@
       <div id="homeSection">
         <div class="card">
           <div class="stat-grid">
-            <div class="stat-item"><div class="stat-num" id="totalCount">0</div><div class="stat-label">总藏书</div></div>
-            <div class="stat-item"><div class="stat-num green" id="inCount">0</div><div class="stat-label">已入库</div></div>
-            <div class="stat-item"><div class="stat-num warn" id="sortCount">0</div><div class="stat-label">待补充</div></div>
-            <div class="stat-item"><div class="stat-num brown" id="readingCount">0</div><div class="stat-label">在读中</div></div>
+            <div class="stat-item stat-clickable" data-stat-filter="all" style="cursor:pointer"><div class="stat-num" id="totalCount">0</div><div class="stat-label">总藏书</div></div>
+            <div class="stat-item stat-clickable" data-stat-filter="in_library" style="cursor:pointer"><div class="stat-num green" id="inCount">0</div><div class="stat-label">已入库</div></div>
+            <div class="stat-item stat-clickable" data-stat-filter="to_be_sorted" style="cursor:pointer"><div class="stat-num warn" id="sortCount">0</div><div class="stat-label">待补充</div></div>
+            <div class="stat-item stat-clickable" data-stat-filter="reading" style="cursor:pointer"><div class="stat-num brown" id="readingCount">0</div><div class="stat-label">在读中</div></div>
           </div>
           <div id="sortAlert"></div>
         </div>
@@ -437,8 +529,9 @@
           <svg width="16" height="16" fill="none" stroke="var(--muted)" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
           <input id="searchInput" placeholder="书名、作者、ISBN…" />
           <button class="clear-btn" id="searchClearBtn" style="display:none">&times;</button>
-          <button class="input-action-btn" id="searchScanBtn" title="扫码搜索" style="position:static;width:36px;height:36px;font-size:16px;display:flex;align-items:center;justify-content:center;flex-shrink:0">📷</button>
+          <button id="searchScanBtn" title="扫码搜索" style="background:var(--surface);border:1px solid var(--line);border-radius:8px;width:36px;height:36px;font-size:16px;display:flex;align-items:center;justify-content:center;flex-shrink:0;cursor:pointer;padding:0">📷</button>
         </div>
+        <div class="muted" style="font-size:11px;margin:-6px 0 8px 4px">💡 点击 📷 扫描条形码，快速查找已有图书</div>
         <div class="chips" id="searchCatChips" style="margin-top:0;margin-bottom:12px"></div>
         <div class="chips" id="searchSummary"></div>
         <div class="book-list" id="searchResults"></div>
@@ -493,12 +586,288 @@
   </div>
 
   <script>
+    // ── Universal zoom lock (all browsers, all platforms) ──────────────
+    // 1. iOS Safari gesture events (pinch zoom)
+    document.addEventListener('gesturestart', e => e.preventDefault(), { passive: false });
+    document.addEventListener('gesturechange', e => e.preventDefault(), { passive: false });
+    document.addEventListener('gestureend', e => e.preventDefault(), { passive: false });
+    // 2. Multi-touch: block 2+ finger touches (pinch zoom on Android/iOS)
+    document.addEventListener('touchstart', e => {
+      if (e.touches.length > 1) e.preventDefault();
+    }, { passive: false });
+    // 3. Track touch distance to block pinch-zoom mid-gesture (Android Chrome etc.)
+    let lastTouchDistance = 0;
+    document.addEventListener('touchmove', e => {
+      if (e.touches.length > 1) {
+        e.preventDefault();
+      }
+    }, { passive: false });
+    // 4. Keyboard zoom: block Ctrl+Plus/Minus/0 and Cmd+Plus/Minus/0
+    document.addEventListener('keydown', e => {
+      if ((e.ctrlKey || e.metaKey) && (e.key === '+' || e.key === '-' || e.key === '=' || e.key === '0')) {
+        e.preventDefault();
+      }
+    });
+    // 5. Mouse wheel zoom: block Ctrl+scroll (desktop browsers)
+    document.addEventListener('wheel', e => {
+      if (e.ctrlKey) e.preventDefault();
+    }, { passive: false });
+    // 6. Double-tap zoom prevention (all mobile browsers)
+    let lastTapTime = 0;
+    document.addEventListener('touchend', e => {
+      const now = Date.now();
+      if (now - lastTapTime < 300) {
+        e.preventDefault();
+      }
+      lastTapTime = now;
+    }, { passive: false });
+    // ── End zoom lock ────────────────────────────────────────────────────
+
     const BOOKS_KEY = 'lib:books:v1';
     const META_KEY = 'lib:meta:v1';
     const MODE_KEY = 'lib:home:mode:v1';
     const PAGE_KEY = 'lib:page:v1';
     const ENTRY_KEY = 'lib:entry:v1';
     const LOCATION_PRESETS_KEY = 'lib:location-presets:v1';
+    // ── Google Books API 代理 ─────────────────────────────
+    // API Key 安全存在 Cloudflare Worker 里，前端不暴露任何 key
+    const GBOOKS_PROXY = 'https://maomao-books-proxy.henrycdev26.workers.dev';
+    // ────────────────────────────────────────────────────────
+
+    // ── Auth & Sync ──────────────────────────────────────────────────────
+    const AUTH_TOKEN_KEY = 'lib:auth:token:v1';
+    const AUTH_USER_KEY = 'lib:auth:user:v1';
+    const SYNC_LAST_KEY = 'lib:sync:last:v1';
+    const API_BASE = GBOOKS_PROXY; // same Worker
+
+    // Auth state
+    const auth = {
+      token: localStorage.getItem(AUTH_TOKEN_KEY) || null,
+      user: (() => { try { return JSON.parse(localStorage.getItem(AUTH_USER_KEY)); } catch { return null; } })(),
+      isLoggedIn() { return !!this.token && !!this.user; },
+      setSession(token, user) {
+        this.token = token;
+        this.user = user;
+        localStorage.setItem(AUTH_TOKEN_KEY, token);
+        localStorage.setItem(AUTH_USER_KEY, JSON.stringify(user));
+      },
+      clear() {
+        this.token = null;
+        this.user = null;
+        localStorage.removeItem(AUTH_TOKEN_KEY);
+        localStorage.removeItem(AUTH_USER_KEY);
+        localStorage.removeItem(SYNC_LAST_KEY);
+      },
+    };
+
+    // API helper
+    async function apiFetch(path, options = {}) {
+      const headers = { 'Content-Type': 'application/json', ...options.headers };
+      if (auth.token) headers['Authorization'] = `Bearer ${auth.token}`;
+      const resp = await fetch(`${API_BASE}${path}`, { ...options, headers });
+      const data = await resp.json();
+      if (!resp.ok) throw { status: resp.status, ...data };
+      return data;
+    }
+
+    // Sync manager
+    const syncManager = {
+      _timer: null,
+      _syncing: false,
+
+      async push(force = false) {
+        if (!auth.isLoggedIn()) return;
+        if (this._syncing && !force) return;
+        this._syncing = true;
+        this._updateUI('syncing');
+        try {
+          const books = loadBooks();
+          const presets = loadLocationPresets();
+          const resp = await apiFetch('/sync/push', {
+            method: 'POST',
+            body: JSON.stringify({ books, locationPresets: presets }),
+          });
+          localStorage.setItem(SYNC_LAST_KEY, new Date().toISOString());
+
+          // Handle conflicts: if server has newer versions, pull them
+          if (resp.conflicts && resp.conflicts.length > 0) {
+            this._updateUI('syncing', `检测到 ${resp.conflicts.length} 条冲突，正在同步云端版本…`);
+            await this._pullOnly();
+            this._updateUI('synced', `${resp.accepted || 0} 本已上传 · ${resp.conflicts.length} 本与云端冲突，已保留云端较新版本`);
+          } else {
+            this._updateUI('synced', `已同步 ${resp.accepted || 0} 本书到云端`);
+          }
+          return resp;
+        } catch (e) {
+          console.warn('Sync push failed:', e);
+          if (e.status === 401) { auth.clear(); render(); }
+          this._updateUI('error');
+          throw e;
+        } finally {
+          this._syncing = false;
+        }
+      },
+
+      /** Internal pull without syncing guard (for use after push conflicts) */
+      async _pullOnly() {
+        try {
+          const data = await apiFetch('/sync/pull', {
+            method: 'POST',
+            body: JSON.stringify({}),
+          });
+          this._mergeFromCloud(data);
+        } catch (e) {
+          console.warn('Conflict pull failed:', e);
+        }
+      },
+
+      /** Merge cloud data into localStorage */
+      _mergeFromCloud(data) {
+        const localBooks = loadBooks();
+        const localMap = new Map(localBooks.map(b => [b.id, b]));
+        let cloudNew = 0, cloudDeleted = 0, cloudUpdated = 0;
+
+        if (data.books && data.books.length > 0) {
+          for (const remote of data.books) {
+            const local = localMap.get(remote.id);
+            if (remote._deleted) {
+              // Tombstone: delete from local if exists and remote delete is newer
+              if (local) {
+                if (remote.updatedAt >= (local.updatedAt || '')) {
+                  localMap.delete(remote.id);
+                  cloudDeleted++;
+                }
+                // else: local edit is newer than delete, keep local
+              }
+            } else if (!local) {
+              localMap.set(remote.id, remote);
+              cloudNew++;
+            } else if (remote.updatedAt > (local.updatedAt || '')) {
+              localMap.set(remote.id, remote);
+              cloudUpdated++;
+            }
+          }
+        }
+
+        const merged = Array.from(localMap.values());
+        localStorage.setItem(BOOKS_KEY, JSON.stringify(merged));
+        localStorage.setItem(META_KEY, JSON.stringify({ schemaVersion: 1, updatedAt: new Date().toISOString() }));
+
+        if (data.locationPresets && data.locationPresets.length > 0) {
+          const localPresets = loadLocationPresets();
+          const mergedPresets = [...new Set([...localPresets, ...data.locationPresets])].slice(0, 8);
+          localStorage.setItem(LOCATION_PRESETS_KEY, JSON.stringify(mergedPresets));
+        }
+
+        localStorage.setItem(SYNC_LAST_KEY, data.syncedAt || new Date().toISOString());
+        return { total: merged.length, cloudNew, cloudDeleted, cloudUpdated };
+      },
+
+      async pull(force = false) {
+        if (!auth.isLoggedIn()) return;
+        if (this._syncing && !force) return;
+        this._syncing = true;
+        this._updateUI('syncing');
+        try {
+          // Full pull including tombstones
+          const data = await apiFetch('/sync/pull', {
+            method: 'POST',
+            body: JSON.stringify({}),
+          });
+
+          const result = this._mergeFromCloud(data);
+
+          let msg = '数据已是最新';
+          const parts = [];
+          if (result.cloudNew > 0) parts.push(`${result.cloudNew} 本新书`);
+          if (result.cloudUpdated > 0) parts.push(`${result.cloudUpdated} 本已更新`);
+          if (result.cloudDeleted > 0) parts.push(`${result.cloudDeleted} 本已删除`);
+          if (parts.length > 0) msg = `从云端同步：${parts.join('、')}`;
+
+          this._updateUI('synced', msg);
+          render();
+          return result;
+        } catch (e) {
+          console.warn('Sync pull failed:', e);
+          if (e.status === 401) { auth.clear(); render(); }
+          this._updateUI('error');
+          throw e;
+        } finally {
+          this._syncing = false;
+        }
+      },
+
+      schedulePush() {
+        if (!auth.isLoggedIn()) return;
+        clearTimeout(this._timer);
+        this._timer = setTimeout(() => this.push(), 2000);
+        this._updateUI('syncing');
+      },
+
+      _updateUI(state, detail) {
+        const el = document.getElementById('syncStatusDot');
+        const label = document.getElementById('syncStatusLabel');
+        if (!el || !label) return;
+        el.className = 'sync-dot ' + state;
+        if (detail) {
+          label.textContent = detail;
+          return;
+        }
+        const labels = { synced: '已同步', syncing: '同步中…', error: '同步失败' };
+        const lastSync = localStorage.getItem(SYNC_LAST_KEY);
+        if (state === 'synced' && lastSync) {
+          label.textContent = '已同步 · ' + new Date(lastSync).toLocaleString('zh-CN', { hour: '2-digit', minute: '2-digit' });
+        } else {
+          label.textContent = labels[state] || '';
+        }
+      },
+
+      async initialSync() {
+        if (!auth.isLoggedIn()) return;
+        // Step 1: Pull cloud data (including tombstones) and merge into local
+        const pullResult = await this.pull(true);
+        // Step 2: Push merged local data to cloud
+        const pushResult = await this.push(true);
+        // Show summary
+        const localTotal = loadBooks().length;
+        const pushed = pushResult?.accepted || 0;
+        const conflicts = pushResult?.conflicts?.length || 0;
+        const pulled = pullResult?.cloudNew || 0;
+        let msg = `同步完成 · 共 ${localTotal} 本书`;
+        if (pulled > 0) msg += ` · 拉取 ${pulled} 本`;
+        if (pushed > 0) msg += ` · 上传 ${pushed} 本`;
+        if (conflicts > 0) msg += ` · ${conflicts} 本冲突已处理`;
+        this._updateUI('synced', msg);
+      },
+    };
+
+    // Auth actions
+    async function authRegister(email, password, displayName) {
+      const data = await apiFetch('/auth/register', {
+        method: 'POST',
+        body: JSON.stringify({ email, password, displayName }),
+      });
+      auth.setSession(data.token, data.user);
+      await syncManager.initialSync();
+      render();
+    }
+
+    async function authLogin(email, password) {
+      const data = await apiFetch('/auth/login', {
+        method: 'POST',
+        body: JSON.stringify({ email, password }),
+      });
+      auth.setSession(data.token, data.user);
+      await syncManager.initialSync();
+      render();
+    }
+
+    async function authLogout() {
+      auth.clear();
+      render();
+    }
+
+    // ── End Auth & Sync ─────────────────────────────────────────────────
 
     function makeId() {
       try {
@@ -520,6 +889,8 @@
       const meta = { ...loadMeta(), schemaVersion: 1, updatedAt: new Date().toISOString() };
       localStorage.setItem(BOOKS_KEY, JSON.stringify(books));
       localStorage.setItem(META_KEY, JSON.stringify(meta));
+      // Trigger cloud sync (debounced)
+      syncManager.schedulePush();
     }
     function loadLocationPresets() {
       try { return JSON.parse(localStorage.getItem(LOCATION_PRESETS_KEY) || '[]'); }
@@ -546,8 +917,28 @@
       localStorage.setItem(PAGE_KEY, page);
       if (options.mode) localStorage.setItem(MODE_KEY, options.mode);
       render();
+      // Stop camera when navigating away from entry mode (deferred to avoid TDZ)
+      queueMicrotask(() => {
+        try {
+          if (scannerActive) {
+            const stayingInEntry = page === 'home' && options.mode === 'entry';
+            if (!stayingInEntry) stopScanner();
+          }
+        } catch (_) {}
+      });
     }
-    function makeNotice(kind, text) { return `<div class="notice ${kind}">${text}</div>`; }
+    function makeNotice(kind, text) { return `<div class="notice ${kind}">${escapeHtml(text)}</div>`; }
+
+    // ── Haptic feedback helpers ──────────────────────────────────────────
+    function hapticScan() {
+      // Short single tap — "I see a barcode"
+      if (navigator.vibrate) navigator.vibrate(40);
+    }
+    function hapticSaved() {
+      // Double-tap pattern — "Book saved!"
+      if (navigator.vibrate) navigator.vibrate([50, 60, 90]);
+    }
+    // ── End haptic helpers ───────────────────────────────────────────────
     function escapeHtml(v) {
       return String(v ?? '').replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;').replaceAll("'", '&#39;');
     }
@@ -588,6 +979,8 @@
       bookList: document.getElementById('bookList'),
       scanSection: document.getElementById('scanSection'),
       manualCard: document.getElementById('manualCard'),
+      formFields: document.getElementById('formFields'),
+      clearFieldsBtn: document.getElementById('clearFieldsBtn'),
       homeSection: document.getElementById('homeSection'),
       searchSection: document.getElementById('searchSection'),
       organizeSection: document.getElementById('organizeSection'),
@@ -614,7 +1007,14 @@
       exportOutput: document.getElementById('exportOutput'),
       scannerBox: document.getElementById('scannerBox'),
       scannerVideo: document.getElementById('scannerVideo'),
-      scannerCancelBtn: document.getElementById('scannerCancelBtn')
+      scannerFlash: document.getElementById('scannerFlash'),
+      scannerCancelBtn: document.getElementById('scannerCancelBtn'),
+      torchBtn: document.getElementById('torchBtn'),
+      proBtn: document.getElementById('proBtn'),
+      proBackdrop: document.getElementById('proBackdrop'),
+      proPanelBox: document.getElementById('proPanelBox'),
+      proCameraChips: document.getElementById('proCameraChips'),
+      proCameraChipsEl: document.getElementById('proCameraChips')
     };
 
     function normalizeReadingStatus(v) {
@@ -627,15 +1027,37 @@
     }
 
     function coverUrl(book) {
-      if (book?.coverUrl) return book.coverUrl;
-      const isbn = String(book?.isbn || '').replace(/[^0-9Xx]/g, '');
-      return isbn ? `https://covers.openlibrary.org/b/isbn/${encodeURIComponent(isbn)}-M.jpg` : '';
+      // Only use stored coverUrl — don't fallback to OL's 1x1 GIF placeholder
+      return book?.coverUrl || '';
     }
     // Detect 1x1 placeholder images from OpenLibrary and hide them
     function onCoverLoad(img) {
-      if (img.naturalWidth <= 2 && img.naturalHeight <= 2) {
-        img.style.background = 'var(--surface-2)';
-        img.removeAttribute('src');
+      const w = img.naturalWidth, h = img.naturalHeight;
+      // 1x1 GIF from Open Library
+      if (w <= 2 && h <= 2) { showCoverPlaceholder(img); return; }
+      // Google Books "image not available" placeholder is exactly 128x196
+      // Catch any small cover from books.google.com (real covers are 300+px wide)
+      const src = img.src || '';
+      if (src.includes('books.google.com') && w <= 200) { showCoverPlaceholder(img); return; }
+      // Generic small placeholder detection
+      if (w <= 80 && h <= 120) { showCoverPlaceholder(img); return; }
+    }
+    function coverHtml(cu, title) {
+      if (cu) return `<div class="cover-wrap"><img src="${escapeHtml(cu)}" alt="${escapeHtml(title || '')}" onload="onCoverLoad(this)" onerror="showCoverPlaceholder(this)" /></div>`;
+      const initial = (title || '').charAt(0) || '📖';
+      return `<div class="cover-wrap"><div class="cover-placeholder">${escapeHtml(initial)}</div></div>`;
+    }
+    function showCoverPlaceholder(img) {
+      const title = img.alt || '';
+      const initial = title.charAt(0) || '📖';
+      const ph = document.createElement('div');
+      ph.className = 'cover-placeholder';
+      ph.textContent = initial;
+      // Replace img inside its .cover-wrap parent
+      if (img.parentElement?.classList.contains('cover-wrap')) {
+        img.parentElement.replaceChild(ph, img);
+      } else {
+        img.replaceWith(ph);
       }
     }
 
@@ -739,8 +1161,9 @@
       const mode = getMode();
 
       // Top bar
+      const userName = auth.isLoggedIn() && auth.user?.display_name ? auth.user.display_name : '毛毛';
       const pageTitles = { home: '我的藏书', search: '找一本书', organize: '信息补充', settings: '设置' };
-      const pageSubs = { home: '毛毛的书房', search: '搜索', organize: '补充信息', settings: '设置' };
+      const pageSubs = { home: `${userName}的书房`, search: '搜索', organize: '补充信息', settings: '设置' };
       els.topbarTitle.textContent = pageTitles[page] || '我的藏书';
       els.modePill.textContent = pageSubs[page] || '';
 
@@ -863,7 +1286,7 @@
         els.bookList.innerHTML = `<div class="book-grid">${byTime.map(b => {
           const cu = coverUrl(b);
           return `<div class="book-grid-item book-detail-btn" data-id="${escapeHtml(b.id)}">
-            <img src="${cu ? escapeHtml(cu) : ''}" alt="${escapeHtml(b.title || '')}" onload="onCoverLoad(this)" onerror="this.style.background='var(--surface-2)';this.removeAttribute('src')" />
+            ${coverHtml(cu, b.title)}
             <div class="book-grid-title">${escapeHtml(b.title || '未命名')}</div>
             <div class="book-grid-author">${escapeHtml(b.author || '未知作者')}</div>
           </div>`;
@@ -881,7 +1304,7 @@
           }
           const cu = coverUrl(b);
           html += `<div class="book-grid-item book-detail-btn" data-id="${escapeHtml(b.id)}">
-            <img src="${cu ? escapeHtml(cu) : ''}" alt="${escapeHtml(b.title || '')}" onload="onCoverLoad(this)" onerror="this.style.background='var(--surface-2)';this.removeAttribute('src')" />
+            ${coverHtml(cu, b.title)}
             <div class="book-grid-title">${escapeHtml(b.title || '未命名')}</div>
             <div class="book-grid-author">${escapeHtml(b.author || '未知作者')}</div>
           </div>`;
@@ -912,7 +1335,9 @@
       const query = String(els.searchInput?.value || '').trim().toLowerCase();
       els.searchClearBtn.style.display = query ? 'block' : 'none';
       const matchedBooks = books.filter(b => {
-        const queryMatched = !query || [b.title, b.author, b.isbn, b.category].some(v => String(v || '').toLowerCase().includes(query));
+        const statusLabel = b.status === 'to_be_sorted' ? '待补充' : '已入库';
+        const readLabel = normalizeReadingStatus(b.readingStatus || '');
+        const queryMatched = !query || [b.title, b.author, b.isbn, b.category, statusLabel, readLabel, b.location].some(v => String(v || '').toLowerCase().includes(query));
         const categoryMatched = !selectedCategoryFilter || String(b.category || '').trim() === selectedCategoryFilter;
         return queryMatched && categoryMatched;
       });
@@ -978,7 +1403,61 @@
       // Settings — user-friendly
       const bookCount = books.length;
       const lastUpdated = loadMeta().updatedAt ? new Date(loadMeta().updatedAt).toLocaleDateString('zh-CN') : '—';
-      els.settingsRows.innerHTML = `
+
+      // Auth section
+      let authHtml = '';
+      if (auth.isLoggedIn()) {
+        const u = auth.user;
+        const avatarInner = u.avatar_url
+          ? `<img src="${escapeHtml(u.avatar_url)}" alt="">`
+          : (u.display_name || u.email || '?').charAt(0).toUpperCase();
+        const lastSync = localStorage.getItem(SYNC_LAST_KEY);
+        const syncTime = lastSync ? new Date(lastSync).toLocaleString('zh-CN', { hour: '2-digit', minute: '2-digit' }) : '从未';
+        authHtml = `
+          <div class="auth-card">
+            <div class="auth-user-card">
+              <div class="auth-avatar">${avatarInner}</div>
+              <div class="auth-user-info">
+                <div class="auth-user-name">${escapeHtml(u.display_name || '用户')}</div>
+                <div class="auth-user-email">${escapeHtml(u.email || '')}</div>
+              </div>
+            </div>
+            <div class="sync-status">
+              <span class="sync-dot synced" id="syncStatusDot"></span>
+              <span id="syncStatusLabel">已同步 · ${escapeHtml(syncTime)}</span>
+            </div>
+            <button class="auth-btn secondary" onclick="syncManager.initialSync().then(()=>render()).catch(()=>{})" style="margin-top:10px">🔄 立即同步</button>
+            <button class="auth-btn secondary" onclick="if(confirm('确定退出登录？本地数据不会丢失。'))authLogout()" style="margin-top:6px;color:var(--danger)">退出登录</button>
+          </div>`;
+      } else {
+        authHtml = `
+          <div class="auth-card" id="authCard">
+            <div class="auth-title" id="authFormTitle">登录</div>
+            <div class="auth-sub">登录后可在多设备间同步藏书数据</div>
+            <div class="auth-error" id="authError"></div>
+            <div id="authFormFields">
+              <div class="auth-field" id="authNameField" style="display:none">
+                <label>昵称</label>
+                <input type="text" id="authName" placeholder="你的昵称" autocomplete="name">
+              </div>
+              <div class="auth-field">
+                <label>邮箱</label>
+                <input type="email" id="authEmail" placeholder="your@email.com" autocomplete="email">
+              </div>
+              <div class="auth-field">
+                <label>密码</label>
+                <input type="password" id="authPassword" placeholder="至少 8 位，包含字母和数字" autocomplete="current-password">
+              </div>
+            </div>
+            <button class="auth-btn primary" id="authSubmitBtn" onclick="handleAuthSubmit()">登录</button>
+            <div class="auth-toggle">
+              <span id="authToggleText">还没有账号？</span>
+              <a id="authToggleLink" onclick="toggleAuthMode()">注册</a>
+            </div>
+          </div>`;
+      }
+
+      els.settingsRows.innerHTML = authHtml + `
         <div class="card" style="margin-bottom:14px;padding:16px">
           <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px">
             <div style="width:44px;height:44px;border-radius:12px;background:var(--accent-light);display:flex;align-items:center;justify-content:center;font-size:22px">📚</div>
@@ -988,7 +1467,9 @@
             </div>
           </div>
           <div style="font-size:12px;color:var(--muted);background:var(--surface);padding:10px 12px;border-radius:8px">
-            💡 数据保存在你的浏览器本地，建议定期备份。换设备时需要导出再导入。
+            ${auth.isLoggedIn()
+              ? '☁️ 数据已开启云同步，会自动备份到云端。'
+              : '💡 数据保存在你的浏览器本地，建议定期备份。登录后可开启云同步。'}
           </div>
         </div>` + [
         { icon: '💾', label: '备份数据', sub: '导出完整的藏书记录', action: 'exportJson' },
@@ -1005,17 +1486,30 @@
       return s.length === 0 || s.length === 10 || s.length === 13;
     }
 
-    els.navHome.onclick = () => setPage('home', { mode: 'dashboard' });
-    els.navSearch.onclick = () => setPage('search');
-    els.navOrganize.onclick = () => setPage('organize');
-    els.navSettings.onclick = () => setPage('settings');
+    // Nav tab: tap current tab → scroll to top; tap other tab → switch page
+    function handleNavTap(btn, page, opts) {
+      btn.addEventListener('click', () => {
+        // Always stop scanner when tapping nav (regardless of page)
+        try { if (scannerActive) stopScanner(); } catch (_) {}
+        if (getPage() === page && !(page === 'home' && getMode() !== (opts?.mode || 'dashboard'))) {
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+        } else {
+          setPage(page, opts);
+          window.scrollTo({ top: 0 });
+        }
+      });
+    }
+    handleNavTap(els.navHome, 'home', { mode: 'dashboard' });
+    handleNavTap(els.navSearch, 'search');
+    handleNavTap(els.navOrganize, 'organize');
+    handleNavTap(els.navSettings, 'settings');
     els.modeDashboard.onclick = () => { setPage('home', { mode: 'dashboard' }); };
     els.modeEntry.onclick = () => { entrySessionCount = 0; setPage('home', { mode: 'entry' }); window.scrollTo({ top: 0, behavior: 'smooth' }); };
     document.getElementById('shelfSortToggle').onclick = () => {
       bookSortMode = bookSortMode === 'alpha' ? 'time' : 'alpha';
       render();
     };
-    els.finishEntryBtn.onclick = () => { entrySessionCount = 0; clearDraftFields({ keepIsbn: false, keepLocation: false }); setPage('home', { mode: 'dashboard' }); };
+    els.finishEntryBtn.onclick = () => { entrySessionCount = 0; if (scannerActive) stopScanner(); clearDraftFields({ keepIsbn: false, keepLocation: false }); setPage('home', { mode: 'dashboard' }); };
     els.searchClearBtn.onclick = () => { els.searchInput.value = ''; render(); };
 
     els.isbnScanBtn.onclick = (event) => {
@@ -1075,6 +1569,82 @@
       return lookupCompleted;
     }
 
+    function showDuplicateModal(existingBook) {
+      return new Promise(resolve => {
+        const overlay = document.createElement('div');
+        overlay.className = 'dup-overlay';
+        overlay.innerHTML = `
+          <div class="dup-modal">
+            <div class="dup-icon">📚</div>
+            <div class="dup-title">这本书已经在库里了</div>
+            <div class="dup-book">
+              <div class="dup-book-title">${escapeHtml(existingBook.title || '未命名')}</div>
+              <div class="dup-book-author">${escapeHtml(existingBook.author || '未知作者')}</div>
+            </div>
+            <div class="dup-detail">不用重复导入哦，要继续扫下一本吗？</div>
+            <div class="dup-btns">
+              <button class="dup-btn-stop">到此为止</button>
+              <button class="dup-btn-continue">继续扫码</button>
+            </div>
+          </div>`;
+
+        const cleanup = (result) => {
+          overlay.style.animation = 'fadeIn .15s ease reverse';
+          setTimeout(() => { overlay.remove(); resolve(result); }, 150);
+        };
+
+        overlay.querySelector('.dup-btn-stop').onclick = () => cleanup('stop');
+        overlay.querySelector('.dup-btn-continue').onclick = () => cleanup('continue');
+
+        // Auto-dismiss after 6 seconds → continue scanning
+        const timer = setTimeout(() => cleanup('continue'), 6000);
+        overlay.addEventListener('click', (e) => {
+          if (e.target === overlay) { clearTimeout(timer); cleanup('stop'); }
+        });
+
+        document.body.appendChild(overlay);
+      });
+    }
+
+    function showSuccessModal(title, author, coverUrl, count, onContinue, onFinish) {
+      const overlay = document.createElement('div');
+      overlay.className = 'dup-overlay';
+      const coverEl = coverUrl
+        ? `<div style="width:60px;height:90px;border-radius:8px;overflow:hidden;margin:0 auto 12px;box-shadow:0 4px 12px rgba(0,0,0,.12)"><img src="${escapeHtml(coverUrl)}" style="width:100%;height:100%;object-fit:cover" /></div>`
+        : '';
+      const emoji = count <= 1 ? '🎉' : count <= 5 ? '🔥' : count <= 10 ? '⚡' : '🏆';
+      const cheers = count <= 1 ? '第一本！' : count <= 3 ? `已录入 ${count} 本！` : count <= 10 ? `${count} 本了，继续！` : `${count} 本！停不下来！`;
+      overlay.innerHTML = `
+        <div class="dup-modal">
+          <div class="dup-icon">${emoji}</div>
+          ${coverEl}
+          <div class="dup-title">${escapeHtml(title)}</div>
+          <div class="dup-book-author" style="color:var(--muted);font-size:13px;margin-bottom:6px">${escapeHtml(author || '')}</div>
+          <div style="font-size:20px;font-weight:800;color:var(--accent);margin-bottom:16px">${cheers}</div>
+          <div class="dup-btns">
+            <button class="dup-btn-stop">结束录入</button>
+            <button class="dup-btn-continue">继续扫码 📷</button>
+          </div>
+        </div>`;
+
+      overlay.querySelector('.dup-btn-stop').onclick = () => {
+        overlay.style.animation = 'fadeIn .15s ease reverse';
+        setTimeout(() => { overlay.remove(); onFinish(); }, 150);
+      };
+      overlay.querySelector('.dup-btn-continue').onclick = () => {
+        overlay.style.animation = 'fadeIn .15s ease reverse';
+        setTimeout(() => { overlay.remove(); onContinue(); }, 150);
+      };
+      overlay.addEventListener('click', (e) => {
+        if (e.target === overlay) {
+          overlay.style.animation = 'fadeIn .15s ease reverse';
+          setTimeout(() => { overlay.remove(); onFinish(); }, 150);
+        }
+      });
+
+      document.body.appendChild(overlay);
+    }
+
     async function saveCurrentBook(options = {}) {
       const isbn = els.isbn.value.trim();
       let title = els.title.value.trim();
@@ -1110,13 +1680,36 @@
         return false;
       }
 
+      // If we have ISBN but no cover, try Bookcover API
+      if (!coverUrl && isbn) {
+        const compact = isbn.replace(/[^0-9Xx]/g, '');
+        if (compact) {
+          try {
+            const bcRes = await fetch(`https://bookcover.longitood.com/bookcover/${encodeURIComponent(compact)}`);
+            if (bcRes.ok) {
+              const bcData = await bcRes.json();
+              if (bcData.url) coverUrl = bcData.url;
+            }
+          } catch (_) {}
+        }
+      }
+
       const wasEditing = Boolean(editingBookId);
       const books = loadBooks();
       const duplicate = books.find(b => b.id !== editingBookId && ((isbn && b.isbn === isbn) || (b.title === title && b.author === author)));
       const isCompleteRecord = Boolean(category && publishedYear && location);
       if (duplicate) {
-        els.manualNotice.innerHTML = makeNotice('warn', '疑似重复：系统发现相同 ISBN 或书名+作者组合。');
-        return false;
+        const dupAction = await showDuplicateModal(duplicate);
+        if (dupAction === 'stop') return false;
+        if (dupAction === 'continue') {
+          // User chose to continue scanning — clear fields and restart
+          const shouldResumeScan = lastEntryMethod === 'scan';
+          clearDraftFields({ keepIsbn: false, keepLocation: true, clearNotices: shouldResumeScan });
+          lookupCompleted = false;
+          if (shouldResumeScan) { scannerIntent = 'entry'; startScanner(); }
+          else { els.isbn.focus(); }
+          return false;
+        }
       }
 
       rememberLocationPreset(location);
@@ -1140,6 +1733,7 @@
         target.status = isCompleteRecord ? 'in_library' : 'to_be_sorted';
         target.updatedAt = new Date().toISOString();
         saveBooks(books);
+        hapticSaved();
         els.manualNotice.innerHTML = makeNotice('ok', `已更新：${title}${isCompleteRecord ? '（已入库）' : '（信息待补充）'}`);
         editingBookId = null;
         els.saveBtn.textContent = '导入库中';
@@ -1155,18 +1749,33 @@
         });
         saveBooks(books);
         entrySessionCount += 1;
-        els.manualNotice.innerHTML = makeNotice('ok', `已导入：${title}${isCompleteRecord ? '（已入库）' : '（信息待补充，后续可完善）'}。继续下一本吧。`);
+        hapticSaved();
+
+        // Stop scanner during modal
+        if (scannerActive) stopScanner();
+
+        // Show success modal (dopamine!)
+        return new Promise(resolve => {
+          showSuccessModal(title, author, coverUrl, entrySessionCount, () => {
+            // Continue scanning
+            clearDraftFields({ keepIsbn: false, keepLocation: true });
+            lookupCompleted = false;
+            lastEntryMethod = 'scan';
+            scannerIntent = 'entry';
+            startScanner();
+            render();
+            resolve(true);
+          }, () => {
+            // Finish entry
+            entrySessionCount = 0;
+            clearDraftFields({ keepIsbn: false, keepLocation: false });
+            lookupCompleted = false;
+            setPage('home', { mode: 'dashboard' });
+            resolve(true);
+          });
+        });
       }
-      const shouldResumeScan = !wasEditing && lastEntryMethod === 'scan';
-      clearDraftFields({ keepIsbn: false, keepLocation: true, clearNotices: shouldResumeScan });
-      lookupCompleted = false;
-      if (shouldResumeScan) {
-        scannerIntent = 'entry';
-        startScanner();
-      } else {
-        els.isbn.focus();
-      }
-      render();
+      // Edit path already returned above
       return true;
     }
 
@@ -1250,6 +1859,9 @@
                 <button class="btn secondary" data-action="edit" data-id="${escapeHtml(book.id)}" style="cursor:pointer">编辑</button>
                 <button class="btn ghost" id="closeDetailBtn">关闭</button>
               </div>
+              <div style="margin-top:16px;padding-top:16px;border-top:1px solid var(--line);text-align:center">
+                <button class="btn ghost delete-book-btn" data-id="${escapeHtml(book.id)}" style="color:#d44;font-size:13px;cursor:pointer">删除此书</button>
+              </div>
             </div>
           </div>
         </div>`;
@@ -1276,6 +1888,38 @@
         return;
       }
 
+      // Delete book
+      const deleteBtn = event.target.closest('.delete-book-btn');
+      if (deleteBtn) {
+        const id = deleteBtn.dataset.id;
+        const book = loadBooks().find(b => b.id === id);
+        if (!book) return;
+        if (!confirm(`确定要删除「${book.title || '未命名图书'}」吗？`)) return;
+        const books = loadBooks().filter(b => b.id !== id);
+        saveBooks(books);
+        els.detailModalRoot.innerHTML = '';
+        render();
+        showToast('已删除');
+        return;
+      }
+
+      // ⋯ menu on book cards
+      const menuBtn = event.target.closest('.menu-btn[data-menu-id]');
+      if (menuBtn && !menuBtn.dataset.action) {
+        const bookId = menuBtn.dataset.menuId;
+        document.querySelectorAll('.menu-panel').forEach(el => el.remove());
+        if (openMenuBookId === bookId) { openMenuBookId = null; return; }
+        openMenuBookId = bookId;
+        const panel = document.createElement('div');
+        panel.className = 'menu-panel';
+        panel.innerHTML = `
+          <button data-action="edit" data-id="${bookId}">✏️ 编辑</button>
+          <button class="delete-book-btn" data-id="${bookId}" style="color:#d44">🗑 删除</button>
+        `;
+        menuBtn.closest('.menu-wrap').appendChild(panel);
+        return;
+      }
+
       const categoryPresetBtn = event.target.closest('.category-preset-btn');
       if (categoryPresetBtn) {
         els.category.value = categoryPresetBtn.dataset.cat || '';
@@ -1285,6 +1929,24 @@
       const locationPresetBtn = event.target.closest('.location-preset-btn');
       if (locationPresetBtn) {
         els.location.value = locationPresetBtn.dataset.value || '';
+        return;
+      }
+
+      // Dashboard stat items → navigate to search with filter
+      const statClick = event.target.closest('.stat-clickable');
+      if (statClick) {
+        const filter = statClick.dataset.statFilter;
+        setPage('search');
+        if (filter === 'all') {
+          els.searchInput.value = '';
+        } else if (filter === 'in_library') {
+          els.searchInput.value = '已入库';
+        } else if (filter === 'to_be_sorted') {
+          els.searchInput.value = '待补充';
+        } else if (filter === 'reading') {
+          els.searchInput.value = '在读';
+        }
+        render();
         return;
       }
 
@@ -1346,7 +2008,7 @@
           setPage('home', { mode: 'entry' });
           window.scrollTo({ top: 0, behavior: 'smooth' });
           setTimeout(() => els.title.focus(), 120);
-          els.manualNotice.innerHTML = makeNotice('warn', `正在编辑《${escapeHtml(book.title || '未命名图书')}》，修改后直接保存即可。`);
+          els.manualNotice.innerHTML = makeNotice('warn', `正在编辑《${book.title || '未命名图书'}》，修改后直接保存即可。`);
           els.detailModalRoot.innerHTML = '';
         }
         return;
@@ -1359,7 +2021,7 @@
         if (!picked) return;
         const books = loadBooks().map(b => b.id === picked.id ? { ...b, status: 'in_library', updatedAt: new Date().toISOString() } : b);
         saveBooks(books);
-        els.organizeNotice.innerHTML = makeNotice('ok', `已整理入库：${escapeHtml(picked.title || '未命名图书')}`);
+        els.organizeNotice.innerHTML = makeNotice('ok', `已整理入库：${picked.title || '未命名图书'}`);
         render();
         return;
       }
@@ -1403,12 +2065,67 @@
       els.settingsNotice.innerHTML = makeNotice('ok', `已下载表格 📊 共 ${books.length} 本书`);
     };
 
+    // ── Import validation ──
+    const BOOK_FIELD_WHITELIST = new Set([
+      'id', 'isbn', 'title', 'author', 'category', 'readingStatus', 'readingProgress',
+      'publishedYear', 'location', 'description', 'notes', 'bookLang', 'coverUrl',
+      'metadataSources', 'status', 'createdAt', 'updatedAt', '_deleted',
+    ]);
+    const SAFE_URL_PROTOCOLS = new Set(['http:', 'https:', 'data:']);
+    const MAX_IMPORT_BOOKS = 5000;
+    const MAX_FIELD_LENGTH = 2000;
+
+    function isSafeUrl(str) {
+      if (!str) return true;
+      try { return SAFE_URL_PROTOCOLS.has(new URL(str).protocol); }
+      catch { return false; }
+    }
+
+    function validateAndSanitizeImport(raw) {
+      if (typeof raw !== 'object' || raw === null) throw new Error('无效的 JSON 对象');
+      if (!Array.isArray(raw.books)) throw new Error('缺少 books 数组');
+      if (!raw.meta || typeof raw.meta !== 'object') throw new Error('缺少 meta 字段');
+      if (raw.books.length > MAX_IMPORT_BOOKS) throw new Error(`书籍数量超限（最多 ${MAX_IMPORT_BOOKS} 本）`);
+
+      const sanitized = [];
+      let warnings = 0;
+      for (let i = 0; i < raw.books.length; i++) {
+        const book = raw.books[i];
+        if (typeof book !== 'object' || book === null) { warnings++; continue; }
+        if (!book.id || typeof book.id !== 'string') { warnings++; continue; }
+
+        // Whitelist fields only
+        const clean = {};
+        for (const key of BOOK_FIELD_WHITELIST) {
+          if (key in book) {
+            let val = book[key];
+            // Type/length checks for strings
+            if (typeof val === 'string' && val.length > MAX_FIELD_LENGTH) val = val.slice(0, MAX_FIELD_LENGTH);
+            // URL safety check
+            if (key === 'coverUrl' && !isSafeUrl(val)) val = '';
+            clean[key] = val;
+          }
+        }
+        // Ensure required fields
+        if (!clean.id) { warnings++; continue; }
+        clean.title = clean.title || '';
+        clean.author = clean.author || '';
+        clean.createdAt = clean.createdAt || new Date().toISOString();
+        clean.updatedAt = clean.updatedAt || new Date().toISOString();
+        // Sanitize metadataSources
+        if (clean.metadataSources && !Array.isArray(clean.metadataSources)) clean.metadataSources = [];
+        sanitized.push(clean);
+      }
+      return { books: sanitized, meta: { schemaVersion: raw.meta.schemaVersion || 1, updatedAt: new Date().toISOString() }, warnings };
+    }
+
     els.validateBtn.onclick = () => {
       try {
         const parsed = JSON.parse(els.importText.value || '{}');
-        if (!Array.isArray(parsed.books)) throw new Error('缺少 books 数组');
-        if (!parsed.meta) throw new Error('缺少 meta 字段');
-        els.settingsNotice.innerHTML = makeNotice('ok', `校验通过：共 ${parsed.books.length} 本图书。`);
+        const result = validateAndSanitizeImport(parsed);
+        let msg = `校验通过：共 ${result.books.length} 本图书。`;
+        if (result.warnings > 0) msg += ` （${result.warnings} 条记录被跳过）`;
+        els.settingsNotice.innerHTML = makeNotice('ok', msg);
       } catch (e) {
         els.settingsNotice.innerHTML = makeNotice('err', `校验失败：${e.message}`);
       }
@@ -1417,20 +2134,81 @@
     els.importBtn.onclick = () => {
       try {
         const parsed = JSON.parse(els.importText.value || '{}');
-        if (!Array.isArray(parsed.books)) throw new Error('缺少 books 数组');
-        if (!parsed.meta) throw new Error('缺少 meta 字段');
-        if (!confirm(`即将用导入数据覆盖当前本地数据（共 ${parsed.books.length} 本）。确定继续吗？`)) {
+        const result = validateAndSanitizeImport(parsed);
+        if (!confirm(`即将用导入数据覆盖当前本地数据（共 ${result.books.length} 本）。确定继续吗？`)) {
           els.settingsNotice.innerHTML = makeNotice('warn', '已取消导入。');
           return;
         }
-        localStorage.setItem(BOOKS_KEY, JSON.stringify(parsed.books));
-        localStorage.setItem(META_KEY, JSON.stringify(parsed.meta));
-        els.settingsNotice.innerHTML = makeNotice('ok', `导入成功：共 ${parsed.books.length} 本图书。`);
+        localStorage.setItem(BOOKS_KEY, JSON.stringify(result.books));
+        localStorage.setItem(META_KEY, JSON.stringify(result.meta));
+        let msg = `导入成功：共 ${result.books.length} 本图书。`;
+        if (result.warnings > 0) msg += ` （${result.warnings} 条记录被跳过）`;
+        els.settingsNotice.innerHTML = makeNotice('ok', msg);
         render();
       } catch (e) {
         els.settingsNotice.innerHTML = makeNotice('err', `导入失败：${e.message}`);
       }
     };
+
+    // ── Auth form handlers ────────────────────────────────────────────────
+    let authIsRegisterMode = false;
+
+    function toggleAuthMode() {
+      authIsRegisterMode = !authIsRegisterMode;
+      const title = document.getElementById('authFormTitle');
+      const nameField = document.getElementById('authNameField');
+      const submitBtn = document.getElementById('authSubmitBtn');
+      const toggleText = document.getElementById('authToggleText');
+      const toggleLink = document.getElementById('authToggleLink');
+      const errorEl = document.getElementById('authError');
+      const passwordInput = document.getElementById('authPassword');
+
+      if (title) title.textContent = authIsRegisterMode ? '注册' : '登录';
+      if (nameField) nameField.style.display = authIsRegisterMode ? 'block' : 'none';
+      if (submitBtn) submitBtn.textContent = authIsRegisterMode ? '注册' : '登录';
+      if (toggleText) toggleText.textContent = authIsRegisterMode ? '已有账号？' : '还没有账号？';
+      if (toggleLink) toggleLink.textContent = authIsRegisterMode ? '登录' : '注册';
+      if (errorEl) { errorEl.style.display = 'none'; errorEl.textContent = ''; }
+      if (passwordInput) passwordInput.autocomplete = authIsRegisterMode ? 'new-password' : 'current-password';
+    }
+
+    async function handleAuthSubmit() {
+      const email = (document.getElementById('authEmail')?.value || '').trim();
+      const password = document.getElementById('authPassword')?.value || '';
+      const displayName = (document.getElementById('authName')?.value || '').trim();
+      const errorEl = document.getElementById('authError');
+      const submitBtn = document.getElementById('authSubmitBtn');
+
+      if (!email || !password) {
+        if (errorEl) { errorEl.textContent = '请输入邮箱和密码'; errorEl.style.display = 'block'; }
+        return;
+      }
+
+      if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = '请稍候…'; }
+      if (errorEl) errorEl.style.display = 'none';
+
+      try {
+        if (authIsRegisterMode) {
+          await authRegister(email, password, displayName);
+        } else {
+          await authLogin(email, password);
+        }
+      } catch (e) {
+        const msg = e.message || (authIsRegisterMode ? '注册失败' : '登录失败');
+        if (errorEl) { errorEl.textContent = msg; errorEl.style.display = 'block'; }
+      } finally {
+        if (submitBtn) {
+          submitBtn.disabled = false;
+          submitBtn.textContent = authIsRegisterMode ? '注册' : '登录';
+        }
+      }
+    }
+
+    // Auto-sync on startup
+    if (auth.isLoggedIn()) {
+      syncManager.initialSync().catch(e => console.warn('Initial sync failed:', e));
+    }
+    // ── End Auth form handlers ──────────────────────────────────────────
 
     // ── Scanner ──────────────────────────────────────────────────────────────
     let scannerStream = null;
@@ -1453,6 +2231,11 @@
 
     function stopScanner() {
       scannerActive = false;
+      torchOn = false;
+      // Clean up freeze-frame state
+      els.scannerVideo.classList.remove('freeze');
+      els.scannerFlash.classList.remove('active');
+      if (els.formFields) els.formFields.style.display = '';
       if (scannerAnimFrame) { cancelAnimationFrame(scannerAnimFrame); scannerAnimFrame = null; }
       if (zxingScanControl) {
         try { zxingScanControl.stop(); } catch (_) {}
@@ -1462,10 +2245,16 @@
       if (scannerStream) { scannerStream.getTracks().forEach(t => t.stop()); scannerStream = null; }
       els.scannerVideo.srcObject = null;
       els.scannerBox.style.display = 'none';
+      els.torchBtn.textContent = '🔦 关';
+      els.torchBtn.classList.remove('active');
+      els.proPanelBox.style.display = 'none';
+      els.proBackdrop.style.display = 'none';
+      els.proBtn.classList.remove('active');
+      proVisible = false;
       render();
     }
 
-    // English → Chinese category mapping for CJK books
+    // English → Chinese category mapping (applied to ALL books)
     const EN_ZH_CATEGORY = {
       'fiction': '小说', 'novel': '小说', 'novels': '小说', 'literature': '文学',
       'literary fiction': '文学小说', 'chinese fiction': '中国小说', 'chinese literature': '中国文学',
@@ -1489,34 +2278,128 @@
       'anthropology': '人类学', 'linguistics': '语言学',
       'c (computer program language)': '编程/C语言', 'java': '编程/Java',
       'python': '编程/Python', 'javascript': '编程/JavaScript',
+      'history': '历史', 'world history': '世界历史', 'chinese history': '中国历史',
+      'politics': '政治', 'military': '军事', 'war': '军事',
+      'nature': '自然', 'environment': '环境', 'gardening': '园艺',
+      'health': '健康', 'fitness': '健身', 'diet': '饮食',
+      'comics': '漫画', 'graphic novels': '漫画', 'manga': '漫画',
+      'humor': '幽默', 'satire': '讽刺', 'adventure': '冒险',
+      'crime': '犯罪', 'detective': '侦探', 'spy': '间谍',
+      'family': '家庭', 'parenting': '育儿', 'pets': '宠物',
+      'crafts': '手工', 'games': '游戏', 'reference': '工具书',
+      'literary criticism': '文学评论', 'literary collections': '文学合集',
+      'performing arts': '表演艺术', 'film': '电影', 'theater': '戏剧',
+      'social science': '社会科学', 'true crime': '纪实犯罪',
+      'body, mind & spirit': '身心灵', 'self help': '自助',
+      'business & economics': '商业', 'language arts & disciplines': '语言文学',
+      'foreign language study': '外语学习', 'study aids': '学习辅导',
     };
-    function translateCategory(cat, lang) {
-      if (!cat || !lang || !lang.startsWith('zh')) return cat;
+    // Pattern-based category rules (checked in order after exact match fails)
+    const CATEGORY_PATTERNS = [
+      [/\bfiction\b/i, '小说'],
+      [/\bnovel/i, '小说'],
+      [/\bpoetry\b|poems?\b/i, '诗歌'],
+      [/\bessay/i, '散文'],
+      [/\bbiograph/i, '传记'],
+      [/\bmemoir/i, '回忆录'],
+      [/\bhistor/i, '历史'],
+      [/\bphilosoph/i, '哲学'],
+      [/\bpsycholog/i, '心理学'],
+      [/\bsociolog/i, '社会学'],
+      [/\beconomic/i, '经济'],
+      [/\bbusiness/i, '商业'],
+      [/\bpolitic/i, '政治'],
+      [/\bscience\b/i, '科学'],
+      [/\bphysic/i, '物理'],
+      [/\bchemist/i, '化学'],
+      [/\bbiolog/i, '生物'],
+      [/\bmedicin/i, '医学'],
+      [/\bhealth/i, '健康'],
+      [/\bcomputer|programming|software/i, '计算机'],
+      [/\btechnolog/i, '科技'],
+      [/\bengineer/i, '工程'],
+      [/\beducat|teaching/i, '教育'],
+      [/\bart\b|artist/i, '艺术'],
+      [/\bmusic/i, '音乐'],
+      [/\bdesign/i, '设计'],
+      [/\bphoto/i, '摄影'],
+      [/\barchitect/i, '建筑'],
+      [/\bcook|food|culinar/i, '烹饪'],
+      [/\btravel/i, '旅行'],
+      [/\bsport/i, '体育'],
+      [/\blaw\b|legal/i, '法律'],
+      [/\breligio/i, '宗教'],
+      [/\bspiritual/i, '身心灵'],
+      [/\bself.?help/i, '自助'],
+      [/\bchildren|juvenile/i, '儿童文学'],
+      [/\byoung adult/i, '青少年'],
+      [/\bcomic|cartoon|manga|graphic novel/i, '漫画'],
+      [/\bcrime|detectiv/i, '犯罪'],
+      [/\bmystery\b/i, '悬疑'],
+      [/\bthriller/i, '惊悚'],
+      [/\bhorror/i, '恐怖'],
+      [/\bromance\b/i, '言情'],
+      [/\bfantas/i, '奇幻'],
+      [/\bsci.?fi|science fiction/i, '科幻'],
+      [/\bmilitar|war\b/i, '军事'],
+      [/\bliteratur/i, '文学'],
+      [/\bdrama\b/i, '戏剧'],
+      [/\bfilm|cinema|movie/i, '电影'],
+      [/\blinguist|language/i, '语言学'],
+      [/\banthropolog/i, '人类学'],
+      [/\bfamily|relationship/i, '家庭'],
+      [/\bparent/i, '育儿'],
+      [/\bnature|environment/i, '自然'],
+      [/\bgarden/i, '园艺'],
+      [/\bhumor|funny|comedy/i, '幽默'],
+      [/\badventur/i, '冒险'],
+      [/\breference/i, '工具书'],
+    ];
+
+    // Junk categories that should be discarded entirely
+    const JUNK_CAT_RE = /^(China|Chinese|Japan|Japanese|Korea|Korean|English|French|German|America|United States|Europe|Asia|Africa|India|Australia|Canadian|British|Irish|Russian|Latin|Italian|Spanish|Portuguese|Swedish|Norwegian|Danish|Dutch|Polish|Arab|Middle East|Beijing|Shanghai|Tokyo|Seoul|London|New York|Paris|Berlin|General|Collections|Miscellaneous|Nonfiction|Fiction and nonfiction|Accessible book|Protected DAISY|Internet Archive Wishlist|In library|OverDrive|Large type|Lending library|Place|People|Geography|Social|Will|Grief|Belief|Doubt|Influence|Totalitarian)(\b.*)?$/i;
+    const JUNK_CAT_RE2 = /language\s+materials|[A-Z][a-z]+\s+(Xian|County|City|Province|Region|Prefecture)\b|[A-Z][a-z]+,\s*[A-Z]|\d{2,4}(th|st|nd|rd)?\s*(century|Century)/i;
+
+    function translateCategory(cat, _lang) {
+      if (!cat) return '';
+      // Already Chinese — keep as-is
       if (/[\u4e00-\u9fff]/.test(cat)) return cat;
-      const key = cat.toLowerCase().trim();
-      return EN_ZH_CATEGORY[key] || cat;
+      const trimmed = cat.trim();
+      // 1. Exact match first (handles "Chinese fiction" → "中国小说" etc.)
+      const key = trimmed.toLowerCase();
+      if (EN_ZH_CATEGORY[key]) return EN_ZH_CATEGORY[key];
+      // 2. Pattern match (handles "Biography & Autobiography" → "传记" etc.)
+      for (const [re, zh] of CATEGORY_PATTERNS) {
+        if (re.test(trimmed)) return zh;
+      }
+      // 3. Junk filter (only after translation attempts fail)
+      if (JUNK_CAT_RE.test(trimmed) || JUNK_CAT_RE2.test(trimmed)) return '';
+      // 4. Library classification codes (call numbers, Dewey, LOC, etc.)
+      if (/^[A-Z]{0,2}\d/.test(trimmed)) return ''; // starts with optional letters then digit: "853", "Pq4817..."
+      if (/^\d{1,3}$/.test(trimmed)) return ''; // pure short numbers
+      // 5. If still English and no match, return empty (will show as 未分类)
+      if (/^[a-zA-Z\s&,.()\-\/]+$/.test(trimmed)) return '';
+      return trimmed;
     }
 
     // Category quality filter — used in both render() and fillBookMetaByIsbn
-    const JUNK_CATEGORY_RE = /^(China|Chinese|Japan|Japanese|Korea|Korean|English|French|German|America|United States|Europe|Asia|Africa|India|Beijing|Shanghai|Tokyo|Seoul|London|New York|Paris|Berlin|General|Collections|Miscellaneous|Nonfiction|Fiction and nonfiction|Accessible book|Protected DAISY|Internet Archive Wishlist|In library|OverDrive|Large type|Lending library|Place|People|History|Geography|Social|Political|Biography|\d{2,4}(th|st|nd|rd)?\s*(century|Century)|[A-Z][a-z]+,\s*[A-Z])/i;
     function isGoodCategory(raw) {
       const s = String(raw || '').trim();
       if (!s) return false;
-      // CJK characters (Chinese/Japanese/Korean) are always valid as categories
-      if (/[\u4e00-\u9fff\u3040-\u30ff\uac00-\ud7af]/.test(s)) return true;
-      // Latin text: apply stricter checks
-      if (s.length <= 2) return false;                      // too short abbreviation
-      if (/[=:]/.test(s)) return false;                     // nyt:hardcover-fiction=20
-      if (/,\s*$/.test(s)) return false;                    // "Man-woman relationships,"
-      if (JUNK_CATEGORY_RE.test(s)) return false;
-      if (/^\d{4}\s*[-–]\s*\d{4}$/.test(s)) return false;  // date ranges
-      if (/^[A-Z]{1,3}$/.test(s)) return false;             // CN, PR etc.
-      return true;
+      if (/[=:]/.test(s)) return false;
+      if (/,\s*$/.test(s)) return false;
+      if (/^\d{4}\s*[-–]\s*\d{4}$/.test(s)) return false;
+      if (/^[A-Z]{1,3}$/.test(s)) return false;
+      if (/^[A-Z]{0,2}\d/.test(s)) return false; // classification codes like "853", "Pq4817.i5"
+      if (/^\d{1,3}$/.test(s)) return false;
+      // Use translateCategory as the authority — if it returns non-empty, it's good
+      const translated = translateCategory(s);
+      return Boolean(translated);
     }
     function pickBestCategory(items) {
       for (const raw of items) {
         const s = String(raw?.name || raw || '').split(' / ')[0].trim().slice(0, 32);
-        if (isGoodCategory(s)) return s;
+        if (isGoodCategory(s)) return translateCategory(s);
       }
       return '';
     }
@@ -1563,7 +2446,20 @@
       function parseGoogleBooks(item) {
         if (!item) return null;
         const info = item.volumeInfo || {};
-        const title = info.title || '';
+        let title = info.title || '';
+        // Append subtitle if it contains volume/part info (Vol, Book, Part, 第X册/卷/部, #N)
+        const sub = (info.subtitle || '').trim();
+        if (sub) {
+          const volRe = /\b(vol\.?|volume|book|part|tome|band)\s*\d/i;
+          const zhVolRe = /第.{1,4}[册卷部集篇]/;
+          const numRe = /^#?\d{1,3}$/;
+          if (volRe.test(sub) || zhVolRe.test(sub) || numRe.test(sub)) {
+            title = `${title}（${sub}）`;
+          } else if (sub.length <= 40 && !title.toLowerCase().includes(sub.toLowerCase())) {
+            // Short subtitle that's not redundant — append with colon
+            title = `${title}: ${sub}`;
+          }
+        }
         const authors = Array.isArray(info.authors) ? info.authors : [];
         const cats = Array.isArray(info.categories) ? info.categories : [];
         const category = pickBestCategory(cats);
@@ -1571,10 +2467,19 @@
         const yearMatch = String(info.publishedDate || '').match(/(19|20)\d{2}/);
         const year = yearMatch ? yearMatch[0] : '';
         const lang = info.language || null;
-        // Google Books thumbnail — ensure HTTPS, improve quality
+        // Google Books thumbnail — ensure HTTPS, improve quality, filter placeholders
         const thumb = info.imageLinks?.thumbnail || info.imageLinks?.smallThumbnail || '';
-        const coverUrl = thumb ? thumb.replace(/^http:/, 'https:').replace('&edge=curl', '').replace('zoom=1', 'zoom=2') : '';
+        let coverUrl = thumb ? thumb.replace(/^http:/, 'https:').replace('&edge=curl', '').replace('zoom=1', 'zoom=2') : '';
+        if (isGBPlaceholderUrl(coverUrl)) coverUrl = '';
         return { title, authors, category, description, year, lang, coverUrl };
+      }
+
+      // Check if a Google Books volume likely has no real cover
+      function isGBPlaceholderUrl(url) {
+        if (!url) return true;
+        // Volume IDs ending with ACAAJ typically have no real cover image
+        const m = url.match(/[?&]id=([^&]+)/);
+        return m && m[1].endsWith('ACAAJ');
       }
 
       // Extract cover from ANY Google Books item (not just best-language match)
@@ -1583,7 +2488,8 @@
         for (const item of gbData.items) {
           const imgs = item?.volumeInfo?.imageLinks;
           if (imgs?.thumbnail || imgs?.smallThumbnail) {
-            return (imgs.thumbnail || imgs.smallThumbnail).replace(/^http:/, 'https:').replace('&edge=curl', '').replace('zoom=1', 'zoom=2');
+            const url = (imgs.thumbnail || imgs.smallThumbnail).replace(/^http:/, 'https:').replace('&edge=curl', '').replace('zoom=1', 'zoom=2');
+            if (!isGBPlaceholderUrl(url)) return url;
           }
         }
         return '';
@@ -1604,7 +2510,12 @@
       function parseOLSearch(data) {
         if (!data?.docs?.length) return null;
         const doc = data.docs[0];
-        const title = doc.title || '';
+        let title = doc.title || '';
+        // OL sometimes puts volume info in subtitle
+        const sub = (doc.subtitle || '').trim();
+        if (sub && sub.length <= 40 && !title.toLowerCase().includes(sub.toLowerCase())) {
+          title = `${title}: ${sub}`;
+        }
         const authors = Array.isArray(doc.author_name) ? doc.author_name : [];
         const subjects = Array.isArray(doc.subject) ? doc.subject : [];
         const category = pickBestCategory(subjects);
@@ -1617,13 +2528,26 @@
       }
 
       // Merge multiple results, preferring language-matched sources
+      // Detect if text contains CJK characters (Chinese/Japanese/Korean)
+      function hasCJK(text) {
+        return /[\u4e00-\u9fff\u3400-\u4dbf\u3040-\u309f\u30a0-\u30ff\uac00-\ud7af]/.test(text || '');
+      }
+
       function mergeResults(results, preferredLang) {
         // results is array of {source, data} where data may be null
         const valid = results.filter(r => r.data && r.data.title);
 
         // Pick best item per field
-        const pick = (getter) => {
-          // First try language-preferred sources
+        const pick = (getter, preferCJK = false) => {
+          // For CJK-preferred ISBNs: prefer results with actual CJK characters
+          if (preferCJK && preferredLang === 'zh') {
+            const cjkMatch = valid.find(r => {
+              const v = getter(r.data);
+              return v && (typeof v === 'string' ? hasCJK(v) : Array.isArray(v) && v.some(hasCJK));
+            });
+            if (cjkMatch) { const v = getter(cjkMatch.data); if (v) return { value: v, source: cjkMatch.source, lang: cjkMatch.data.lang }; }
+          }
+          // Then try language-preferred sources
           if (preferredLang) {
             const langMatch = valid.find(r => r.data.lang && String(r.data.lang).startsWith(preferredLang));
             if (langMatch) { const v = getter(langMatch.data); if (v) return { value: v, source: langMatch.source, lang: langMatch.data.lang }; }
@@ -1635,8 +2559,8 @@
           return null;
         };
 
-        const titleR = pick(d => d.title);
-        const authorsR = pick(d => d.authors?.length ? d.authors : null);
+        const titleR = pick(d => d.title, true);
+        const authorsR = pick(d => d.authors?.length ? d.authors : null, true);
         const categoryR = pick(d => d.category);
         const descR = pick(d => d.description);
         const yearR = pick(d => d.year);
@@ -1662,39 +2586,24 @@
       const altIsbn = compact.length === 13 ? isbn13to10(compact) : isbn10to13(compact);
       const preferredLang = inferLang(compact);
 
-      setNotice('warn', `已识别 ISBN：${isbn}，正在查询书名、作者、分类和简介…`);
+      setNotice('warn', `已识别 ISBN：${isbn}，正在查询…`);
 
       try {
-        // Build all fetch URLs
-        const olUrl = `https://openlibrary.org/api/books?bibkeys=ISBN:${encodeURIComponent(compact)}&format=json&jscmd=data`;
-        const olSearchUrl = `https://openlibrary.org/search.json?isbn=${encodeURIComponent(compact)}&fields=title,author_name,subject,first_publish_year,cover_i,language,publisher&limit=3`;
-        const gbUrl = `https://www.googleapis.com/books/v1/volumes?q=isbn:${encodeURIComponent(compact)}&maxResults=5`;
-        const gbLangUrl = preferredLang
-          ? `https://www.googleapis.com/books/v1/volumes?q=isbn:${encodeURIComponent(compact)}&langRestrict=${encodeURIComponent(preferredLang)}&maxResults=5`
-          : null;
-        const crUrl = `https://api.crossref.org/works?filter=isbn:${encodeURIComponent(compact)}&rows=3`;
-        // Alt ISBN queries (ISBN-10 ↔ 13 conversion)
-        const olAltUrl = altIsbn ? `https://openlibrary.org/api/books?bibkeys=ISBN:${encodeURIComponent(altIsbn)}&format=json&jscmd=data` : null;
-        const gbAltUrl = altIsbn ? `https://www.googleapis.com/books/v1/volumes?q=isbn:${encodeURIComponent(altIsbn)}&maxResults=3` : null;
+        const _gb = GBOOKS_PROXY;
 
-        // Additional search for CJK books: title-based Google Books search with Chinese language
-        const gbTitleSearchUrl = preferredLang === 'zh'
-          ? `https://www.googleapis.com/books/v1/volumes?q=isbn:${encodeURIComponent(compact)}&langRestrict=zh&printType=books&maxResults=5`
-          : null;
+        // Helper: apply data to form
+        function applyToForm(m) {
+          if (m.title) els.title.value = m.title;
+          if (m.authors.length) els.author.value = m.authors.join(', ');
+          if (m.category && !els.category.value) els.category.value = m.category;
+          if (m.year && !els.publishedYear.value) els.publishedYear.value = m.year;
+          if (m.description && els.description && !els.description.value) els.description.value = m.description;
+          markAutoFilled('title', 'author', 'category', 'publishedYear');
+          if (m.coverUrl) els.manualCard.dataset.pendingCoverUrl = m.coverUrl;
+          if (m.lang) els.manualCard.dataset.bookLang = m.lang;
+          if (m.sources.length) els.manualCard.dataset.bookSources = m.sources.join(' / ');
+        }
 
-        // Fire all requests in parallel (up to 8 sources)
-        const urls = [olUrl, olSearchUrl, gbUrl, gbLangUrl, crUrl, olAltUrl, gbAltUrl, gbTitleSearchUrl].filter(Boolean);
-        const responses = await Promise.allSettled(urls.map(u => fetch(u).then(r => r.ok ? r.json() : null)));
-
-        const [olRes, olSearchRes, gbRes, gbLangRes, crRes, olAltRes, gbAltRes, gbTitleRes] = responses.map(r => r.status === 'fulfilled' ? r.value : null);
-
-        // Parse Open Library results
-        const olData = olRes ? (olRes[`ISBN:${compact}`] || null) : null;
-        const olAltData = olAltRes ? (olAltRes[`ISBN:${altIsbn}`] || null) : null;
-        const olParsed = parseOpenLibrary(olData) || parseOpenLibrary(olAltData);
-        const olSearchParsed = parseOLSearch(olSearchRes);
-
-        // Parse Google Books — prefer language-matched item
         function bestGbItem(data) {
           if (!data?.items?.length) return null;
           if (preferredLang) {
@@ -1702,51 +2611,113 @@
           }
           return data.items[0];
         }
-        const gbLangParsed = parseGoogleBooks(bestGbItem(gbLangRes));
+
+        // ── Phase 1: Fast path — Google Books + Bookcover in parallel (~300-800ms) ──
+        const gbUrl = `${_gb}/?q=isbn:${encodeURIComponent(compact)}&maxResults=5`;
+        const gbLangUrl = preferredLang
+          ? `${_gb}/?q=isbn:${encodeURIComponent(compact)}&langRestrict=${encodeURIComponent(preferredLang)}&maxResults=5`
+          : null;
+        const bcUrl = `https://bookcover.longitood.com/bookcover/${encodeURIComponent(compact)}`;
+
+        const phase1Urls = [gbUrl, gbLangUrl, bcUrl].filter(Boolean);
+        const phase1 = await Promise.allSettled(phase1Urls.map(u =>
+          fetch(u).then(r => r.ok ? r.json() : null).catch(() => null)
+        ));
+
+        const gbRes = phase1[0].status === 'fulfilled' ? phase1[0].value : null;
+        const gbLangRes = gbLangUrl ? (phase1[1].status === 'fulfilled' ? phase1[1].value : null) : null;
+        const bcIdx = gbLangUrl ? 2 : 1;
+        const bcCover = (phase1[bcIdx]?.status === 'fulfilled' ? phase1[bcIdx].value : null)?.url || '';
+
         const gbParsed = parseGoogleBooks(bestGbItem(gbRes));
-        const gbAltParsed = parseGoogleBooks(bestGbItem(gbAltRes));
+        const gbLangParsed = parseGoogleBooks(bestGbItem(gbLangRes));
 
-        // Parse Crossref
-        const crParsed = parseCrossref(crRes?.message?.items?.[0]);
+        const fastResult = [];
+        if (gbLangParsed) fastResult.push({ source: 'Google Books', data: gbLangParsed });
+        if (gbParsed) fastResult.push({ source: 'Google Books', data: gbParsed });
 
-        // Assemble result list, language-preferred sources first
-        const resultList = [];
-        if (gbLangParsed) resultList.push({ source: 'Google Books', data: gbLangParsed });
-        if (olParsed) resultList.push({ source: 'Open Library', data: olParsed });
-        if (olSearchParsed) resultList.push({ source: 'Open Library', data: olSearchParsed });
-        if (gbParsed) resultList.push({ source: 'Google Books', data: gbParsed });
-        if (gbAltParsed) resultList.push({ source: 'Google Books', data: gbAltParsed });
-        const gbTitleParsed = parseGoogleBooks(bestGbItem(gbTitleRes));
-        if (gbTitleParsed) resultList.push({ source: 'Google Books', data: gbTitleParsed });
-        if (crParsed) resultList.push({ source: 'Crossref', data: crParsed });
+        let merged = mergeResults(fastResult, preferredLang);
+        if (!merged.coverUrl) merged.coverUrl = bcCover || extractAnyCover(gbLangRes) || extractAnyCover(gbRes) || '';
+        if (merged.category) merged.category = translateCategory(merged.category);
 
-        const merged = mergeResults(resultList, preferredLang);
+        // Title + author is enough to show immediately; category filled in background
+        const hasEnough = Boolean(merged.title && merged.authors.length);
 
-        // Translate English categories to Chinese for CJK books
-        if (merged.category && merged.lang) {
-          merged.category = translateCategory(merged.category, merged.lang);
+        if (hasEnough) {
+          // ✅ Fast path — show results immediately, enrich in background
+          applyToForm(merged);
+
+          // Background enrichment (fills gaps without blocking user)
+          (async () => {
+            try {
+              const olSearchUrl = `https://openlibrary.org/search.json?isbn=${encodeURIComponent(compact)}&fields=title,author_name,subject,first_publish_year,cover_i,language&limit=3`;
+              const enrichUrls = [olSearchUrl];
+              if (altIsbn) enrichUrls.push(`${_gb}/?q=isbn:${encodeURIComponent(altIsbn)}&maxResults=3`);
+              const enrichRes = await Promise.allSettled(enrichUrls.map(u =>
+                fetch(u).then(r => r.ok ? r.json() : null).catch(() => null)
+              ));
+              const olSearchParsed = parseOLSearch(enrichRes[0].status === 'fulfilled' ? enrichRes[0].value : null);
+              if (!els.category.value && olSearchParsed?.category) {
+                const cat = translateCategory(olSearchParsed.category);
+                if (cat) { els.category.value = cat; markAutoFilled('category'); }
+              }
+              if (!els.publishedYear.value && olSearchParsed?.year) {
+                els.publishedYear.value = olSearchParsed.year; markAutoFilled('publishedYear');
+              }
+              if (!els.manualCard.dataset.pendingCoverUrl) {
+                const fallback = olSearchParsed?.coverUrl || '';
+                if (fallback) els.manualCard.dataset.pendingCoverUrl = fallback;
+              }
+            } catch (_) {}
+          })();
+
+        } else {
+          // ── Slow path: Google Books insufficient — query all sources ──
+          setNotice('warn', `正在查询更多数据源…`);
+
+          const slowUrls = [
+            `https://openlibrary.org/api/books?bibkeys=ISBN:${encodeURIComponent(compact)}&format=json&jscmd=data`,
+            `https://openlibrary.org/search.json?isbn=${encodeURIComponent(compact)}&fields=title,author_name,subject,first_publish_year,cover_i,language&limit=3`,
+            `https://api.crossref.org/works?filter=isbn:${encodeURIComponent(compact)}&rows=3`,
+            altIsbn ? `${_gb}/?q=isbn:${encodeURIComponent(altIsbn)}&maxResults=3` : null,
+            altIsbn ? `https://openlibrary.org/api/books?bibkeys=ISBN:${encodeURIComponent(altIsbn)}&format=json&jscmd=data` : null,
+            preferredLang === 'zh' ? `${_gb}/?q=isbn:${encodeURIComponent(compact)}&langRestrict=zh&printType=books&maxResults=5` : null
+          ].filter(Boolean);
+
+          const slowRes = await Promise.allSettled(slowUrls.map(u =>
+            fetch(u).then(r => r.ok ? r.json() : null).catch(() => null)
+          ));
+          const val = (i) => slowRes[i]?.status === 'fulfilled' ? slowRes[i].value : null;
+
+          let si = 0;
+          const olRes = val(si++);
+          const olSearchRes = val(si++);
+          const crRes = val(si++);
+          const gbAltRes = altIsbn ? val(si++) : null;
+          const olAltRes = altIsbn ? val(si++) : null;
+          const gbTitleRes = preferredLang === 'zh' ? val(si++) : null;
+
+          const olData = olRes ? (olRes[`ISBN:${compact}`] || null) : null;
+          const olAltData = olAltRes ? (olAltRes[`ISBN:${altIsbn}`] || null) : null;
+          const olParsed = parseOpenLibrary(olData) || parseOpenLibrary(olAltData);
+          const olSearchParsed = parseOLSearch(olSearchRes);
+          const gbAltParsed = parseGoogleBooks(bestGbItem(gbAltRes));
+          const gbTitleParsed = parseGoogleBooks(bestGbItem(gbTitleRes));
+          const crParsed = parseCrossref(crRes?.message?.items?.[0]);
+
+          const allResults = [...fastResult];
+          if (olParsed) allResults.push({ source: 'Open Library', data: olParsed });
+          if (olSearchParsed) allResults.push({ source: 'Open Library', data: olSearchParsed });
+          if (gbAltParsed) allResults.push({ source: 'Google Books', data: gbAltParsed });
+          if (gbTitleParsed) allResults.push({ source: 'Google Books', data: gbTitleParsed });
+          if (crParsed) allResults.push({ source: 'Crossref', data: crParsed });
+
+          merged = mergeResults(allResults, preferredLang);
+          if (!merged.coverUrl) merged.coverUrl = bcCover || extractAnyCover(gbAltRes) || extractAnyCover(gbTitleRes) || '';
+          if (!merged.coverUrl) merged.coverUrl = `https://covers.openlibrary.org/b/isbn/${compact}-M.jpg`;
+          if (merged.category) merged.category = translateCategory(merged.category);
+          applyToForm(merged);
         }
-
-        // Cover fallback: aggressively search ALL GB results for any thumbnail
-        if (!merged.coverUrl) {
-          merged.coverUrl = extractAnyCover(gbLangRes) || extractAnyCover(gbRes) || extractAnyCover(gbAltRes) || extractAnyCover(gbTitleRes) || '';
-        }
-        // Final cover fallback: OpenLibrary ISBN cover (may return placeholder but worth trying)
-        if (!merged.coverUrl && compact) {
-          merged.coverUrl = `https://covers.openlibrary.org/b/isbn/${compact}-M.jpg`;
-        }
-
-        // Apply merged data to form fields
-        if (merged.title) els.title.value = merged.title;
-        if (merged.authors.length) els.author.value = merged.authors.join(', ');
-        if (merged.category && !els.category.value) els.category.value = merged.category;
-        if (merged.year && !els.publishedYear.value) els.publishedYear.value = merged.year;
-        if (merged.description && els.description && !els.description.value) els.description.value = merged.description;
-        // Mark auto-filled fields with highlight
-        markAutoFilled('title', 'author', 'category', 'publishedYear');
-        if (merged.coverUrl) els.manualCard.dataset.pendingCoverUrl = merged.coverUrl;
-        if (merged.lang) els.manualCard.dataset.bookLang = merged.lang;
-        if (merged.sources.length) els.manualCard.dataset.bookSources = merged.sources.join(' / ');
 
         const titleFilled = Boolean(els.title.value);
         const anyFilled = Boolean(els.title.value || els.author.value || els.category.value || els.publishedYear.value);
@@ -1772,6 +2743,7 @@
       }
     }
 
+    function showToast(text) { showScanToast(text); }
     function showScanToast(text) {
       const existing = document.querySelector('.scan-toast');
       if (existing) existing.remove();
@@ -1790,7 +2762,23 @@
           el.addEventListener('input', function handler() { el.classList.remove('auto-filled'); el.removeEventListener('input', handler); }, { once: true });
         }
       });
+      // Show clear button if any field was auto-filled
+      if (els.clearFieldsBtn) els.clearFieldsBtn.style.display = '';
     }
+
+    // Clear all pre-filled fields
+    els.clearFieldsBtn.onclick = () => {
+      ['title', 'author', 'category', 'publishedYear'].forEach(id => {
+        if (els[id]) { els[id].value = ''; els[id].classList.remove('auto-filled'); }
+      });
+      if (els.description) els.description.value = '';
+      delete els.manualCard.dataset.pendingCoverUrl;
+      delete els.manualCard.dataset.bookLang;
+      delete els.manualCard.dataset.bookSources;
+      els.clearFieldsBtn.style.display = 'none';
+      lookupCompleted = false;
+      els.manualNotice.innerHTML = makeNotice('warn', '已清空预填信息，请手动输入。');
+    };
 
     function handleScanResult(rawValue) {
       stopScanner();
@@ -1802,16 +2790,179 @@
           els.searchInput.value = isbn;
           setPage('search');
           render();
-          els.scanNotice.innerHTML = makeNotice('ok', `已扫码搜索 ISBN：${escapeHtml(isbn)}`);
+          els.scanNotice.innerHTML = makeNotice('ok', `已扫码搜索 ISBN：${isbn}`);
           return;
         }
         els.isbn.value = isbn;
         els.isbn.classList.add('auto-filled');
         fillBookMetaByIsbn(isbn, 'scan');
       } else {
-        els.scanNotice.innerHTML = makeNotice('warn', `识别到条码但非 ISBN 格式（${escapeHtml(rawValue)}），请手动录入 ISBN。`);
+        els.scanNotice.innerHTML = makeNotice('warn', `识别到条码但非 ISBN 格式（${rawValue}），请手动录入 ISBN。`);
         setEntryMode('manual');
       }
+    }
+
+    let torchOn = false;
+    const BEST_CAM_KEY = 'lib:best-camera:v1';
+
+    // Select the best camera for barcode scanning (prefer macro/shortest focus distance)
+    // Caches result in localStorage so subsequent scans are instant.
+    async function pickBestCamera() {
+      // Return cached camera if available
+      const cached = localStorage.getItem(BEST_CAM_KEY);
+      if (cached) {
+        try {
+          const { deviceId } = JSON.parse(cached);
+          // Verify it still exists
+          const devices = await navigator.mediaDevices.enumerateDevices();
+          if (devices.some(d => d.deviceId === deviceId)) return { deviceId, fromCache: true };
+        } catch (_) {}
+        localStorage.removeItem(BEST_CAM_KEY);
+      }
+
+      try {
+        // First get permission with any rear camera
+        const tempStream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: { ideal: 'environment' } }
+        });
+        tempStream.getTracks().forEach(t => t.stop());
+
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        const videoCams = devices.filter(d => d.kind === 'videoinput');
+        if (videoCams.length <= 1) {
+          const id = videoCams[0]?.deviceId || null;
+          if (id) localStorage.setItem(BEST_CAM_KEY, JSON.stringify({ deviceId: id }));
+          return { deviceId: id, fromCache: false };
+        }
+
+        // Probe each camera for capabilities (focus distance, torch, etc.)
+        let best = null;
+        let bestScore = -Infinity;
+        for (const cam of videoCams) {
+          try {
+            const probe = await navigator.mediaDevices.getUserMedia({ video: { deviceId: { exact: cam.deviceId } } });
+            const track = probe.getVideoTracks()[0];
+            const caps = track.getCapabilities ? track.getCapabilities() : {};
+            probe.getTracks().forEach(t => t.stop());
+
+            const label = (cam.label || '').toLowerCase();
+            const facing = caps.facingMode || [];
+
+            // Skip front-facing cameras
+            if (facing.includes('user') || label.includes('front') || label.includes('facetime')) continue;
+
+            let score = 0;
+            if (caps.focusDistance && caps.focusDistance.min !== undefined) {
+              score += Math.max(0, 100 - (caps.focusDistance.min * 500));
+            }
+            if (label.includes('ultra') || label.includes('wide') || label.includes('macro') || label.includes('0.5')) score += 50;
+            if (caps.torch) score += 10;
+            if (caps.width && caps.width.max) score += caps.width.max / 10000;
+            if (facing.includes('environment') || label.includes('back') || label.includes('rear')) score += 20;
+
+            if (score > bestScore) { bestScore = score; best = cam.deviceId; }
+          } catch (_) {}
+        }
+        if (best) localStorage.setItem(BEST_CAM_KEY, JSON.stringify({ deviceId: best }));
+        return { deviceId: best, fromCache: false };
+      } catch (_) {
+        return { deviceId: null, fromCache: false };
+      }
+    }
+
+    // Toggle flashlight
+    function toggleTorch() {
+      if (!scannerStream) return;
+      const track = scannerStream.getVideoTracks()[0];
+      if (!track) return;
+      const caps = track.getCapabilities ? track.getCapabilities() : {};
+      if (!caps.torch) {
+        els.scanNotice.innerHTML = makeNotice('warn', '该摄像头不支持闪光灯');
+        return;
+      }
+      torchOn = !torchOn;
+      track.applyConstraints({ advanced: [{ torch: torchOn }] }).catch(() => { torchOn = false; });
+      els.torchBtn.textContent = torchOn ? '🔦 开' : '🔦 关';
+      els.torchBtn.classList.toggle('active', torchOn);
+    }
+
+    els.torchBtn.onclick = toggleTorch;
+
+    // Pro mode panel
+    let proVisible = false;
+    function closePro() {
+      proVisible = false;
+      els.proPanelBox.style.display = 'none';
+      els.proBackdrop.style.display = 'none';
+      els.proBtn.classList.remove('active');
+    }
+    els.proBackdrop.onclick = closePro;
+
+    // Switch camera live (no restart needed for preview, restart for scanning)
+    async function switchToCamera(deviceId) {
+      localStorage.setItem(BEST_CAM_KEY, JSON.stringify({ deviceId }));
+      // Restart scanner with new camera
+      stopScanner();
+      proVisible = false;
+      await startScanner();
+    }
+
+    els.proBtn.onclick = async () => {
+      proVisible = !proVisible;
+      els.proPanelBox.style.display = proVisible ? '' : 'none';
+      els.proBackdrop.style.display = proVisible ? '' : 'none';
+      els.proBtn.classList.toggle('active', proVisible);
+      if (!proVisible) return;
+
+      // Build camera chips (rear cameras only, friendly labels)
+      try {
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        const cams = devices.filter(d => {
+          if (d.kind !== 'videoinput') return false;
+          const l = (d.label || '').toLowerCase();
+          return !l.includes('front') && !l.includes('facetime') && !l.includes('selfie') && !l.includes('前置');
+        });
+        const currentDeviceId = scannerStream?.getVideoTracks()[0]?.getSettings?.()?.deviceId;
+        els.proCameraChips.innerHTML = cams.map((c, i) => {
+          const raw = c.label || '';
+          let label = raw;
+          const rl = raw.toLowerCase();
+          if (rl.includes('ultra wide') || rl.includes('超广角')) label = '超广角';
+          else if (rl.includes('telephoto') || rl.includes('长焦')) label = '长焦';
+          else if (rl.includes('wide') || rl.includes('广角')) label = '主摄';
+          else if (rl.includes('back') || rl.includes('rear') || rl.includes('后置')) label = `后置${i + 1}`;
+          else if (!raw) label = `镜头${i + 1}`;
+          const isActive = c.deviceId === currentDeviceId;
+          return `<div class="pro-cam-chip ${isActive ? 'active' : ''}" data-cam-id="${c.deviceId}">${label}</div>`;
+        }).join('');
+
+        // Click to switch camera immediately
+        els.proCameraChips.querySelectorAll('.pro-cam-chip').forEach(chip => {
+          chip.onclick = () => {
+            if (chip.classList.contains('active')) { closePro(); return; }
+            switchToCamera(chip.dataset.camId);
+          };
+        });
+      } catch (_) {}
+    };
+
+    function showCameraDetectAnim() {
+      els.scannerBox.style.display = 'block';
+      els.scannerVideo.style.display = 'none';
+      const overlay = document.createElement('div');
+      overlay.id = 'camDetectOverlay';
+      overlay.innerHTML = `
+        <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:180px;background:var(--bg);border-radius:14px;gap:12px">
+          <div style="font-size:48px;animation:camBounce 1.2s ease-in-out infinite">🔍📷</div>
+          <div style="color:var(--muted);font-size:14px;font-weight:600">正在寻找最佳镜头…</div>
+          <div style="color:var(--muted);font-size:12px;opacity:.7">首次使用需要检测，之后会记住</div>
+        </div>`;
+      els.scannerBox.appendChild(overlay);
+    }
+    function hideCameraDetectAnim() {
+      els.scannerVideo.style.display = '';
+      const overlay = document.getElementById('camDetectOverlay');
+      if (overlay) overlay.remove();
     }
 
     async function startScanner() {
@@ -1820,29 +2971,95 @@
         return;
       }
 
-      els.scanNotice.innerHTML = makeNotice('warn', '正在申请摄像头权限…');
+      torchOn = false;
+      els.torchBtn.textContent = '🔦 关';
+      els.torchBtn.classList.remove('active');
+
+      // Check if we need first-time camera detection
+      const hasCachedCam = !!localStorage.getItem(BEST_CAM_KEY);
+      if (!hasCachedCam) {
+        showCameraDetectAnim();
+        render();
+      }
+
+      // Smart camera selection — prefer macro/shortest focus distance (cached after first use)
+      const { deviceId: bestDeviceId, fromCache } = await pickBestCamera();
+      if (!hasCachedCam) hideCameraDetectAnim();
+
+      const videoConstraints = bestDeviceId
+        ? { deviceId: { exact: bestDeviceId }, width: { ideal: 1920 }, height: { ideal: 1080 } }
+        : { facingMode: { ideal: 'environment' }, width: { ideal: 1920 }, height: { ideal: 1080 } };
 
       // Path 1: Native BarcodeDetector (Chrome, iOS 17.4+)
       if ('BarcodeDetector' in window) {
         try {
-          const stream = await navigator.mediaDevices.getUserMedia({
-            video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } }
-          });
+          const stream = await navigator.mediaDevices.getUserMedia({ video: videoConstraints });
           scannerStream = stream;
           const video = els.scannerVideo;
           video.srcObject = stream;
           await video.play();
           scannerActive = true;
           els.scannerBox.style.display = 'block';
+          els.formFields.style.display = 'none'; // Hide form while scanning
           render();
-          els.scanNotice.innerHTML = makeNotice('warn', '将书背面条码对准框内…');
+
+          // Try to enable continuous autofocus for barcode scanning
+          const track = stream.getVideoTracks()[0];
+          const caps = track.getCapabilities ? track.getCapabilities() : {};
+          if (caps.focusMode && caps.focusMode.includes('continuous')) {
+            try { await track.applyConstraints({ advanced: [{ focusMode: 'continuous' }] }); } catch (_) {}
+          }
+
+          // Show torch button only if supported
+          els.torchBtn.style.display = caps.torch ? '' : 'none';
+
+          els.scanNotice.innerHTML = '';
+
           const detector = new BarcodeDetector({ formats: ['ean_13', 'ean_8', 'code_128', 'code_39', 'itf', 'upc_a', 'upc_e', 'qr_code'] });
+          // ROI canvas — crop center strip for faster/more accurate barcode detection
+          const roiCanvas = document.createElement('canvas');
+          const roiCtx = roiCanvas.getContext('2d');
+          let scanFlip = false;
+          // 6-second hint timer
+          const scanHintTimer = setTimeout(() => {
+            if (scannerActive) {
+              els.scanNotice.innerHTML = makeNotice('warn', '💡 条码识别较慢？试试对准书背面的 ISBN 数字（978 开头），或手动输入。');
+            }
+          }, 6000);
+
           const scan = async () => {
             if (!scannerActive) return;
             try {
               if (video.readyState >= 2) {
-                const barcodes = await detector.detect(video);
-                if (barcodes.length > 0) { handleScanResult(barcodes[0].rawValue); return; }
+                let barcodes;
+                if (!scanFlip) {
+                  // Scan center strip only (where the aim box is) — faster, more focused
+                  const vw = video.videoWidth, vh = video.videoHeight;
+                  const cropH = Math.round(vh * 0.3); // center 30% height
+                  const cropY = Math.round((vh - cropH) / 2);
+                  roiCanvas.width = vw; roiCanvas.height = cropH;
+                  roiCtx.drawImage(video, 0, cropY, vw, cropH, 0, 0, vw, cropH);
+                  barcodes = await detector.detect(roiCanvas);
+                } else {
+                  // Every other frame: scan full frame as fallback
+                  barcodes = await detector.detect(video);
+                }
+                scanFlip = !scanFlip;
+                if (barcodes.length > 0) {
+                  hapticScan();
+                  // Freeze-frame effect: pause video visually + flash
+                  video.classList.add('freeze');
+                  els.scannerFlash.classList.add('active');
+                  video.pause();
+                  // Hold the freeze briefly, then process
+                  setTimeout(() => {
+                    handleScanResult(barcodes[0].rawValue);
+                    // Clean up freeze state (stopScanner or next startScanner will also reset)
+                    video.classList.remove('freeze');
+                    els.scannerFlash.classList.remove('active');
+                  }, 350);
+                  return;
+                }
               }
             } catch (_) {}
             scannerAnimFrame = requestAnimationFrame(scan);
@@ -1869,13 +3086,44 @@
         zxingReader = new window.ZXingBrowser.BrowserMultiFormatReader();
         scannerActive = true;
         els.scannerBox.style.display = 'block';
+        els.formFields.style.display = 'none'; // Hide form while scanning
         render();
-        els.scanNotice.innerHTML = makeNotice('warn', '将书背面条码对准框内…');
-        // decodeFromVideoDevice manages camera lifecycle; null = prefer rear/environment camera
+        els.scanNotice.innerHTML = '';
+        // 6-second hint timer for ZXing path
+        setTimeout(() => {
+          if (scannerActive) {
+            els.scanNotice.innerHTML = makeNotice('warn', '💡 条码识别较慢？试试对准书背面的 ISBN 数字（978 开头），或手动输入。');
+          }
+        }, 6000);
+        // Use best camera if found, otherwise let ZXing pick
         zxingScanControl = await zxingReader.decodeFromVideoDevice(
-          null, els.scannerVideo,
-          (result, err) => { if (result && result.text) handleScanResult(result.text); }
+          bestDeviceId || null, els.scannerVideo,
+          (result, err) => {
+            if (result && result.text) {
+              hapticScan();
+              // Freeze-frame effect for ZXing path
+              const vid = els.scannerVideo;
+              vid.classList.add('freeze');
+              els.scannerFlash.classList.add('active');
+              vid.pause();
+              setTimeout(() => {
+                handleScanResult(result.text);
+                vid.classList.remove('freeze');
+                els.scannerFlash.classList.remove('active');
+              }, 350);
+            }
+          }
         );
+        // Try to show torch button for ZXing path
+        if (els.scannerVideo.srcObject) {
+          const track = els.scannerVideo.srcObject.getVideoTracks()[0];
+          scannerStream = els.scannerVideo.srcObject;
+          const caps = track?.getCapabilities ? track.getCapabilities() : {};
+          els.torchBtn.style.display = caps.torch ? '' : 'none';
+          if (caps.focusMode && caps.focusMode.includes('continuous')) {
+            try { await track.applyConstraints({ advanced: [{ focusMode: 'continuous' }] }); } catch (_) {}
+          }
+        }
       } catch (e) {
         const msg = e.name === 'NotAllowedError' ? '摄像头权限被拒绝，请在浏览器设置中允许访问摄像头后重试。'
           : e.name === 'NotFoundError' ? '未检测到摄像头设备。'
@@ -1888,7 +3136,54 @@
     els.scannerCancelBtn.onclick = stopScanner;
     // ── End Scanner ───────────────────────────────────────────────────────────
 
+    // One-time migration: re-translate all existing categories to Chinese
+    (function migrateCategories() {
+      const MIGRATION_KEY = 'lib:cat-migration:v3';
+      if (localStorage.getItem(MIGRATION_KEY)) return;
+      const books = loadBooks();
+      let changed = false;
+      for (const b of books) {
+        if (b.category) {
+          const translated = translateCategory(b.category);
+          if (translated !== b.category) {
+            b.category = translated;
+            b.updatedAt = new Date().toISOString();
+            changed = true;
+          }
+        }
+      }
+      if (changed) saveBooks(books);
+      localStorage.setItem(MIGRATION_KEY, Date.now().toString());
+    })();
+
     render();
+
+    // One-time migration: fetch missing/placeholder covers from Bookcover API
+    (async function migrateCovers() {
+      const COVER_MIG_KEY = 'lib:cover-migration:v2';
+      if (localStorage.getItem(COVER_MIG_KEY)) return;
+      const books = loadBooks();
+      // Need cover: no coverUrl, OR Google Books placeholder URL (often fake "image not available")
+      const isGBPlaceholder = (url) => url && url.includes('books.google.com') && url.includes('ACAAJ');
+      const needCover = books.filter(b => b.isbn && (!b.coverUrl || isGBPlaceholder(b.coverUrl)));
+      if (!needCover.length) { localStorage.setItem(COVER_MIG_KEY, Date.now().toString()); return; }
+      let changed = false;
+      for (const b of needCover) {
+        const isbn = String(b.isbn).replace(/[^0-9Xx]/g, '');
+        if (!isbn) continue;
+        try {
+          const res = await fetch(`https://bookcover.longitood.com/bookcover/${encodeURIComponent(isbn)}`);
+          if (res.ok) {
+            const data = await res.json();
+            if (data.url) { b.coverUrl = data.url; b.updatedAt = new Date().toISOString(); changed = true; }
+          }
+        } catch (_) {}
+        // Small delay to be nice to the API
+        await new Promise(r => setTimeout(r, 300));
+      }
+      if (changed) { saveBooks(books); render(); }
+      localStorage.setItem(COVER_MIG_KEY, Date.now().toString());
+    })();
 
     // Register Service Worker
     if ('serviceWorker' in navigator) {
