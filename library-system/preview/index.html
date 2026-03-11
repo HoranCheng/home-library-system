@@ -297,6 +297,36 @@
     .setting-arrow { color:var(--muted); font-size:16px; }
     pre { margin:12px 0 0; padding:12px; border-radius:12px; background:#1E1A15; color:#D4CBB8; white-space:pre-wrap; word-break:break-word; font-size:12px; }
 
+    /* ── Auth UI ── */
+    .auth-card { background:var(--card); border-radius:16px; padding:20px; margin-bottom:14px; box-shadow:var(--shadow); }
+    .auth-card .auth-title { font-size:16px; font-weight:700; margin-bottom:4px; }
+    .auth-card .auth-sub { font-size:12px; color:var(--muted); margin-bottom:16px; }
+    .auth-card .auth-field { margin-bottom:12px; }
+    .auth-card .auth-field label { display:block; font-size:12px; color:var(--muted); margin-bottom:4px; font-weight:600; }
+    .auth-card .auth-field input { width:100%; padding:10px 12px; border:1px solid var(--line); border-radius:10px; font-size:14px; background:var(--surface); color:var(--text); outline:none; }
+    .auth-card .auth-field input:focus { border-color:var(--accent); }
+    .auth-btn { width:100%; padding:12px; border:none; border-radius:12px; font-size:14px; font-weight:700; cursor:pointer; transition:all .2s; }
+    .auth-btn.primary { background:var(--accent); color:#fff; }
+    .auth-btn.primary:disabled { opacity:.5; cursor:not-allowed; }
+    .auth-btn.secondary { background:var(--surface); color:var(--text); border:1px solid var(--line); margin-top:8px; }
+    .auth-btn.google { background:#fff; color:#333; border:1px solid #ddd; margin-top:8px; display:flex; align-items:center; justify-content:center; gap:8px; }
+    .auth-btn.danger { background:var(--danger); color:#fff; margin-top:8px; }
+    .auth-toggle { text-align:center; margin-top:14px; font-size:13px; color:var(--muted); }
+    .auth-toggle a { color:var(--accent); text-decoration:none; font-weight:600; cursor:pointer; }
+    .auth-error { background:#FFF0F0; color:var(--danger); padding:10px 12px; border-radius:8px; font-size:13px; margin-bottom:12px; display:none; }
+    .auth-user-card { display:flex; align-items:center; gap:14px; }
+    .auth-avatar { width:48px; height:48px; border-radius:14px; background:var(--accent-light); display:flex; align-items:center; justify-content:center; font-size:24px; flex-shrink:0; overflow:hidden; }
+    .auth-avatar img { width:100%; height:100%; object-fit:cover; }
+    .auth-user-info { flex:1; }
+    .auth-user-name { font-size:15px; font-weight:700; }
+    .auth-user-email { font-size:12px; color:var(--muted); margin-top:2px; }
+    .sync-status { display:flex; align-items:center; gap:6px; font-size:12px; color:var(--muted); margin-top:12px; padding:10px 12px; background:var(--surface); border-radius:8px; }
+    .sync-dot { width:6px; height:6px; border-radius:50%; flex-shrink:0; }
+    .sync-dot.synced { background:var(--ok); }
+    .sync-dot.syncing { background:var(--warn); animation:pulse 1s infinite; }
+    .sync-dot.error { background:var(--danger); }
+    @keyframes pulse { 0%,100% { opacity:1; } 50% { opacity:.4; } }
+
     /* ── Menu ── */
     .menu-wrap { position:relative; }
     .menu-btn { width:auto !important; padding:8px 10px !important; border-radius:10px !important; background:var(--surface); color:var(--muted); border:1px solid var(--line); font-size:18px; line-height:1; cursor:pointer; }
@@ -603,6 +633,169 @@
     const GBOOKS_PROXY = 'https://maomao-books-proxy.henrycdev26.workers.dev';
     // ────────────────────────────────────────────────────────
 
+    // ── Auth & Sync ──────────────────────────────────────────────────────
+    const AUTH_TOKEN_KEY = 'lib:auth:token:v1';
+    const AUTH_USER_KEY = 'lib:auth:user:v1';
+    const SYNC_LAST_KEY = 'lib:sync:last:v1';
+    const API_BASE = GBOOKS_PROXY; // same Worker
+
+    // Auth state
+    const auth = {
+      token: localStorage.getItem(AUTH_TOKEN_KEY) || null,
+      user: (() => { try { return JSON.parse(localStorage.getItem(AUTH_USER_KEY)); } catch { return null; } })(),
+      isLoggedIn() { return !!this.token && !!this.user; },
+      setSession(token, user) {
+        this.token = token;
+        this.user = user;
+        localStorage.setItem(AUTH_TOKEN_KEY, token);
+        localStorage.setItem(AUTH_USER_KEY, JSON.stringify(user));
+      },
+      clear() {
+        this.token = null;
+        this.user = null;
+        localStorage.removeItem(AUTH_TOKEN_KEY);
+        localStorage.removeItem(AUTH_USER_KEY);
+        localStorage.removeItem(SYNC_LAST_KEY);
+      },
+    };
+
+    // API helper
+    async function apiFetch(path, options = {}) {
+      const headers = { 'Content-Type': 'application/json', ...options.headers };
+      if (auth.token) headers['Authorization'] = `Bearer ${auth.token}`;
+      const resp = await fetch(`${API_BASE}${path}`, { ...options, headers });
+      const data = await resp.json();
+      if (!resp.ok) throw { status: resp.status, ...data };
+      return data;
+    }
+
+    // Sync manager
+    const syncManager = {
+      _timer: null,
+      _syncing: false,
+
+      async push() {
+        if (!auth.isLoggedIn() || this._syncing) return;
+        this._syncing = true;
+        try {
+          const books = loadBooks();
+          const presets = loadLocationPresets();
+          const lastSync = localStorage.getItem(SYNC_LAST_KEY) || null;
+          await apiFetch('/sync/push', {
+            method: 'POST',
+            body: JSON.stringify({ lastSyncAt: lastSync, books, locationPresets: presets }),
+          });
+          localStorage.setItem(SYNC_LAST_KEY, new Date().toISOString());
+          this._updateUI('synced');
+        } catch (e) {
+          console.warn('Sync push failed:', e);
+          if (e.status === 401) { auth.clear(); render(); }
+          this._updateUI('error');
+        } finally {
+          this._syncing = false;
+        }
+      },
+
+      async pull() {
+        if (!auth.isLoggedIn() || this._syncing) return;
+        this._syncing = true;
+        try {
+          const lastSync = localStorage.getItem(SYNC_LAST_KEY) || null;
+          const data = await apiFetch('/sync/pull', {
+            method: 'POST',
+            body: JSON.stringify({ lastSyncAt: lastSync }),
+          });
+
+          if (data.books && data.books.length > 0) {
+            const localBooks = loadBooks();
+            const localMap = new Map(localBooks.map(b => [b.id, b]));
+
+            for (const remote of data.books) {
+              const local = localMap.get(remote.id);
+              if (remote._deleted) {
+                localMap.delete(remote.id);
+              } else if (!local || (remote.updatedAt > (local.updatedAt || ''))) {
+                localMap.set(remote.id, remote);
+              }
+            }
+            const merged = Array.from(localMap.values());
+            localStorage.setItem(BOOKS_KEY, JSON.stringify(merged));
+            localStorage.setItem(META_KEY, JSON.stringify({ schemaVersion: 1, updatedAt: new Date().toISOString() }));
+          }
+
+          if (data.locationPresets) {
+            localStorage.setItem(LOCATION_PRESETS_KEY, JSON.stringify(data.locationPresets));
+          }
+
+          localStorage.setItem(SYNC_LAST_KEY, data.syncedAt || new Date().toISOString());
+          this._updateUI('synced');
+          render();
+        } catch (e) {
+          console.warn('Sync pull failed:', e);
+          if (e.status === 401) { auth.clear(); render(); }
+          this._updateUI('error');
+        } finally {
+          this._syncing = false;
+        }
+      },
+
+      schedulePush() {
+        if (!auth.isLoggedIn()) return;
+        clearTimeout(this._timer);
+        this._timer = setTimeout(() => this.push(), 2000);
+        this._updateUI('syncing');
+      },
+
+      _updateUI(state) {
+        const el = document.getElementById('syncStatusDot');
+        const label = document.getElementById('syncStatusLabel');
+        if (!el || !label) return;
+        el.className = 'sync-dot ' + state;
+        const labels = { synced: '已同步', syncing: '同步中…', error: '同步失败' };
+        const lastSync = localStorage.getItem(SYNC_LAST_KEY);
+        if (state === 'synced' && lastSync) {
+          label.textContent = '已同步 · ' + new Date(lastSync).toLocaleString('zh-CN', { hour: '2-digit', minute: '2-digit' });
+        } else {
+          label.textContent = labels[state] || '';
+        }
+      },
+
+      async initialSync() {
+        if (!auth.isLoggedIn()) return;
+        await this.pull();
+        // Also push any local-only data
+        await this.push();
+      },
+    };
+
+    // Auth actions
+    async function authRegister(email, password, displayName) {
+      const data = await apiFetch('/auth/register', {
+        method: 'POST',
+        body: JSON.stringify({ email, password, displayName }),
+      });
+      auth.setSession(data.token, data.user);
+      await syncManager.initialSync();
+      render();
+    }
+
+    async function authLogin(email, password) {
+      const data = await apiFetch('/auth/login', {
+        method: 'POST',
+        body: JSON.stringify({ email, password }),
+      });
+      auth.setSession(data.token, data.user);
+      await syncManager.initialSync();
+      render();
+    }
+
+    async function authLogout() {
+      auth.clear();
+      render();
+    }
+
+    // ── End Auth & Sync ─────────────────────────────────────────────────
+
     function makeId() {
       try {
         if (globalThis.crypto && typeof globalThis.crypto.randomUUID === 'function') {
@@ -623,6 +816,8 @@
       const meta = { ...loadMeta(), schemaVersion: 1, updatedAt: new Date().toISOString() };
       localStorage.setItem(BOOKS_KEY, JSON.stringify(books));
       localStorage.setItem(META_KEY, JSON.stringify(meta));
+      // Trigger cloud sync (debounced)
+      syncManager.schedulePush();
     }
     function loadLocationPresets() {
       try { return JSON.parse(localStorage.getItem(LOCATION_PRESETS_KEY) || '[]'); }
@@ -1134,7 +1329,61 @@
       // Settings — user-friendly
       const bookCount = books.length;
       const lastUpdated = loadMeta().updatedAt ? new Date(loadMeta().updatedAt).toLocaleDateString('zh-CN') : '—';
-      els.settingsRows.innerHTML = `
+
+      // Auth section
+      let authHtml = '';
+      if (auth.isLoggedIn()) {
+        const u = auth.user;
+        const avatarInner = u.avatar_url
+          ? `<img src="${escapeHtml(u.avatar_url)}" alt="">`
+          : (u.display_name || u.email || '?').charAt(0).toUpperCase();
+        const lastSync = localStorage.getItem(SYNC_LAST_KEY);
+        const syncTime = lastSync ? new Date(lastSync).toLocaleString('zh-CN', { hour: '2-digit', minute: '2-digit' }) : '从未';
+        authHtml = `
+          <div class="auth-card">
+            <div class="auth-user-card">
+              <div class="auth-avatar">${avatarInner}</div>
+              <div class="auth-user-info">
+                <div class="auth-user-name">${escapeHtml(u.display_name || '用户')}</div>
+                <div class="auth-user-email">${escapeHtml(u.email || '')}</div>
+              </div>
+            </div>
+            <div class="sync-status">
+              <span class="sync-dot synced" id="syncStatusDot"></span>
+              <span id="syncStatusLabel">已同步 · ${escapeHtml(syncTime)}</span>
+            </div>
+            <button class="auth-btn secondary" onclick="syncManager.push()" style="margin-top:10px">🔄 立即同步</button>
+            <button class="auth-btn secondary" onclick="if(confirm('确定退出登录？本地数据不会丢失。'))authLogout()" style="margin-top:6px;color:var(--danger)">退出登录</button>
+          </div>`;
+      } else {
+        authHtml = `
+          <div class="auth-card" id="authCard">
+            <div class="auth-title" id="authFormTitle">登录</div>
+            <div class="auth-sub">登录后可在多设备间同步藏书数据</div>
+            <div class="auth-error" id="authError"></div>
+            <div id="authFormFields">
+              <div class="auth-field" id="authNameField" style="display:none">
+                <label>昵称</label>
+                <input type="text" id="authName" placeholder="你的昵称" autocomplete="name">
+              </div>
+              <div class="auth-field">
+                <label>邮箱</label>
+                <input type="email" id="authEmail" placeholder="your@email.com" autocomplete="email">
+              </div>
+              <div class="auth-field">
+                <label>密码</label>
+                <input type="password" id="authPassword" placeholder="至少 8 位，包含字母和数字" autocomplete="current-password">
+              </div>
+            </div>
+            <button class="auth-btn primary" id="authSubmitBtn" onclick="handleAuthSubmit()">登录</button>
+            <div class="auth-toggle">
+              <span id="authToggleText">还没有账号？</span>
+              <a id="authToggleLink" onclick="toggleAuthMode()">注册</a>
+            </div>
+          </div>`;
+      }
+
+      els.settingsRows.innerHTML = authHtml + `
         <div class="card" style="margin-bottom:14px;padding:16px">
           <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px">
             <div style="width:44px;height:44px;border-radius:12px;background:var(--accent-light);display:flex;align-items:center;justify-content:center;font-size:22px">📚</div>
@@ -1144,7 +1393,9 @@
             </div>
           </div>
           <div style="font-size:12px;color:var(--muted);background:var(--surface);padding:10px 12px;border-radius:8px">
-            💡 数据保存在你的浏览器本地，建议定期备份。换设备时需要导出再导入。
+            ${auth.isLoggedIn()
+              ? '☁️ 数据已开启云同步，会自动备份到云端。'
+              : '💡 数据保存在你的浏览器本地，建议定期备份。登录后可开启云同步。'}
           </div>
         </div>` + [
         { icon: '💾', label: '备份数据', sub: '导出完整的藏书记录', action: 'exportJson' },
@@ -1768,6 +2019,66 @@
         els.settingsNotice.innerHTML = makeNotice('err', `导入失败：${e.message}`);
       }
     };
+
+    // ── Auth form handlers ────────────────────────────────────────────────
+    let authIsRegisterMode = false;
+
+    function toggleAuthMode() {
+      authIsRegisterMode = !authIsRegisterMode;
+      const title = document.getElementById('authFormTitle');
+      const nameField = document.getElementById('authNameField');
+      const submitBtn = document.getElementById('authSubmitBtn');
+      const toggleText = document.getElementById('authToggleText');
+      const toggleLink = document.getElementById('authToggleLink');
+      const errorEl = document.getElementById('authError');
+      const passwordInput = document.getElementById('authPassword');
+
+      if (title) title.textContent = authIsRegisterMode ? '注册' : '登录';
+      if (nameField) nameField.style.display = authIsRegisterMode ? 'block' : 'none';
+      if (submitBtn) submitBtn.textContent = authIsRegisterMode ? '注册' : '登录';
+      if (toggleText) toggleText.textContent = authIsRegisterMode ? '已有账号？' : '还没有账号？';
+      if (toggleLink) toggleLink.textContent = authIsRegisterMode ? '登录' : '注册';
+      if (errorEl) { errorEl.style.display = 'none'; errorEl.textContent = ''; }
+      if (passwordInput) passwordInput.autocomplete = authIsRegisterMode ? 'new-password' : 'current-password';
+    }
+
+    async function handleAuthSubmit() {
+      const email = (document.getElementById('authEmail')?.value || '').trim();
+      const password = document.getElementById('authPassword')?.value || '';
+      const displayName = (document.getElementById('authName')?.value || '').trim();
+      const errorEl = document.getElementById('authError');
+      const submitBtn = document.getElementById('authSubmitBtn');
+
+      if (!email || !password) {
+        if (errorEl) { errorEl.textContent = '请输入邮箱和密码'; errorEl.style.display = 'block'; }
+        return;
+      }
+
+      if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = '请稍候…'; }
+      if (errorEl) errorEl.style.display = 'none';
+
+      try {
+        if (authIsRegisterMode) {
+          await authRegister(email, password, displayName);
+        } else {
+          await authLogin(email, password);
+        }
+      } catch (e) {
+        const msg = e.message || (authIsRegisterMode ? '注册失败' : '登录失败');
+        if (errorEl) { errorEl.textContent = msg; errorEl.style.display = 'block'; }
+      } finally {
+        if (submitBtn) {
+          submitBtn.disabled = false;
+          submitBtn.textContent = authIsRegisterMode ? '注册' : '登录';
+        }
+      }
+    }
+
+    // Auto-sync on startup
+    if (auth.isLoggedIn()) {
+      syncManager.initialSync().catch(e => console.warn('Initial sync failed:', e));
+    }
+    // ── End Auth form handlers ──────────────────────────────────────────
 
     // ── Scanner ──────────────────────────────────────────────────────────────
     let scannerStream = null;
