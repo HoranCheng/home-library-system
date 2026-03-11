@@ -8,6 +8,7 @@
   <link rel="apple-touch-icon" href="./icon-192.svg">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://unpkg.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' https: data:; connect-src 'self' https://maomao-books-proxy.henrycdev26.workers.dev https://www.googleapis.com;">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@600;700&display=swap" rel="stylesheet">
@@ -309,7 +310,7 @@
     .auth-btn.primary { background:var(--accent); color:#fff; }
     .auth-btn.primary:disabled { opacity:.5; cursor:not-allowed; }
     .auth-btn.secondary { background:var(--surface); color:var(--text); border:1px solid var(--line); margin-top:8px; }
-    .auth-btn.google { background:#fff; color:#333; border:1px solid #ddd; margin-top:8px; display:flex; align-items:center; justify-content:center; gap:8px; }
+    /* .auth-btn.google reserved for future Google Sign-In */
     .auth-btn.danger { background:var(--danger); color:#fff; margin-top:8px; }
     .auth-toggle { text-align:center; margin-top:14px; font-size:13px; color:var(--muted); }
     .auth-toggle a { color:var(--accent); text-decoration:none; font-weight:600; cursor:pointer; }
@@ -687,7 +688,15 @@
             body: JSON.stringify({ books, locationPresets: presets }),
           });
           localStorage.setItem(SYNC_LAST_KEY, new Date().toISOString());
-          this._updateUI('synced', `已同步 ${resp.accepted || 0} 本书到云端`);
+
+          // Handle conflicts: if server has newer versions, pull them
+          if (resp.conflicts && resp.conflicts.length > 0) {
+            this._updateUI('syncing', `检测到 ${resp.conflicts.length} 条冲突，正在同步云端版本…`);
+            await this._pullOnly();
+            this._updateUI('synced', `${resp.accepted || 0} 本已上传 · ${resp.conflicts.length} 本与云端冲突，已保留云端较新版本`);
+          } else {
+            this._updateUI('synced', `已同步 ${resp.accepted || 0} 本书到云端`);
+          }
           return resp;
         } catch (e) {
           console.warn('Sync push failed:', e);
@@ -699,50 +708,85 @@
         }
       },
 
+      /** Internal pull without syncing guard (for use after push conflicts) */
+      async _pullOnly() {
+        try {
+          const data = await apiFetch('/sync/pull', {
+            method: 'POST',
+            body: JSON.stringify({}),
+          });
+          this._mergeFromCloud(data);
+        } catch (e) {
+          console.warn('Conflict pull failed:', e);
+        }
+      },
+
+      /** Merge cloud data into localStorage */
+      _mergeFromCloud(data) {
+        const localBooks = loadBooks();
+        const localMap = new Map(localBooks.map(b => [b.id, b]));
+        let cloudNew = 0, cloudDeleted = 0, cloudUpdated = 0;
+
+        if (data.books && data.books.length > 0) {
+          for (const remote of data.books) {
+            const local = localMap.get(remote.id);
+            if (remote._deleted) {
+              // Tombstone: delete from local if exists and remote delete is newer
+              if (local) {
+                if (remote.updatedAt >= (local.updatedAt || '')) {
+                  localMap.delete(remote.id);
+                  cloudDeleted++;
+                }
+                // else: local edit is newer than delete, keep local
+              }
+            } else if (!local) {
+              localMap.set(remote.id, remote);
+              cloudNew++;
+            } else if (remote.updatedAt > (local.updatedAt || '')) {
+              localMap.set(remote.id, remote);
+              cloudUpdated++;
+            }
+          }
+        }
+
+        const merged = Array.from(localMap.values());
+        localStorage.setItem(BOOKS_KEY, JSON.stringify(merged));
+        localStorage.setItem(META_KEY, JSON.stringify({ schemaVersion: 1, updatedAt: new Date().toISOString() }));
+
+        if (data.locationPresets && data.locationPresets.length > 0) {
+          const localPresets = loadLocationPresets();
+          const mergedPresets = [...new Set([...localPresets, ...data.locationPresets])].slice(0, 8);
+          localStorage.setItem(LOCATION_PRESETS_KEY, JSON.stringify(mergedPresets));
+        }
+
+        localStorage.setItem(SYNC_LAST_KEY, data.syncedAt || new Date().toISOString());
+        return { total: merged.length, cloudNew, cloudDeleted, cloudUpdated };
+      },
+
       async pull(force = false) {
         if (!auth.isLoggedIn()) return;
         if (this._syncing && !force) return;
         this._syncing = true;
         this._updateUI('syncing');
         try {
-          // Always do a full pull (no incremental) to ensure completeness
+          // Full pull including tombstones
           const data = await apiFetch('/sync/pull', {
             method: 'POST',
             body: JSON.stringify({}),
           });
 
-          const localBooks = loadBooks();
-          const localMap = new Map(localBooks.map(b => [b.id, b]));
-          let cloudCount = 0;
+          const result = this._mergeFromCloud(data);
 
-          if (data.books && data.books.length > 0) {
-            for (const remote of data.books) {
-              const local = localMap.get(remote.id);
-              if (remote._deleted) {
-                localMap.delete(remote.id);
-              } else if (!local || (remote.updatedAt > (local.updatedAt || ''))) {
-                localMap.set(remote.id, remote);
-                if (!local) cloudCount++;
-              }
-            }
-          }
+          let msg = '数据已是最新';
+          const parts = [];
+          if (result.cloudNew > 0) parts.push(`${result.cloudNew} 本新书`);
+          if (result.cloudUpdated > 0) parts.push(`${result.cloudUpdated} 本已更新`);
+          if (result.cloudDeleted > 0) parts.push(`${result.cloudDeleted} 本已删除`);
+          if (parts.length > 0) msg = `从云端同步：${parts.join('、')}`;
 
-          const merged = Array.from(localMap.values());
-          localStorage.setItem(BOOKS_KEY, JSON.stringify(merged));
-          localStorage.setItem(META_KEY, JSON.stringify({ schemaVersion: 1, updatedAt: new Date().toISOString() }));
-
-          if (data.locationPresets && data.locationPresets.length > 0) {
-            // Merge: keep local presets + add cloud ones
-            const localPresets = loadLocationPresets();
-            const mergedPresets = [...new Set([...localPresets, ...data.locationPresets])].slice(0, 8);
-            localStorage.setItem(LOCATION_PRESETS_KEY, JSON.stringify(mergedPresets));
-          }
-
-          localStorage.setItem(SYNC_LAST_KEY, data.syncedAt || new Date().toISOString());
-          const msg = cloudCount > 0 ? `从云端同步了 ${cloudCount} 本新书` : '数据已是最新';
           this._updateUI('synced', msg);
           render();
-          return { merged: merged.length, newFromCloud: cloudCount };
+          return result;
         } catch (e) {
           console.warn('Sync pull failed:', e);
           if (e.status === 401) { auth.clear(); render(); }
@@ -780,17 +824,19 @@
 
       async initialSync() {
         if (!auth.isLoggedIn()) return;
-        // Step 1: Pull cloud data and merge into local
+        // Step 1: Pull cloud data (including tombstones) and merge into local
         const pullResult = await this.pull(true);
-        // Step 2: Push ALL local data (including pre-existing local books) to cloud
+        // Step 2: Push merged local data to cloud
         const pushResult = await this.push(true);
         // Show summary
         const localTotal = loadBooks().length;
         const pushed = pushResult?.accepted || 0;
-        const pulled = pullResult?.newFromCloud || 0;
+        const conflicts = pushResult?.conflicts?.length || 0;
+        const pulled = pullResult?.cloudNew || 0;
         let msg = `同步完成 · 共 ${localTotal} 本书`;
-        if (pulled > 0) msg += ` · 从云端拉取 ${pulled} 本`;
+        if (pulled > 0) msg += ` · 拉取 ${pulled} 本`;
         if (pushed > 0) msg += ` · 上传 ${pushed} 本`;
+        if (conflicts > 0) msg += ` · ${conflicts} 本冲突已处理`;
         this._updateUI('synced', msg);
       },
     };
@@ -881,7 +927,7 @@
         } catch (_) {}
       });
     }
-    function makeNotice(kind, text) { return `<div class="notice ${kind}">${text}</div>`; }
+    function makeNotice(kind, text) { return `<div class="notice ${kind}">${escapeHtml(text)}</div>`; }
 
     // ── Haptic feedback helpers ──────────────────────────────────────────
     function hapticScan() {
@@ -1962,7 +2008,7 @@
           setPage('home', { mode: 'entry' });
           window.scrollTo({ top: 0, behavior: 'smooth' });
           setTimeout(() => els.title.focus(), 120);
-          els.manualNotice.innerHTML = makeNotice('warn', `正在编辑《${escapeHtml(book.title || '未命名图书')}》，修改后直接保存即可。`);
+          els.manualNotice.innerHTML = makeNotice('warn', `正在编辑《${book.title || '未命名图书'}》，修改后直接保存即可。`);
           els.detailModalRoot.innerHTML = '';
         }
         return;
@@ -1975,7 +2021,7 @@
         if (!picked) return;
         const books = loadBooks().map(b => b.id === picked.id ? { ...b, status: 'in_library', updatedAt: new Date().toISOString() } : b);
         saveBooks(books);
-        els.organizeNotice.innerHTML = makeNotice('ok', `已整理入库：${escapeHtml(picked.title || '未命名图书')}`);
+        els.organizeNotice.innerHTML = makeNotice('ok', `已整理入库：${picked.title || '未命名图书'}`);
         render();
         return;
       }
@@ -2019,12 +2065,67 @@
       els.settingsNotice.innerHTML = makeNotice('ok', `已下载表格 📊 共 ${books.length} 本书`);
     };
 
+    // ── Import validation ──
+    const BOOK_FIELD_WHITELIST = new Set([
+      'id', 'isbn', 'title', 'author', 'category', 'readingStatus', 'readingProgress',
+      'publishedYear', 'location', 'description', 'notes', 'bookLang', 'coverUrl',
+      'metadataSources', 'status', 'createdAt', 'updatedAt', '_deleted',
+    ]);
+    const SAFE_URL_PROTOCOLS = new Set(['http:', 'https:', 'data:']);
+    const MAX_IMPORT_BOOKS = 5000;
+    const MAX_FIELD_LENGTH = 2000;
+
+    function isSafeUrl(str) {
+      if (!str) return true;
+      try { return SAFE_URL_PROTOCOLS.has(new URL(str).protocol); }
+      catch { return false; }
+    }
+
+    function validateAndSanitizeImport(raw) {
+      if (typeof raw !== 'object' || raw === null) throw new Error('无效的 JSON 对象');
+      if (!Array.isArray(raw.books)) throw new Error('缺少 books 数组');
+      if (!raw.meta || typeof raw.meta !== 'object') throw new Error('缺少 meta 字段');
+      if (raw.books.length > MAX_IMPORT_BOOKS) throw new Error(`书籍数量超限（最多 ${MAX_IMPORT_BOOKS} 本）`);
+
+      const sanitized = [];
+      let warnings = 0;
+      for (let i = 0; i < raw.books.length; i++) {
+        const book = raw.books[i];
+        if (typeof book !== 'object' || book === null) { warnings++; continue; }
+        if (!book.id || typeof book.id !== 'string') { warnings++; continue; }
+
+        // Whitelist fields only
+        const clean = {};
+        for (const key of BOOK_FIELD_WHITELIST) {
+          if (key in book) {
+            let val = book[key];
+            // Type/length checks for strings
+            if (typeof val === 'string' && val.length > MAX_FIELD_LENGTH) val = val.slice(0, MAX_FIELD_LENGTH);
+            // URL safety check
+            if (key === 'coverUrl' && !isSafeUrl(val)) val = '';
+            clean[key] = val;
+          }
+        }
+        // Ensure required fields
+        if (!clean.id) { warnings++; continue; }
+        clean.title = clean.title || '';
+        clean.author = clean.author || '';
+        clean.createdAt = clean.createdAt || new Date().toISOString();
+        clean.updatedAt = clean.updatedAt || new Date().toISOString();
+        // Sanitize metadataSources
+        if (clean.metadataSources && !Array.isArray(clean.metadataSources)) clean.metadataSources = [];
+        sanitized.push(clean);
+      }
+      return { books: sanitized, meta: { schemaVersion: raw.meta.schemaVersion || 1, updatedAt: new Date().toISOString() }, warnings };
+    }
+
     els.validateBtn.onclick = () => {
       try {
         const parsed = JSON.parse(els.importText.value || '{}');
-        if (!Array.isArray(parsed.books)) throw new Error('缺少 books 数组');
-        if (!parsed.meta) throw new Error('缺少 meta 字段');
-        els.settingsNotice.innerHTML = makeNotice('ok', `校验通过：共 ${parsed.books.length} 本图书。`);
+        const result = validateAndSanitizeImport(parsed);
+        let msg = `校验通过：共 ${result.books.length} 本图书。`;
+        if (result.warnings > 0) msg += ` （${result.warnings} 条记录被跳过）`;
+        els.settingsNotice.innerHTML = makeNotice('ok', msg);
       } catch (e) {
         els.settingsNotice.innerHTML = makeNotice('err', `校验失败：${e.message}`);
       }
@@ -2033,15 +2134,16 @@
     els.importBtn.onclick = () => {
       try {
         const parsed = JSON.parse(els.importText.value || '{}');
-        if (!Array.isArray(parsed.books)) throw new Error('缺少 books 数组');
-        if (!parsed.meta) throw new Error('缺少 meta 字段');
-        if (!confirm(`即将用导入数据覆盖当前本地数据（共 ${parsed.books.length} 本）。确定继续吗？`)) {
+        const result = validateAndSanitizeImport(parsed);
+        if (!confirm(`即将用导入数据覆盖当前本地数据（共 ${result.books.length} 本）。确定继续吗？`)) {
           els.settingsNotice.innerHTML = makeNotice('warn', '已取消导入。');
           return;
         }
-        localStorage.setItem(BOOKS_KEY, JSON.stringify(parsed.books));
-        localStorage.setItem(META_KEY, JSON.stringify(parsed.meta));
-        els.settingsNotice.innerHTML = makeNotice('ok', `导入成功：共 ${parsed.books.length} 本图书。`);
+        localStorage.setItem(BOOKS_KEY, JSON.stringify(result.books));
+        localStorage.setItem(META_KEY, JSON.stringify(result.meta));
+        let msg = `导入成功：共 ${result.books.length} 本图书。`;
+        if (result.warnings > 0) msg += ` （${result.warnings} 条记录被跳过）`;
+        els.settingsNotice.innerHTML = makeNotice('ok', msg);
         render();
       } catch (e) {
         els.settingsNotice.innerHTML = makeNotice('err', `导入失败：${e.message}`);
@@ -2688,14 +2790,14 @@
           els.searchInput.value = isbn;
           setPage('search');
           render();
-          els.scanNotice.innerHTML = makeNotice('ok', `已扫码搜索 ISBN：${escapeHtml(isbn)}`);
+          els.scanNotice.innerHTML = makeNotice('ok', `已扫码搜索 ISBN：${isbn}`);
           return;
         }
         els.isbn.value = isbn;
         els.isbn.classList.add('auto-filled');
         fillBookMetaByIsbn(isbn, 'scan');
       } else {
-        els.scanNotice.innerHTML = makeNotice('warn', `识别到条码但非 ISBN 格式（${escapeHtml(rawValue)}），请手动录入 ISBN。`);
+        els.scanNotice.innerHTML = makeNotice('warn', `识别到条码但非 ISBN 格式（${rawValue}），请手动录入 ISBN。`);
         setEntryMode('manual');
       }
     }

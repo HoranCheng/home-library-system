@@ -171,15 +171,15 @@ export async function handleSync(request, env, path, corsHeaders) {
     let books;
 
     if (lastSyncAt) {
-      // Incremental: only books updated after lastSyncAt
+      // Incremental: books updated after lastSyncAt (including tombstones)
       const result = await env.DB.prepare(
         'SELECT * FROM books WHERE user_id = ? AND updated_at > ? ORDER BY updated_at ASC'
       ).bind(userId, lastSyncAt).all();
       books = result.results.map(rowToBook);
     } else {
-      // Full pull: all non-deleted books
+      // Full pull: ALL books including tombstones (so client can reconcile deletes)
       const result = await env.DB.prepare(
-        'SELECT * FROM books WHERE user_id = ? AND is_deleted = 0 ORDER BY created_at DESC'
+        'SELECT * FROM books WHERE user_id = ? ORDER BY created_at DESC'
       ).bind(userId).all();
       books = result.results.map(rowToBook);
     }

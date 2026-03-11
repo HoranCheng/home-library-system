@@ -55,7 +55,7 @@ function timingSafeEqual(a, b) {
 
 // ── JWT ──
 
-const JWT_EXPIRY = 24 * 60 * 60; // 24 hours in seconds
+const JWT_EXPIRY = 8 * 60 * 60; // 8 hours (no refresh token yet — see security notes)
 
 /** 签发 JWT */
 export async function signJwt(payload, secret) {

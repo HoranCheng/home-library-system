@@ -14,10 +14,11 @@ export async function authenticate(request, env) {
   return payload; // null if invalid/expired
 }
 
-/** 要求认证的中间件包装器 */
+/** 要求认证的中间件包装器 — returns Response (error) or user object */
 export async function requireAuth(request, env) {
   const user = await authenticate(request, env);
   if (!user) {
+    // Note: CORS headers are added by withCors() in the main handler
     return new Response(JSON.stringify({ error: 'UNAUTHORIZED', message: '请先登录' }), {
       status: 401,
       headers: { 'Content-Type': 'application/json' },

@@ -159,8 +159,7 @@ CREATE TABLE sync_meta (
 POST /auth/register        注册平台账号
 POST /auth/login            邮箱密码登录
 POST /auth/google           Google ID Token 登录
-POST /auth/refresh          刷新 JWT
-POST /auth/logout           登出（前端清 token 即可）
+POST /auth/logout           登出（前端清 token 即可，服务端暂无 revoke）
 GET  /auth/me               获取当前用户信息
 ```
 
