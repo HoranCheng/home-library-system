@@ -1,0 +1,384 @@
+========================================================================
+Receipt Renamer 第二轮整改报告
+日期：2026-03-11
+========================================================================
+
+声明：这是阶段性整改汇报，不是最终验收版本。
+Worker 端 P0 项（身份验证、debug 接口、CORS、配额原子化）
+尚未落地，需要 Worker 端代码配合完成。
+
+========================================================================
+一、状态分类总览
+========================================================================
+
+【A 类 — 已完成并验证】（7 项）
+  A1. 浏览器直连 Anthropic API 删除
+  A2. SW 缓存策略收紧
+  A3. 文件命名统一为 merchant
+  A4. 输入限制全链路统一
+  A5. 本地敏感数据全量用户隔离
+  A6. Sheets 写入重试 + outbox
+  A7. Remember Me 自建 checkbox 移除
+
+【B 类 — 已完成但仍有残留风险】（1 项）
+  B1. 图片压缩功能
+
+【C 类 — 需要 Worker 配合，尚未落地】（4 项）
+  C1. Worker 用户身份验证 [P0]
+  C2. /api/debug/gemini 接口关闭 [P0]
+  C3. CORS 白名单收紧 [P0]
+  C4. 配额原子化 [P0]
+
+【D 类 — 仅规划，尚未实施】（3 项）
+  D1. 自动化测试
+  D2. 架构/安全文档
+  D3. 备份功能正式实现
+
+========================================================================
+二、A 类详述 — 已完成并验证
+========================================================================
+
+----------------------------------------------------------------------
+A1. 浏览器直连 Anthropic API — 已删除
+----------------------------------------------------------------------
+原问题：ai.js 的 analyzeViaDirect() 在浏览器端直接调用 Anthropic API，
+        x-api-key 暴露在请求头中。
+处理：整个函数删除。analyzeReceipt() 现在强制要求 PROXY_URL。
+      未配置时抛出明确错误，不 fallback。
+验证：构建通过，grep 确认无 VITE_ANTHROPIC_API_KEY 引用。
+文件：src/services/ai.js
+
+----------------------------------------------------------------------
+A2. Service Worker 缓存策略 — 已收紧
+----------------------------------------------------------------------
+原问题：SW 缓存所有 GET 请求，包括 googleapis.com、OAuth 响应等。
+处理：重写 fetch handler，四重过滤：
+  1. 只缓存 self.location.origin（同源）
+  2. 排除 /api/ 路径
+  3. 只缓存静态文件扩展名（html/js/css/png/jpg/svg/ico/woff/json）
+  4. 只缓存 response.ok
+验证：构建通过，人工复检 sw.js 逻辑正确。
+文件：public/sw.js
+
+----------------------------------------------------------------------
+A3. 文件命名 — 已统一为 merchant
+----------------------------------------------------------------------
+原问题：processor.js（自动处理）使用 category 命名，
+        ReviewView.jsx（手动审核）使用 merchant 命名，两条路径不一致。
+        这直接影响文件检索价值和"识别后变成可管理资产"的主链路。
+
+处理：
+  - processor.js 命名逻辑改为：
+    `${safeDate} ${safeMerchant} ${safeAmount}.${ext}`
+    例：2026.03.10 Woolworths 45.50.jpg
+
+  - safeMerchant 使用 toTitleCase()（同 ReviewView.jsx 逻辑）
+    例：WOOLWORTHS METRO → Woolworths Metro
+
+  - ReviewView.jsx 原本就是 merchant 命名（格式一致）
+
+  修改路径：
+    src/services/processor.js 第 150-152 行
+
+  影响范围：
+    - 新上传的收据会立即使用新命名
+    - 已存在的文件不受影响（不追溯重命名）
+    - Sheets 记录中的 merchant 字段本来就是 AI 识别的商家名，不受影响
+    - 审核通过后的命名和自动处理的命名完全一致
+
+验证：构建通过，两条命名路径现在使用相同的格式：
+      `日期 商家 金额.扩展名`
+
+----------------------------------------------------------------------
+A4. 输入限制 — 全链路统一
+----------------------------------------------------------------------
+原问题：前端限制 20MB，AI 层限制 10MB base64（≈7.5MB 文件），
+        策略不一致导致前端放行的文件到 AI 层被拒绝。
+
+处理后的统一规则：
+
+  阶段          限制              拦截点
+  ─────────────────────────────────────────────────────
+  文件选择      10MB / 文件       ScanView.jsx（alert 提示）
+  压缩后        通常 <1MB         compressImage()（仅开启时）
+  base64 编码   14MB base64       ai.js（兜底，10MB 文件≈13.3MB base64）
+  AI 代理接收   Worker 端限制     Worker 端（需另行配置）
+
+  MIME 白名单（全链路一致）：
+  - image/jpeg ✓
+  - image/png  ✓
+  - application/pdf ✓
+
+  已移除（未经全链路验证）：
+  - image/webp — Canvas toBlob 输出为 JPEG，WebP 输入未验证 AI 识别效果
+  - image/heic — iOS HEIC 需要额外解码库，Canvas 不直接支持
+
+  用户体验：
+  - 超过 10MB 的文件在选择时就被拦截，提示开启压缩
+  - MIME 不匹配在选择时拦截，提示支持的格式
+  - 不会出现"前端放行了但后端拒绝"的情况
+
+验证：ScanView.jsx 和 ai.js 的限制值一致。构建通过。
+
+----------------------------------------------------------------------
+A5. 本地敏感数据 — 全量用户隔离
+----------------------------------------------------------------------
+原问题：上一版只隔离了 localStorage，IndexedDB、Sheets outbox、
+        SW 内存态 token 均未隔离。
+
+处理后的完整隔离清单：
+
+  存储位置              隔离方式                    状态
+  ─────────────────────────────────────────────────────────
+  localStorage          key 加 ::userId 后缀        ✅ 已完成
+    rr-config           ✅
+    rr-receipts         ✅
+    rr-proc-progress    ✅
+    rr-non-receipt-alerts ✅
+    rr-sheets-outbox    ✅ （本轮新增）
+
+  IndexedDB
+    rr-image-cache      DB 名加 ::userId 后缀       ✅ 本轮新增
+    rr-pending-uploads  DB 名加 ::userId 后缀       ✅ 本轮新增
+    rr-sw-queue         SW 内部使用，已有 uid 字段    ⚠️ 见下方说明
+
+  Service Worker
+    _accessToken 变量   登出时通过 postMessage 清除  ✅ 本轮新增
+
+  rr-sw-queue 说明：
+  SW 的 IndexedDB 运行在 SW scope（与主线程隔离），且每个 task 已携带 uid。
+  但 DB 名本身未加 userId 前缀——因为 SW 在主线程设置 rr-current-user 之前
+  就可能启动。如果需要彻底隔离，需要在 SW 内部也维护用户身份状态。
+  当前风险：低。SW queue 中的 task 只包含 Drive file ID 和 proxy URL，
+  不包含文件内容或认证凭证。且 task 完成后自动删除。
+
+  登出时清理流程：
+  1. signOut() — 清除 Google token client 状态
+  2. clearSWToken() — postMessage 通知 SW 清除 _accessToken
+  3. 不删除用户数据（按 scope 隔离）
+  4. 新用户登录 → setCurrentUser(newSub) → 自动切到新 scope
+
+  工厂重置清理流程：
+  1. clearAllData() — 删除所有 rr-* localStorage 条目
+  2. indexedDB.deleteDatabase() — 删除三个 IndexedDB
+  3. setConfig(DEFAULT_CONFIG) — 重置 React state
+
+验证：逐一检查每个存储位置的读写路径，确认均使用 scoped key/DB name。
+
+----------------------------------------------------------------------
+A6. Sheets 写入重试 + outbox
+----------------------------------------------------------------------
+原问题：Sheets appendToSheet 失败时只打 console.warn，数据静默丢失。
+
+处理：
+  1. 重试：3 次指数退避（1.5s → 3s）
+  2. 3 次全失败 → 写入 rr-sheets-outbox（用户隔离的 localStorage）
+  3. outbox 记录格式：{ fileId, row, sheetId, failedAt, retries }
+  4. retrySheetOutbox() 函数可在 app 恢复时调用
+  5. 超过 10 次总重试后放弃（避免无限积累）
+  6. receiptRecord.sheetSyncFailed = true 标记（UI 可显示同步状态）
+
+验证：构建通过。outbox 读写路径使用 _getOutboxKey() 获取用户隔离的 key。
+
+----------------------------------------------------------------------
+A7. Remember Me — 移除自建 checkbox
+----------------------------------------------------------------------
+原问题：会议要求优先依赖 Google 原生登录保持，而不是自建"记住我"。
+        上一版保留了 checkbox 只改了文案，没有真正对齐会议要求。
+
+处理：
+  1. 彻底删除 ConfigView.jsx 中的 rememberMe checkbox
+  2. 所有 requestAccessToken 调用改为 persistent: false
+  3. Token 只存 sessionStorage（关闭标签页即过期）
+  4. 跨会话登录恢复完全依赖 Google session cookie：
+     - 用户打开 app → tryRestoreSession() 尝试 sessionStorage
+     - 失败 → requestAccessToken({ prompt: '' }) 利用 Google cookie 静默刷新
+     - Google cookie 也失效 → 弹出 Google 登录界面
+
+  已知限制（坦白说明）：
+  - Google session cookie 有效期由 Google 控制（通常 2 周左右）
+  - 用户清除浏览器数据后需要重新登录
+  - iOS Safari 对第三方 cookie 限制严格，可能导致跨会话恢复失败率较高
+  - 要彻底解决需迁移到 authorization code flow + 后端 token 管理
+    （成本高，当前阶段不做）
+
+  与会议要求的对齐度：
+  - ✅ 已移除自建 checkbox
+  - ✅ 已切换到 Google 原生 session 机制
+  - ⚠️ 在 implicit flow 框架下，这是 Google 原生 remember-me 的最佳实现
+  - ⚠️ 完美方案（authorization code flow）需后端支持，不在本轮范围
+
+验证：构建通过。grep 确认无 rememberMe 状态变量。
+
+========================================================================
+三、B 类详述 — 已完成但仍有残留风险
+========================================================================
+
+----------------------------------------------------------------------
+B1. 图片压缩功能
+----------------------------------------------------------------------
+功能：设置页新增"上传前压缩"开关。
+实现：Canvas 本地压缩，1280px 宽，JPEG 82% 质量。
+效果：约 1-5MB 照片 → 200-500KB，小票文字仍清晰可辨。
+
+残留风险：
+  1. Canvas toBlob 在少数移动浏览器上可能因内存不足输出空白
+     缓解：代码已处理（压缩结果比原图大 → 保留原图）
+  2. HEIC 格式照片（iPhone 默认）在 Canvas 中无法直接处理
+     缓解：HEIC 已从 MIME 白名单中移除。iPhone 拍照选 JPEG 或
+     系统会自动转换为 JPEG（大多数情况）
+  3. 压缩后图片为 JPEG 格式，即使输入是 PNG
+     影响：PNG 格式的收据较少见，且 JPEG 压缩后仍可识别
+
+========================================================================
+四、C 类详述 — 需要 Worker 配合，尚未落地
+========================================================================
+
+以下四项均为 P0（上线前必须同时完成），因为身份验证、CORS、
+配额、debug 接口四者共同构成 Worker 端的安全边界，
+缺少任何一个都可能被滥用并产生费用风险。
+
+----------------------------------------------------------------------
+C1. Worker 用户身份验证 [P0]
+----------------------------------------------------------------------
+现状：前端通过请求体传 uid 字段，Worker 直接信任。
+风险：任何人可以伪造 uid，冒充其他用户消耗配额。
+
+关于方案选择——ID token 验签 vs access token + userinfo：
+
+  原始审计方案：前端发送 Google ID token → Worker 本地验签 → 取 sub
+  当前实际情况：GIS (Google Identity Services) implicit flow 返回的是
+  access token，不是 ID token。要获取 ID token 需要：
+    a. 使用 authorization code flow（需后端）
+    b. 或在 GIS 配置中请求 id_token scope + 设置 nonce
+
+  因此我建议分两步走：
+
+  第一步（快速落地）：
+  - 前端在请求头中发送 access token（Authorization: Bearer xxx）
+  - Worker 调用 Google tokeninfo/userinfo API 验证 token 有效性 + 取 sub
+  - 代价：每次 AI 请求多一次 Google API 调用（~50ms）
+  - 收益：立即可实现，无需改前端 OAuth 流程
+
+  第二步（后续优化，可选）：
+  - 前端 GIS 配置添加 id_token scope
+  - 获取 ID token 后，Worker 本地验签（用 Google JWKS 公钥）
+  - 代价：需要改前端 OAuth 配置 + Worker 实现 JWT 验签
+  - 收益：消除对 Google API 的运行时依赖，延迟更低
+
+  为什么没有直接采用 ID token 方案：
+  当前 GIS 配置只请求 access token，切换到 ID token 需要同时修改
+  前端和 Worker，涉及 scope 变更、token 解析逻辑变更、JWKS 缓存等。
+  在"快速关闭安全漏洞"的优先级下，access token + userinfo 方案
+  可以在不动前端的情况下，仅通过 Worker 端改动就完成身份验证。
+
+----------------------------------------------------------------------
+C2. /api/debug/gemini 接口 [P0]
+----------------------------------------------------------------------
+处理：Worker 端直接删除此 route，或加 admin token 保护。
+前端侧：无调用，无需改动。
+
+----------------------------------------------------------------------
+C3. CORS 白名单 [P0]
+----------------------------------------------------------------------
+Worker 应将 Access-Control-Allow-Origin 从 * 改为：
+  - https://horancheng.github.io（生产）
+  - http://localhost:5173（开发）
+  - 未来正式域名（上线时加入）
+
+----------------------------------------------------------------------
+C4. 配额原子化 [P0]
+----------------------------------------------------------------------
+现状：配额计数可能存在竞态条件（并发请求时计数不准确）。
+要求：使用 Durable Objects 或事务性 KV 实现原子计数。
+配额规则：
+  - 基础：100 张/天/用户
+  - 临时增加：{ userId, dailyLimit, tempBonus, tempExpiry }
+  - tempBonus 到期自动清零，不污染基础配额
+
+========================================================================
+五、D 类详述 — 仅规划，尚未实施
+========================================================================
+
+D1. 自动化测试（P1）
+  优先级排序：
+  1. AI 服务输入验证（大小、MIME、proxy 缺失）
+  2. 用户隔离存储（跨用户不泄漏）
+  3. Sheets 重试 + outbox 机制
+  4. 文件命名格式一致性
+  5. 图片压缩输出验证
+
+D2. 文档（P1）
+  - ARCHITECTURE.md
+  - SECURITY.md
+  - ROADMAP.md
+
+D3. 备份功能（P3）
+  UI 已就绪（标注"实验性"），实际实现待决策。
+
+========================================================================
+六、本轮全部代码改动
+========================================================================
+
+commit 86999c9 — 第一批修复（审计后）
+commit 5d6ab47 — 第二批修复（回应反馈）
+
+文件清单：
+
+src/services/ai.js
+  - 删除 analyzeViaDirect（API Key 暴露）
+  - 添加大小 + MIME 校验
+  - MIME 白名单：JPEG/PNG/PDF（移除未验证的 WebP/HEIC）
+
+src/services/storage.js
+  - 用户隔离存储（按 Google sub ID 分区）
+  - setCurrentUser / clearCurrentUserData / clearAllData
+
+src/services/processor.js
+  - 命名：category → merchant + amount（title-case）
+  - Sheets 重试 3 次 + 指数退避
+  - Sheets outbox（用户隔离的 localStorage）
+  - retrySheetOutbox() 补偿函数
+
+src/services/imageCache.js
+  - IndexedDB 名加 ::userId 后缀
+
+src/services/pendingQueue.js
+  - IndexedDB 名加 ::userId 后缀
+
+src/services/swBridge.js
+  - 新增 clearSWToken()
+
+src/views/ScanView.jsx
+  - 文件限制 10MB + MIME（JPEG/PNG/PDF）
+  - compressImage() 本地压缩
+  - 文件验证前移到文件选择时
+
+src/views/ConfigView.jsx
+  - 移除 rememberMe checkbox
+  - 添加图片压缩开关
+
+src/App.jsx
+  - 登录时 setCurrentUser(sub)
+  - 登出时 clearSWToken()
+  - 工厂重置清除 IndexedDB
+  - 移除所有 persistent/rememberMe 引用
+
+public/sw.js
+  - 缓存策略：仅同源 + 仅静态文件 + 仅 ok 响应
+
+========================================================================
+七、结论
+========================================================================
+
+前端侧可做的整改已全部完成。构建通过，人工复检未发现明显功能异常。
+
+当前阻塞项：Worker 端 4 个 P0（身份验证、debug 接口、CORS、配额），
+这四项需要同时完成才能构成完整的安全边界。
+
+下一步：等 Worker 端代码可操作后，实施 C 类全部 4 项，
+然后进行第三轮完整复检。
+
+========================================================================
+报告结束
+========================================================================

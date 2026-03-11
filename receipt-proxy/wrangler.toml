@@ -1,0 +1,9 @@
+name = "receipt-proxy"
+main = "src/index.js"
+compatibility_date = "2024-01-01"
+workers_dev = true
+
+[[kv_namespaces]]
+binding = "QUOTA_KV"
+id = "b2eed1c130264698901461467cd50757"
+preview_id = "81c74f4af2a746dc8490cab834a54e7d"

@@ -1,0 +1,228 @@
+毛毛书房 联合审查总结（GPT 5.4 + Claude Opus 4.6）
+日期：2026-03-11
+
+一、你让我做了什么
+- 邀请 GPT 5.4 作为独立测试者加入项目审查
+- 让 GPT 审查：
+  1) 整个产品流程
+  2) 代码安全性
+  3) 使用体验
+  4) UI 合理性和排布
+- 然后由 Claude Opus 4.6 回应 GPT 的报告
+- 再让 GPT 对 Claude 的修复方案做第二轮评论
+- 双方达成共识后，由 Claude 直接修改代码修补
+
+二、GPT 第一轮主要结论
+GPT 给出的总评是：
+- 本地单机版体验已经不错
+- 但如果按“正式云同步产品”看，安全和同步正确性还不够稳
+
+GPT 重点指出的问题：
+
+P0（严重）
+1. Worker 的 CORS 白名单有漏洞
+   - 用了 startsWith()
+   - 恶意域名如 https://horancheng.github.io.evil.com 也可能通过
+
+2. 前端存在 XSS 风险
+   - makeNotice() 直接把动态文本拼进 innerHTML
+   - 如果报错信息里带 HTML，可能被注入
+   - 又因为 JWT 放在 localStorage，XSS 一旦成立就可能盗 token
+
+3. PWA 部署不完整
+   - manifest.json / sw.js 线上 404
+   - 代码里写了 manifest 和 service worker，但用户实际拿不到
+
+4. Google Books 代理太开放
+   - 参数几乎全透传
+   - 没限流
+   - 容易被别人拿去刷配额
+
+P1（重要）
+5. 云端删除传播不完整
+   - full pull 不返回 tombstone（删除标记）
+   - 可能导致“已经删掉的书又被新设备推回云端复活”
+
+6. 冲突虽然由后端识别，但前端没有处理
+   - 用户会误以为“已同步成功”
+
+7. 401 / 429 错误响应没有统一带 CORS 头
+   - 前端有时只会看到 CORS 错误，不利于排查
+
+8. Google 登录后端做了，前端没接完
+   - 能力和界面承诺不一致
+
+9. 导入 JSON 的校验太浅
+   - 容易导入脏数据或恶意数据
+
+10. Token 只有 JWT，没有 refresh / revoke
+
+11. SW 缓存策略太粗
+   - 如果上线会缓存所有 GET，请求范围太大
+
+三、Claude 对 GPT 的回应
+Claude 基本接受了 GPT 的主结论，尤其认同：
+- CORS 漏洞是真的
+- XSS 风险是真的
+- 删除复活是同步逻辑 bug
+- 冲突处理确实没补完
+- PWA 部署确实有问题
+
+Claude 当时提出的修法：
+- CORS 改成 URL 精确匹配
+- makeNotice 默认 escapeHtml
+- 全面排查 innerHTML
+- Books 代理加白名单 + 限流
+- full pull 返回 tombstone
+- push 冲突后自动 pull
+- 加强导入校验
+- JWT TTL 从 24h 缩短
+- Google 登录前端先不做，等 GOOGLE_CLIENT_ID
+
+四、GPT 第二轮评论（对 Claude 方案的复审）
+GPT 第二轮认为：
+- Claude 方向对
+- 但有几项如果只做“最小止血版”，还不够完整
+
+GPT 第二轮补强了这些点：
+1. XSS 不能只修 makeNotice，要系统性收口危险 innerHTML
+2. 删除传播不能只补 full pull，要把 tombstone、merge 规则、initial sync 一起修
+3. 冲突提示不能假装成“同步成功”
+4. PWA 404 不能只口头说修了，必须做部署后 smoke test
+5. Google 登录如果暂缓，就不能继续保留误导性承诺
+6. SW 如果这轮启用，至少要做保守安全版，不能继续“缓存所有 GET”
+
+五、最终达成的共识修复清单
+1. 修 CORS
+2. 统一所有错误响应的 CORS 头
+3. 收口 XSS
+4. 收紧 Books 代理
+5. 修删除传播和 tombstone 合并逻辑
+6. 修冲突处理和冲突提示
+7. 加强导入校验
+8. 缩短 JWT TTL，修正文档
+9. 暂缓 Google 登录前端，但清理误导性残留
+10. 修 PWA 部署
+11. 把 SW 改成保守安全版
+
+六、Claude 已经实际改了什么
+这次实际已经修改并提交/推送/部署了：
+
+A. Worker 安全修复
+1. 修复 CORS 漏洞
+   - 不再使用 startsWith()
+   - 改成 new URL(origin).origin 后精确匹配白名单
+   - 本地开发源改成具体端口
+
+2. 统一所有响应的 CORS 头
+   - auth/sync/error/401/429/500/OPTIONS 都统一补 CORS
+   - 不再出现某些错误响应跨域失败的问题
+
+3. 收紧 Google Books 代理
+   - 只允许有限参数：q、maxResults、langRestrict、printType、orderBy
+   - q 长度限制为 200 字符
+   - maxResults 强制限制在 1-10
+   - 增加 IP 限流（30 次/分钟）
+   - ISBN 查询缓存 24 小时，普通文本查询缓存 1 小时
+
+4. JWT 有效期缩短
+   - 从 24 小时改为 8 小时
+   - 当前仍然没有 refresh token，这一点在文档里也已对齐说明
+
+B. 前端安全和数据修复
+5. 修复 makeNotice 的 XSS 面
+   - makeNotice() 现在默认会 escapeHtml
+   - 几个会双重转义的调用点也已经同步修正
+
+6. 增加基础 CSP
+   - 已在 index.html 里加入 Content-Security-Policy meta
+   - 当前因为单文件架构，脚本仍需要 unsafe-inline
+   - 但已经比完全没有 CSP 强一层
+
+7. 修复同步删除传播
+   - full pull 现在会拿到 tombstone（已删除记录）
+   - merge 时会根据 updatedAt 比较新旧
+   - 云端较新的删除会从本地删除
+   - 避免“云端已删书籍被新设备复活”
+
+8. 修复同步冲突处理
+   - push 后如果有 conflicts，前端会自动 pull 云端版本
+   - 同步状态会明确提示冲突，不再伪装成普通“同步成功”
+   - 提示文案类似：
+     “X 本与云端冲突，已保留云端较新版本”
+
+9. 同步状态显示更清晰
+   - 会显示拉取/上传/冲突数量
+   - 比如：
+     “同步完成 · 共 42 本书 · 拉取 3 本 · 上传 5 本 · 2 本冲突已处理”
+
+10. 加强导入 JSON 校验
+   - 白名单字段校验
+   - 字段长度限制
+   - URL 协议限制（防止 javascript:）
+   - 最多 5000 本书
+   - 非法记录会被跳过，并显示跳过条数
+
+11. 清理 Google 登录残留承诺
+   - 这轮没有上线 Google 登录前端
+   - 相关样式残留已收敛，避免误导
+
+C. PWA 部署和缓存修复
+12. SW 改成保守安全版
+   - 不再缓存所有 GET
+   - 只缓存同源 GET
+   - 跳过 auth/sync API 路径
+   - 增加缓存版本和旧缓存清理
+
+13. 重新发布 gh-pages 内容
+   - 已重新执行 gh-pages 发布
+   - 同时补上 GitHub Pages workflow：
+     .github/workflows/pages.yml
+   - 之后会把 preview/index.html、manifest.json、sw.js、icon 一起部署到 Pages artifact
+
+七、已经验证通过的结果
+1. 前端测试：57/57 全通过
+2. Worker 已重新部署成功
+   - 版本 ID：ee4ba460-6b7c-41ef-a3bf-67fca5cb20ba
+3. CORS 漏洞已验证修复
+   - 之前恶意 Origin 会被反射
+   - 现在恶意 Origin 不再被放行
+4. 合法 Origin 请求正常
+5. 401 响应现在也带 CORS 头
+
+八、当前线上效果
+已经确定生效的：
+- 登录/同步/导入/冲突提示/同步逻辑/Worker 安全修复
+- 这些已经在代码、测试和 Worker 部署层面完成
+
+正在等待 GitHub Pages workflow 生效的：
+- manifest.json
+- sw.js
+- icon 文件
+
+原因不是代码没写，而是 Pages 的发布方式需要 workflow 接管。
+现在 workflow 文件已经补上并推送了，等 GitHub Actions 跑完后，PWA 资源会跟着一起上线。
+
+九、相关提交
+- 2e866e3
+  security: comprehensive fixes from GPT 5.4 + Claude Opus 4.6 joint review
+
+- 2216939
+  ci(pages): deploy preview PWA assets to GitHub Pages artifact
+
+十、最后结果（当前状态）
+这轮之后，项目状态相比之前明显更稳：
+- CORS 漏洞已修
+- XSS 风险面明显缩小
+- Books 代理不再是裸奔状态
+- 多设备同步的删除传播和冲突处理更完整
+- 导入数据更安全
+- JWT 风险边界更明确
+- PWA 部署链路也补上了自动化
+
+一句话总结：
+这次不是只改 UI 或小交互，而是把“账号 + 云同步 + 安全边界 + 部署完整性”这整条链路整体抬高了一截。
+
+如果你愿意，下一轮我建议继续做两件事：
+1. 真正补上 Google 登录前端（等你配置 GOOGLE_CLIENT_ID）
+2. 继续收尾 XSS/innerHTML 的系统性收口，以及 refresh token 体系

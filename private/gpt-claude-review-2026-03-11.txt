@@ -1,0 +1,154 @@
+═══════════════════════════════════════════════════════════════
+  Receipt Renamer — GPT 5.4 × Claude Opus 4.6 联合审核报告
+  日期：2026-03-11
+═══════════════════════════════════════════════════════════════
+
+一、审核流程
+───────────────────────────────────────────────────────────────
+
+1. GPT 5.4 作为 QA 测试者，阅读了项目全部 11 个关键源文件
+2. GPT 出具了中文审核报告，覆盖 5 个维度，总分 33/50
+3. Claude Opus 4.6 读取报告，实施修复
+4. GPT 5.4 二次复核修复结果，确认 P0 问题已解决
+5. GPT 额外发现 2 个遗漏 bug，Claude 补修
+6. 代码部署到 GitHub Pages
+
+
+二、GPT 5.4 评分
+───────────────────────────────────────────────────────────────
+
+  维度                  评分    说明
+  ─────────────────────────────────────────────
+  代码安全性             6/10   隔离未闭环、UID 不一致
+  使用体验               7/10   主流程顺，错误处理偏原始
+  UI 合理性              7/10   视觉统一，ConfigView 偏重
+  UI 排布                7/10   主导航成立，ReviewView 偏长
+  代码架构               6/10   服务层拆分正确，App.jsx 过重
+  ─────────────────────────────────────────────
+  总分                  33/50
+
+
+三、GPT 发现的关键问题 & Claude 的修复
+───────────────────────────────────────────────────────────────
+
+【P0-2】ReviewView 来源文件夹 bug ✅ 已修复
+  问题：Review 页同时展示 inbox 和 review 文件，但 approve
+        时固定用 reviewFolderId 移动，来自 inbox 的文件会
+        move 失败。
+  修复：
+  - 文件加载时标记 source: 'inbox' | 'review'
+  - handleEdit 保存 source 到 editing 对象
+  - handleApprove 按 editing.source 选择正确的源文件夹
+  - 新增 inboxFolderId state
+  文件：src/views/ReviewView.jsx
+
+【P0-1】用户隔离存储未闭环 ✅ 已修复
+  问题：storage.js 有 user-scoped 机制，但 processor.js、
+        App.jsx、ReviewView.jsx 仍直接操作裸 localStorage，
+        导致多用户数据可能串号。
+  修复：
+  - processor.js: rr-proc-progress 和 rr-non-receipt-alerts
+    改为 store()/load()
+  - App.jsx: rr-non-receipt-alerts 读取改为 load()
+  - ReviewView.jsx: 删除时清理 alerts 改为 store()/load()
+  文件：src/services/processor.js, src/App.jsx,
+        src/views/ReviewView.jsx
+
+【P0-3】AI 配额 UID 来源不一致 ✅ 已修复
+  问题：ai.js 用 receipt_google_uid，其他地方用
+        rr-current-user，导致配额可能全落到 anonymous。
+  修复：全部统一为 rr-current-user
+  文件：src/services/ai.js, src/views/ScanView.jsx
+
+【P1-2】alert() → Toast ⚠️ 部分完成
+  问题：大量系统弹窗破坏移动端体验。
+  修复（已完成）：
+  - ScanView: 文件太大、类型不支持
+  - ReviewView: 加载失败、登录过期、操作失败、删除失败
+  未修（后续）：
+  - ConfigView、SetupView、InboxView 的 alert
+  - App.jsx 的 confirm() 保留（删除操作需明确确认）
+
+
+四、GPT 二次复核发现的额外 bug & 修复
+───────────────────────────────────────────────────────────────
+
+【Bug A】getSavedProgress() 缺 await ✅ 已修复
+  问题：processor.js 里 getSavedProgress 改成了 async，
+        但 App.jsx 两处调用没加 await，Promise 被当对象用。
+  影响：T-017/T-018 的进度恢复和可见性恢复逻辑失效。
+  修复：两处都加了 await，handleVisibility 改为 async。
+
+【Bug B】ReviewView 删除时绕过 scoped storage ✅ 已修复
+  问题：handleDelete 里清理 rr-non-receipt-alerts 仍直接
+        用裸 localStorage，绕过了刚修好的用户隔离。
+  修复：改为 load()/store()。
+
+
+五、GPT 提出但本轮不修的项目
+───────────────────────────────────────────────────────────────
+
+【P1-1】命名策略改为"日期+商家+金额"
+  决定：用户明确要求保留"日期+分类"格式，尊重产品决策。
+  后续：抽统一命名 helper 函数，避免两处各写一套。
+
+【P2-1】拆分 App.jsx 应用级逻辑
+  建议：抽 useAuthBootstrap、useCloudConfigSync 等 hooks
+  计划：后续重构版本
+
+【P2-2】拆分 ScanView/ReviewView 业务逻辑
+  建议：上传队列状态机、文件校验压缩等移出视图层
+  计划：后续重构版本
+
+【P2-3】精简 LogView 首屏认知负担
+  建议：默认只显示图表+列表，导出/数据源切换收入二级
+  计划：需产品讨论
+
+【P3-1】Toast 去重/合并
+【P3-2】AiLivePanel 增加失败项详情
+【P3-3】ConfigView 实验性模块弱化
+
+
+六、GPT 的最终评价
+───────────────────────────────────────────────────────────────
+
+"这轮不是'表面修补'，而是真正把三个核心 P0 问题大体修
+正了。补完最后两处小漏点后，本轮整改可以关闭。"
+
+"这个项目最大优点不是'代码多漂亮'，而是已经明显脱离
+demo，进入真实产品迭代状态。"
+
+
+七、Claude 的回应
+───────────────────────────────────────────────────────────────
+
+GPT 的审核质量很高，特别是：
+- P0-2 ReviewView 来源 bug 是真实的功能级 bug
+- getSavedProgress 的 await 遗漏是我改 async 后的疏忽
+- UID 不一致问题确实是历史遗留，一直没注意到
+
+GPT 给的 33/50 评分我基本认同。项目当前阶段确实是
+"能打但没收口"——功能已经完整，但数据隔离、错误处理、
+架构整洁度还需要持续打磨。
+
+本轮修复后的改善：
+- 数据隔离：从"有框架但漏洞多"到"核心路径已闭环"
+- 审核流：从"有隐含 bug"到"按来源正确处理"
+- 配额：从"可能全落到 anonymous"到"统一 UID"
+- 错误交互：从"全是 alert"到"关键页面用 Toast"
+
+
+八、提交记录
+───────────────────────────────────────────────────────────────
+
+  commit d513921 — fix: GPT 5.4 review — P0 fixes + 2 GPT-found bugs
+  部署：https://horancheng.github.io/receipt-renamer/
+
+  审核报告：docs/gpt-review-report.md
+  复核回复：docs/gpt-review-response.md
+
+
+═══════════════════════════════════════════════════════════════
+  GPT 5.4 × Claude Opus 4.6 联合审核完成
+  所有 P0 问题已修复并通过复核
+═══════════════════════════════════════════════════════════════
