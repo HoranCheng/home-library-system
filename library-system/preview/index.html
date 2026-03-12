@@ -425,54 +425,133 @@
     .summary-legend-item .dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
     .summary-legend-item .val{font-weight:700;color:var(--text)}
 
-    /* ── Book Wandering Carousel ── */
-    .wander-section{margin:0 -20px;padding:0 20px;position:relative}
-    .wander-card{
-      background:var(--card);border-radius:20px;padding:0;overflow:hidden;
-      box-shadow:0 4px 20px rgba(44,38,31,.10);border:1px solid rgba(255,255,255,.6);
-      position:relative;cursor:pointer;
+    /* ── Book Wandering Carousel · 重构版 ── */
+    .wander-section { margin: 0 -20px; padding: 0 20px; position: relative; }
+    .wander-card {
+      background: var(--card);
+      border-radius: 18px;
+      overflow: hidden;
+      box-shadow: var(--shadow-md);
+      border: 1px solid rgba(255,255,255,.7);
+      display: flex;
+      flex-direction: row;
+      align-items: stretch;
+      min-height: 178px;
+      cursor: pointer;
+      position: relative;
     }
-    .wander-cover-area{
-      position:relative;height:200px;overflow:hidden;
-      display:flex;align-items:center;justify-content:center;
-      background:linear-gradient(145deg,var(--brown-light),#E8DFD0);
+    /* 左：封面区 */
+    .wander-cover-area {
+      width: 122px; flex-shrink: 0;
+      position: relative; overflow: hidden;
+      display: flex; align-items: center; justify-content: center;
+      padding: 18px 14px;
+      background: linear-gradient(145deg, #f0e8d8, #e2d6c4);
     }
-    .wander-cover{
-      width:100px;height:142px;border-radius:8px;object-fit:cover;
-      box-shadow:0 12px 40px rgba(44,38,31,.25),0 2px 8px rgba(44,38,31,.1);
-      transition:opacity .5s ease,transform .5s ease;
-      position:absolute;z-index:3;
+    .wander-cover-bg {
+      position: absolute; inset: 0;
+      opacity: .18; filter: blur(26px) saturate(1.5);
+      background-size: cover; background-position: center;
+      transition: background .5s ease;
     }
-    .wander-cover.out{opacity:0;transform:scale(.9) translateY(10px)}
-    .wander-cover-bg{
-      position:absolute;inset:0;opacity:.15;filter:blur(40px) saturate(1.5);
-      background-size:cover;background-position:center;transition:background-image .5s;
+    .wander-cover {
+      width: 82px; height: 116px;
+      border-radius: 5px; object-fit: cover;
+      box-shadow: 0 8px 26px rgba(44,38,31,.22), 0 2px 6px rgba(44,38,31,.1);
+      transition: opacity .4s ease, transform .4s ease;
+      position: relative; z-index: 3; flex-shrink: 0;
     }
-    .wander-deco{
-      position:absolute;font-size:120px;opacity:.04;font-family:var(--serif);
-      color:var(--accent2);pointer-events:none;user-select:none;
-      right:-10px;bottom:-20px;line-height:1;
+    .wander-cover.out { opacity: 0; transform: scale(.92) translateY(7px); }
+    .wander-deco {
+      position: absolute; font-size: 68px; opacity: .05;
+      font-family: var(--serif); color: var(--accent2);
+      pointer-events: none; right: -4px; bottom: -8px; line-height: 1;
+      user-select: none;
     }
-    .wander-info{padding:18px 20px}
-    .wander-cat{display:inline-block;font-size:10px;font-weight:600;padding:3px 10px;border-radius:20px;background:var(--accent-light);color:var(--accent);margin-bottom:8px}
-    .wander-title{font-size:19px;font-family:var(--serif);font-weight:700;line-height:1.35;margin-bottom:4px}
-    .wander-meta{font-size:13px;color:var(--muted);display:flex;align-items:center;gap:8px;flex-wrap:wrap}
-    .wander-status{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:600;padding:3px 10px;border-radius:20px;margin-top:8px}
-    .wander-status::before{content:'';width:5px;height:5px;border-radius:50%;flex-shrink:0}
-    .wander-status.reading{background:var(--warn-light);color:#8B6A20}
-    .wander-status.reading::before{background:var(--warn)}
-    .wander-status.want{background:#EBF2F8;color:#2D6A9F}
-    .wander-status.want::before{background:#5B9BD5}
-    .wander-status.done{background:var(--ok-light);color:#2D6A3A}
-    .wander-status.done::before{background:var(--ok)}
-    .wander-nav{display:flex;align-items:center;justify-content:center;gap:6px;margin-top:14px}
-    .wander-dots{display:flex;gap:4px;align-items:center}
-    .wander-dots span{width:5px;height:5px;border-radius:50%;background:rgba(139,111,78,.2);transition:all .3s}
-    .wander-dots span.active{background:var(--accent2);width:16px;border-radius:3px}
-    .wander-arr{width:28px;height:28px;border-radius:50%;border:1.5px solid var(--line);background:var(--card);color:var(--accent2);font-size:12px;cursor:pointer;display:flex;align-items:center;justify-content:center}
-    .wander-arr:active{background:var(--brown-light)}
-    .wander-timer{position:absolute;bottom:0;left:0;right:0;height:3px}
-    .wander-timer-fill{height:100%;background:linear-gradient(90deg,var(--accent2),var(--accent));border-radius:0 0 20px 20px;opacity:.4;transition:width linear}
+    /* 右：文字区 */
+    .wander-info {
+      flex: 1; min-width: 0;
+      padding: 16px 14px 14px 12px;
+      display: flex; flex-direction: column;
+      justify-content: space-between;
+    }
+    .wander-cat {
+      display: inline-block;
+      font-size: 10px; font-weight: 600;
+      padding: 2px 8px; border-radius: 20px;
+      background: var(--accent-light); color: var(--accent);
+      margin-bottom: 6px; width: fit-content;
+    }
+    .wander-title {
+      font-size: clamp(13.5px, 4vw, 17px);
+      font-family: var(--serif); font-weight: 700;
+      line-height: 1.38; margin-bottom: 4px;
+      display: -webkit-box;
+      -webkit-line-clamp: 3; -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+    .wander-meta {
+      font-size: 11px; color: var(--muted);
+      margin-bottom: 7px;
+      display: flex; align-items: center; gap: 5px; flex-wrap: wrap;
+    }
+    .wander-summary {
+      font-size: clamp(11px, 3vw, 12.5px);
+      color: var(--muted); line-height: 1.6;
+      display: -webkit-box;
+      -webkit-line-clamp: 3; -webkit-box-orient: vertical;
+      overflow: hidden; flex: 1; margin-bottom: 10px;
+    }
+    .wander-bottom {
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    /* 状态徽章 */
+    .wander-status {
+      display: inline-flex; align-items: center; gap: 4px;
+      font-size: 10px; font-weight: 600;
+      padding: 2px 8px; border-radius: 20px;
+    }
+    .wander-status .sdot { width: 4px; height: 4px; border-radius: 50%; flex-shrink: 0; }
+    .wander-status.reading { background: var(--warn-light); color: #8B6A20; }
+    .wander-status.reading .sdot { background: var(--warn); }
+    .wander-status.want    { background: #EBF2F8; color: #2D6A9F; }
+    .wander-status.want .sdot    { background: #5B9BD5; }
+    .wander-status.done    { background: var(--ok-light); color: #2D6A3A; }
+    .wander-status.done .sdot    { background: var(--ok); }
+    /* 想读按钮 */
+    .wander-wish-btn {
+      width: 28px; height: 28px;
+      border: none; background: transparent; cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 16px; opacity: .38; border-radius: 50%; padding: 0;
+      transition: opacity .15s, transform .18s;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .wander-wish-btn:hover  { opacity: .65; transform: scale(1.12); }
+    .wander-wish-btn:active { transform: scale(1.2); }
+    .wander-wish-btn.wished { opacity: 1; }
+    /* 翻页箭头：覆盖在卡片上，半透明 */
+    .wander-nav {
+      position: absolute;
+      top: 50%; transform: translateY(-50%);
+      left: 0; right: 0;
+      display: flex; justify-content: space-between;
+      padding: 0 5px;
+      pointer-events: none; z-index: 10;
+    }
+    .wander-arr {
+      width: 24px; height: 24px; border-radius: 50%;
+      border: 1px solid rgba(139,111,78,.15);
+      background: rgba(255,253,248,.8); backdrop-filter: blur(4px);
+      color: var(--accent2); font-size: 13px;
+      cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      pointer-events: all;
+      opacity: .45; transition: opacity .15s;
+      box-shadow: 0 1px 4px rgba(0,0,0,.07);
+    }
+    .wander-arr:hover  { opacity: 1; }
+    .wander-arr:active { opacity: 1; transform: scale(.92); }
 
     /* ── Organize: tabs ── */
     .org-tabs{display:flex;gap:0;background:var(--surface-2);border-radius:12px;padding:3px;margin-bottom:16px}
@@ -610,27 +689,34 @@
         </div>
         <div class="wander-section">
           <div class="wander-card" id="wanderCard">
+            <!-- 左：封面 -->
             <div class="wander-cover-area">
               <div class="wander-cover-bg" id="wanderBg"></div>
-              <img class="wander-cover" id="wanderCover" />
+              <img class="wander-cover" id="wanderCover" alt="" />
               <div class="wander-deco" id="wanderDeco">书</div>
             </div>
+            <!-- 右：文字 -->
             <div class="wander-info">
-              <div class="wander-cat" id="wanderCat"></div>
-              <div class="wander-title" id="wanderTitle"></div>
-              <div class="wander-meta">
-                <span id="wanderAuthor"></span>
-                <span style="opacity:.3">·</span>
-                <span id="wanderYear"></span>
+              <div>
+                <div class="wander-cat" id="wanderCat"></div>
+                <div class="wander-title" id="wanderTitle"></div>
+                <div class="wander-meta">
+                  <span id="wanderAuthor"></span>
+                  <span id="wanderYearDot" style="opacity:.3">·</span>
+                  <span id="wanderYear"></span>
+                </div>
+                <div class="wander-summary" id="wanderSummary"></div>
               </div>
-              <div class="wander-status" id="wanderStatus"></div>
+              <div class="wander-bottom">
+                <div class="wander-status" id="wanderStatus"></div>
+                <button class="wander-wish-btn" id="wanderWishBtn" title="标记想读">♡</button>
+              </div>
             </div>
-            <div class="wander-timer"><div class="wander-timer-fill" id="wanderTimer"></div></div>
-          </div>
-          <div class="wander-nav">
-            <button class="wander-arr" id="wanderPrev">‹</button>
-            <div class="wander-dots" id="wanderDots"></div>
-            <button class="wander-arr" id="wanderNext">›</button>
+            <!-- 翻页箭头（覆盖整个卡片，半透明） -->
+            <div class="wander-nav">
+              <button class="wander-arr" id="wanderPrev">‹</button>
+              <button class="wander-arr" id="wanderNext">›</button>
+            </div>
           </div>
         </div>
 
@@ -3338,51 +3424,120 @@
     els.scannerCancelBtn.onclick = stopScanner;
     // ── End Scanner ───────────────────────────────────────────────────────────
 
-    // ── Wander carousel ───────────────────────────────────────────────────────
+    // ── Wander carousel · 重构版 ────────────────────────────────────────────
     const WANDER_DECOS = ['书','阅','读','思','知','梦','文','墨','章','韵','诗','卷'];
     let wanderIdx = 0, wanderTimer = null;
 
+    // 摘要兜底文案（无 description 时使用）
+    const WANDER_FALLBACK_SUMMARIES = [
+      '安静地等在书架上。',
+      '翻开它，总会有所收获。',
+      '每次拿起都有不同感受。',
+      '文字的重量，握在手里才知道。',
+      '一个故事，一段不同的人生。',
+    ];
+
+    // 展示池：优先有封面的书；不足3本时纳入全部
+    function buildWanderPool(books) {
+      const withCover = books.filter(b => b.coverUrl && b.coverUrl.trim());
+      return withCover.length >= 3 ? withCover : books;
+    }
+
     function renderWander() {
-      const books = loadActiveBooks();
-      if (!books.length) return;
-      const b = books[wanderIdx % books.length];
+      const pool = buildWanderPool(loadActiveBooks());
+      if (!pool.length) return;
+      const b = pool[wanderIdx % pool.length];
+
       const cover = document.getElementById('wanderCover');
       const cu = coverUrl(b);
-      const cls = normalizeReadingStatus(b.readingStatus) === '在读' ? 'reading' : normalizeReadingStatus(b.readingStatus) === '读完' ? 'done' : 'want';
+      const cls = normalizeReadingStatus(b.readingStatus) === '在读' ? 'reading'
+        : normalizeReadingStatus(b.readingStatus) === '读完' ? 'done' : 'want';
 
       cover.classList.add('out');
       setTimeout(() => {
-        if (cu) { cover.src = cu; cover.style.background = catColor(b.category); cover.onerror = function(){ this.style.background = catColor(b.category); this.removeAttribute('src'); }; }
-        else { cover.removeAttribute('src'); cover.style.background = catColor(b.category); }
-        document.getElementById('wanderBg').style.backgroundImage = cu ? `url(${cu})` : 'none';
-        document.getElementById('wanderDeco').textContent = WANDER_DECOS[wanderIdx % WANDER_DECOS.length];
-        document.getElementById('wanderCat').textContent = b.category || '未分类';
-        document.getElementById('wanderTitle').textContent = b.title || '未命名';
-        document.getElementById('wanderAuthor').textContent = b.author || '未知作者';
-        document.getElementById('wanderYear').textContent = b.publishedYear || '';
+        if (cu) {
+          cover.src = cu;
+          cover.style.background = catColor(b.category);
+          cover.onerror = function() {
+            this.style.background = catColor(b.category);
+            this.removeAttribute('src');
+          };
+        } else {
+          cover.removeAttribute('src');
+          cover.style.background = catColor(b.category);
+        }
+
+        document.getElementById('wanderBg').style.background = catColor(b.category);
+        document.getElementById('wanderDeco').textContent
+          = WANDER_DECOS[wanderIdx % WANDER_DECOS.length];
+        document.getElementById('wanderCat').textContent   = b.category || '未分类';
+        document.getElementById('wanderTitle').textContent = b.title    || '未命名';
+        document.getElementById('wanderAuthor').textContent = b.author  || '未知作者';
+
+        const yearEl    = document.getElementById('wanderYear');
+        const yearDotEl = document.getElementById('wanderYearDot');
+        if (b.publishedYear) {
+          yearEl.textContent      = b.publishedYear;
+          yearDotEl.style.display = '';
+        } else {
+          yearEl.textContent      = '';
+          yearDotEl.style.display = 'none';
+        }
+
+        document.getElementById('wanderSummary').textContent = b.description
+          ? b.description.slice(0, 90)
+          : WANDER_FALLBACK_SUMMARIES[wanderIdx % WANDER_FALLBACK_SUMMARIES.length];
+
         const statusEl = document.getElementById('wanderStatus');
         statusEl.className = 'wander-status ' + cls;
-        statusEl.textContent = normalizeReadingStatus(b.readingStatus);
-        // Dots
-        document.getElementById('wanderDots').innerHTML = books.map((_, i) =>
-          `<span class="${i === (wanderIdx % books.length) ? 'active' : ''}"></span>`
-        ).join('');
+        statusEl.innerHTML =
+          `<span class="sdot"></span>${escapeHtml(normalizeReadingStatus(b.readingStatus))}`;
+
+        const wishBtn = document.getElementById('wanderWishBtn');
+        const isWant  = normalizeReadingStatus(b.readingStatus) === '要读';
+        wishBtn.textContent = isWant ? '♥' : '♡';
+        wishBtn.className   = 'wander-wish-btn' + (isWant ? ' wished' : '');
+        wishBtn.dataset.id  = b.id;
+
         cover.classList.remove('out');
-      }, 400);
-      // Timer
-      const timer = document.getElementById('wanderTimer');
-      timer.style.transition = 'none'; timer.style.width = '0%';
-      requestAnimationFrame(() => { timer.style.transition = 'width 5s linear'; timer.style.width = '100%'; });
+      }, 380);
     }
 
-    function nextWander() { const books = loadActiveBooks(); wanderIdx = (wanderIdx + 1) % (books.length || 1); renderWander(); resetWanderTimer(); }
-    function prevWander() { const books = loadActiveBooks(); wanderIdx = (wanderIdx - 1 + (books.length || 1)) % (books.length || 1); renderWander(); resetWanderTimer(); }
-    function resetWanderTimer() { clearInterval(wanderTimer); wanderTimer = setInterval(() => { const books = loadActiveBooks(); wanderIdx = (wanderIdx + 1) % (books.length || 1); renderWander(); }, 5000); }
+    function nextWander() {
+      const pool = buildWanderPool(loadActiveBooks());
+      wanderIdx = (wanderIdx + 1) % (pool.length || 1);
+      renderWander(); resetWanderTimer();
+    }
+    function prevWander() {
+      const pool = buildWanderPool(loadActiveBooks());
+      wanderIdx = (wanderIdx - 1 + (pool.length || 1)) % (pool.length || 1);
+      renderWander(); resetWanderTimer();
+    }
+    function resetWanderTimer() {
+      clearInterval(wanderTimer);
+      wanderTimer = setInterval(() => {
+        const pool = buildWanderPool(loadActiveBooks());
+        wanderIdx  = (wanderIdx + 1) % (pool.length || 1);
+        renderWander();
+      }, 6000);
+    }
 
     // Wander click handlers
     document.getElementById('wanderCard').addEventListener('click', () => {
-      const books = loadActiveBooks();
-      if (books.length) showBookDetail(books[wanderIdx % books.length].id);
+      const pool = buildWanderPool(loadActiveBooks());
+      if (pool.length) showBookDetail(pool[wanderIdx % pool.length].id);
+    });
+    document.getElementById('wanderWishBtn').addEventListener('click', (e) => {
+      e.stopPropagation();
+      const id = e.currentTarget.dataset.id;
+      if (!id) return;
+      const book = loadActiveBooks().find(b => b.id === id);
+      if (!book) return;
+      if (normalizeReadingStatus(book.readingStatus) !== '要读') {
+        updateBook(id, { readingStatus: '要读' });
+        e.currentTarget.textContent = '♥';
+        e.currentTarget.classList.add('wished');
+      }
     });
     document.getElementById('wanderPrev').addEventListener('click', (e) => { e.stopPropagation(); prevWander(); });
     document.getElementById('wanderNext').addEventListener('click', (e) => { e.stopPropagation(); nextWander(); });
