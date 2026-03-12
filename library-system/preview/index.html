@@ -1817,6 +1817,7 @@
     }
     document.getElementById('shelfSortToggle').onclick = () => {
       bookSortMode = bookSortMode === 'alpha' ? 'time' : 'alpha';
+      localStorage.setItem('lib:sort-mode:v1', bookSortMode);
       render();
     };
     els.finishEntryBtn.onclick = () => { entrySessionCount = 0; if (scannerActive) stopScanner(); clearDraftFields({ keepIsbn: false, keepLocation: false }); setPage('home', { mode: 'dashboard' }); };
@@ -2621,7 +2622,7 @@
     let editReturnPage = 'home';
     let editReturnMode = 'dashboard';
     let editReturnScrollY = 0;
-    let bookSortMode = 'alpha'; // 'alpha' | 'time'
+    let bookSortMode = localStorage.getItem('lib:sort-mode:v1') || 'alpha'; // 'alpha' | 'time'
 
     function stopScanner() {
       scannerActive = false;
