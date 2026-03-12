@@ -523,13 +523,13 @@
       width: 28px; height: 28px;
       border: none; background: transparent; cursor: pointer;
       display: flex; align-items: center; justify-content: center;
-      font-size: 16px; opacity: .38; border-radius: 50%; padding: 0;
-      transition: opacity .15s, transform .18s;
+      font-size: 16px; color: var(--accent2); opacity: .45; border-radius: 50%; padding: 0;
+      transition: opacity .2s, transform .18s, color .2s;
       -webkit-tap-highlight-color: transparent;
     }
-    .wander-wish-btn:hover  { opacity: .65; transform: scale(1.12); }
+    .wander-wish-btn:hover  { opacity: .75; transform: scale(1.12); }
     .wander-wish-btn:active { transform: scale(1.2); }
-    .wander-wish-btn.wished { opacity: 1; }
+    .wander-wish-btn.wished { opacity: 1; color: #C2785C; }
     /* 翻页箭头：覆盖在卡片上，半透明 */
     .wander-nav {
       position: absolute;
@@ -3533,7 +3533,12 @@
       if (!id) return;
       const book = loadActiveBooks().find(b => b.id === id);
       if (!book) return;
-      if (normalizeReadingStatus(book.readingStatus) !== '要读') {
+      const isWant = normalizeReadingStatus(book.readingStatus) === '要读';
+      if (isWant) {
+        updateBook(id, { readingStatus: '' });
+        e.currentTarget.textContent = '♡';
+        e.currentTarget.classList.remove('wished');
+      } else {
         updateBook(id, { readingStatus: '要读' });
         e.currentTarget.textContent = '♥';
         e.currentTarget.classList.add('wished');
