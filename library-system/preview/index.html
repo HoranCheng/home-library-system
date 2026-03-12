@@ -423,7 +423,7 @@
       display: flex;
       flex-direction: row;
       align-items: stretch;
-      min-height: 178px;
+      height: 192px;
       cursor: pointer;
       position: relative;
     }
@@ -470,24 +470,25 @@
       margin-bottom: 6px; width: fit-content;
     }
     .wander-title {
-      font-size: clamp(13.5px, 4vw, 17px);
+      font-size: 15px;
       font-family: var(--serif); font-weight: 700;
-      line-height: 1.38; margin-bottom: 4px;
+      line-height: 1.35; margin-bottom: 4px;
       display: -webkit-box;
-      -webkit-line-clamp: 3; -webkit-box-orient: vertical;
+      -webkit-line-clamp: 2; -webkit-box-orient: vertical;
       overflow: hidden;
     }
     .wander-meta {
       font-size: 11px; color: var(--muted);
       margin-bottom: 7px;
-      display: flex; align-items: center; gap: 5px; flex-wrap: wrap;
+      display: flex; align-items: center; gap: 5px;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
     }
     .wander-summary {
-      font-size: clamp(11px, 3vw, 12.5px);
-      color: var(--muted); line-height: 1.6;
+      font-size: 12px;
+      color: var(--muted); line-height: 1.55;
       display: -webkit-box;
-      -webkit-line-clamp: 3; -webkit-box-orient: vertical;
-      overflow: hidden; flex: 1; margin-bottom: 10px;
+      -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+      overflow: hidden; flex: 1; min-height: 0; margin-bottom: 8px;
     }
     .wander-bottom {
       display: flex; align-items: center; justify-content: space-between;
@@ -1195,7 +1196,7 @@
 
     function normalizeReadingStatus(v) {
       const s = String(v || '').trim();
-      if (['读完', '已读完', '已完成', 'done'].includes(s)) return '读过';
+      if (['读过', '读完', '已读完', '已完成', 'done'].includes(s)) return '读过';
       return '';  // 未读（默认）
     }
 
@@ -3589,6 +3590,8 @@
         if (['读完', '已读完', '已完成', 'done'].includes(s)) {
           b.readingStatus = '读过';
           changed = true;
+        } else if (s === '读过') {
+          // Already migrated, skip
         } else if (['要读', '想读', '在读', '正在读', 'want', 'reading'].includes(s)) {
           b.readingStatus = '';
           changed = true;
