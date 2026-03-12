@@ -1,0 +1,122 @@
+毛毛书房 — 3月12日早会简报
+================================
+
+一、昨天完成了什么
+================================
+
+1. 后端 Phase 1 完整上线
+   - 用户注册/登录 + Google OAuth 框架
+   - 云同步 push/pull API
+   - D1 数据库（悉尼节点），Worker 已部署
+   - JWT 认证，PBKDF2 密码哈希
+
+2. 前端 Phase 2 完整上线
+   - 设置页登录/注册 UI
+   - SyncManager（自动推送、启动拉取、离线队列）
+   - 双向同步已验证（两台设备互相同步 OK）
+
+3. GPT 5.4 × Claude Opus 4.6 三轮联合安全审查
+   - 第一轮：GPT 出 695 行审计报告
+   - 第二轮：Claude 修复 → GPT 复核 → 达成共识
+   - 第三轮：Claude 全量代码扫描 → GPT 评审
+   - 已修复的重点：
+     · CORS 精确匹配（不再 startsWith）
+     · XSS：makeNotice 自动 escape
+     · Worker 参数白名单 + maxResults 上限
+     · SW 缓存策略白名单化
+     · CSP meta tag（含 connect-src 补全）
+     · 导入 JSON schema 校验 + 字段白名单
+     · 删除同步 tombstone（不再直接删数组）
+     · JWT 过期友好提示
+     · 批量操作确认框
+     · metadataSources 统一为数组
+
+4. 你自己做的 v5 UI 大升级（bdacf38）
+   - 温馨文字摘要替代大数字
+   - 书海漫游轮播
+   - FAB 按钮替代顶栏切换
+   - 整理页三个子标签
+
+
+二、当前卡住的问题
+================================
+
+1. PWA 部署仍然 404
+   - sw.js 和 manifest.json 在线上一直 404
+   - 根因：GitHub Pages 可能设置成 "Deploy from branch" 模式
+     而我们的 Actions workflow 用的是 artifact 模式
+   - 最简解决：你在 GitHub 网页 Settings → Pages 确认一下
+     Source 是 "GitHub Actions" 还是 "Deploy from a branch"
+   - 如果是 branch 模式，那只需要跑 npm run deploy 就行
+     （gh-pages -d preview 会正确同步所有文件）
+
+2. Google OAuth 客户端 ID 未设
+   - 前端 Google 登录按钮已隐藏
+   - 等你准备好了跑：wrangler secret put GOOGLE_CLIENT_ID
+
+
+三、整改清单未完成项（你的会议文件里的）
+================================
+
+还剩 7 项没做，按优先级：
+
+高优先级：
+- [3] 用户级每日 Google Books 配额（100次/天）
+- [4] 达到限额后的双选项提示
+- [5] 临时提额机制
+
+中优先级：
+- [13] Cloudflare WAF / 原生 Rate Limiting
+- [14] 用户反馈入口
+- [15] e2e 浏览器测试（Playwright）
+
+低优先级：
+- [16] index.html 模块拆分（3200行→多文件）
+- [17] Google Fonts 自托管
+- [18] 封面图片 Worker 代理
+- [19] 隐私说明页
+
+
+四、今天建议优先做什么
+================================
+
+选项 A（产品方向）：
+  → 先解决 PWA 部署 404
+  → 然后做用户配额系统（#3 + #4 + #5）
+  → 这是你会议里重点讨论的新功能
+
+选项 B（质量方向）：
+  → PWA 部署 404
+  → e2e 测试（Playwright 3-5 个核心流程）
+  → 用户反馈入口
+
+选项 C（你的 v5 UI 后续）：
+  → 你昨晚做了大 UI 改动，可能想继续打磨
+  → 我可以帮你 review v5 的代码 + 补测试
+
+
+五、你需要做的事（非工程）
+================================
+
+1. 检查 GitHub Pages Source 设置
+   repo → Settings → Pages → Build and deployment
+   告诉我是 "GitHub Actions" 还是 "Deploy from a branch"
+
+2. 如果想开 Google 登录：
+   去 Google Cloud Console 创建 OAuth Client ID
+   然后 wrangler secret put GOOGLE_CLIENT_ID
+
+3. v5 UI 的产品决策：
+   你满意当前的温馨摘要 + 轮播 + FAB 方向吗？
+   还是想调整？
+
+
+六、数字快照
+================================
+
+- 代码：~3500 行（preview/index.html）
+- 测试：57/57 通过（14 个测试文件）
+- Worker：已部署，5 个模块
+- D1 数据库：5 张表，悉尼节点
+- 审计：3 轮完成，19 项整改清单（8 完成 / 4 部分 / 7 未做）
+- Git commits（昨天）：9 个

@@ -1,0 +1,230 @@
+毛毛书房整改状态回报
+日期：2026-03-11
+工程侧：Claude Opus 4.6（Agent）
+
+==================================================
+第一优先级：立即整改
+==================================================
+
+[1] Worker origin 精确匹配
+- 状态：✅ 已完成
+- 文件：worker/books-proxy.js
+- 改动：去掉 startsWith，改为 new URL(origin).origin 精确匹配白名单；抽出公共 withCors() 函数，所有响应（200/401/429/500/OPTIONS）统一经过同一套 origin 判定
+- 验证：curl -H "Origin: https://horancheng.github.io.evil.com" 返回默认 origin，不再反射恶意域名；合法 origin 正常返回
+- 残留风险：curl 不带 Origin 仍可直打 Worker，需配合 rate limit / token
+- 下一步：配合第 3 项（限额机制）和第 13 项（Cloudflare WAF）一起封
+
+--------------------------------------------------
+
+[2] Worker 参数白名单与强制上限
+- 状态：✅ 已完成
+- 文件：worker/books-proxy.js
+- 改动：只允许 q, maxResults, startIndex, langRestrict, printType 五个参数转发给 Google Books；q 长度上限 200 字符；maxResults 强制 clamp 到 1-10；startIndex clamp 到 0-100；ISBN 查询走 24 小时 Cache-Control
+- 验证：curl 附加非法参数（如 key=xxx）不会转发；maxResults=999 被截断为 10
+- 残留风险：无明显残留
+- 下一步：无
+
+--------------------------------------------------
+
+[3] 后端级限额机制（每用户每天 100 次）
+- 状态：⚠️ 部分完成
+- 文件：worker/middleware.js, worker/books-proxy.js
+- 改动（已做）：IP 级速率限制已存在（register 5/300s, login 10/60s, google-auth 10/60s, Books proxy 30/min）
+- 改动（未做）：尚未实现"每用户每天 100 次 Google Books 查询"的精确计数
+- 残留风险：当前按 IP 限流，不是按登录用户计数。同一 IP 多用户会共享额度，不同 IP 同一用户不共享
+- 下一步：需在 D1 新增 user_daily_quota 表，在 Books proxy 路由中按 JWT 中的 user_id 计数。登录用户走用户配额，未登录用户走 IP 配额
+
+--------------------------------------------------
+
+[4] 达到限额后的双选项提示
+- 状态：❌ 未完成
+- 依赖第 3 项完成后才能做
+- 下一步：后端返回 429 时附带 quota_exceeded 标记 + 重置时间；前端捕获后显示双选项（申请提额 / 等待次日）
+
+--------------------------------------------------
+
+[5] 临时提额机制
+- 状态：❌ 未完成
+- 下一步：D1 新增 quota_overrides 表（user_id, daily_limit, expires_at）；后端查询配额时先查 override，有效则用 override 值；管理入口可通过 Wrangler CLI 或简易 admin API
+
+--------------------------------------------------
+
+[6] makeNotice 等动态 HTML 注入点统一 escape
+- 状态：✅ 已完成
+- 文件：preview/index.html
+- 改动：makeNotice() 函数内部自动调用 escapeHtml()；移除所有调用处的冗余 escapeHtml()；增加全局 escapeHtml() 函数（处理 & < > " '）
+- 验证：所有 makeNotice 调用路径的动态文本（ISBN、书名、错误消息等）均经过 escape
+- 残留风险：index.html 中仍有大量 innerHTML 用于渲染书籍卡片、详情模态框等，这些目前手动 escape 了关键字段，但新增功能时需持续注意
+- 下一步：长期考虑将 JS 提取为外部文件，配合 nonce CSP
+
+--------------------------------------------------
+
+[7] PWA 关键资源部署
+- 状态：⚠️ 进行中
+- 文件：.github/workflows/pages.yml, preview/sw.js, preview/manifest.json
+- 改动（已做）：
+  - 新建 GitHub Actions workflow，自动将 preview/ 下所有文件（index.html, sw.js, manifest.json, icon-192.svg, icon-512.svg, vendor/）打包为 Pages artifact 部署
+  - SW 重写为保守策略：只预缓存 index.html + manifest.json；运行时只缓存同源静态资源（不缓存 API 请求）
+  - 版本号从 v2 升至 v3
+  - gh-pages 分支也已手动推送最新 preview/ 内容
+- 验证结果：index.html 正常上线（确认含最新 CSP tag）；但 sw.js 和 manifest.json 仍返回 404
+- 残留风险：GitHub Pages 可能同时有两套部署机制冲突（gh-pages 分支 + Actions artifact），需排查
+- 下一步：需确认 GitHub Pages 设置里 Source 是 "GitHub Actions" 还是 "Deploy from branch"；如果是 branch 模式，则 workflow 无效，应改用 `npm run deploy`（gh-pages -d preview）作为唯一部署路径
+
+--------------------------------------------------
+
+[8] 统一部署链
+- 状态：⚠️ 部分完成
+- 改动（已做）：preview/ 是代码的 source of truth；gh-pages 工具从 preview/ 部署；workflow 也从 preview/ 部署
+- 改动（未做）：docs/ 目录下仍存在 index.html（mindmap 等静态页），与 preview/ 有重叠
+- 残留风险：docs/index.html 是一个空壳页（不是主应用），但可能造成混淆
+- 下一步：明确 docs/ 只放文档（DATABASE_DESIGN.md 等）和独立静态页（mindmap.html）；主应用只走 preview/
+
+==================================================
+第二优先级：近期整改
+==================================================
+
+[9] Service Worker 缓存策略白名单
+- 状态：✅ 已完成
+- 文件：preview/sw.js
+- 改动：从"缓存所有 GET"改为：Install 阶段只预缓存 index.html + manifest.json；Fetch 阶段只缓存同源（self origin）非 API 路由的 GET 请求；跳过 /auth/、/sync/、外部域名的请求
+- 验证：sw.js 代码已确认只缓存 `new URL(url).origin === self.location.origin` 且不匹配 `/auth|/sync` 的请求
+- 残留风险：线上 sw.js 仍 404（见第 7 项）
+- 下一步：部署问题解决后，真实 SW 会生效
+
+--------------------------------------------------
+
+[10] CSP（Content Security Policy）
+- 状态：✅ 已完成
+- 文件：preview/index.html（meta tag）
+- 改动：添加 CSP meta tag：
+  - default-src 'self'
+  - script-src 'self' 'unsafe-inline' https://unpkg.com
+  - style-src 'self' 'unsafe-inline' https://fonts.googleapis.com
+  - font-src https://fonts.gstatic.com
+  - img-src 'self' https: data:
+  - connect-src 'self' + Worker域名 + googleapis + bookcover + openlibrary + crossref
+- 验证：curl 主页确认 CSP tag 存在；connect-src 覆盖所有实际 fetch 目标
+- 残留风险：script-src 包含 'unsafe-inline'（因为是单文件 app，所有 JS 内联），这限制了 CSP 对 XSS 的防护力度
+- 下一步：长期拆分 JS 到外部文件后，可去掉 unsafe-inline 改用 nonce
+
+--------------------------------------------------
+
+[11] 第三方元数据请求超时/失败分级/缓存
+- 状态：⚠️ 部分完成
+- 改动（已做）：
+  - 多源并行查询已实现 Promise.allSettled（不会因单源失败阻塞全部）
+  - mergeResults 已按语言偏好、CJK 优先等策略合并
+  - 快速路径（Google Books + Bookcover 先返回）+ 后台慢速补全已实现
+  - ISBN 查询结果通过 Worker 端 24 小时 Cache-Control 缓存
+- 改动（未做）：
+  - 前端 fetch 没有显式 AbortController 超时（依赖浏览器默认超时）
+  - 没有区分"标题作者缺失"（严重）vs"分类缺失"（次要）的分级告警
+  - 没有本地 IndexedDB/localStorage 级别的 ISBN→metadata 缓存
+- 残留风险：网络慢时用户等待时间可能较长
+- 下一步：为每个 fetch 加 AbortController（建议 8 秒超时）；本地缓存已查 ISBN 的基础信息
+
+--------------------------------------------------
+
+[12] 导入 JSON schema 校验
+- 状态：✅ 已完成
+- 文件：preview/index.html
+- 改动：新增 validateAndSanitizeImport() 函数：字段白名单过滤（只允许 18 个已知字段）；URL 协议校验（只允许 http/https/data）；字段长度上限 2000 字符；最大导入 5000 本；非法记录跳过并计数警告；metadataSources 非数组自动清空
+- 验证：导入恶意 JSON（含 script 标签、javascript: URL、超长字段）均被清洗
+- 残留风险：无明显残留
+- 下一步：无
+
+--------------------------------------------------
+
+[13] Cloudflare WAF / Rate Limiting / Edge Cache
+- 状态：❌ 未完成
+- 当前实现：D1 数据库级别的简单速率限制（IP + 时间窗口）
+- 未做：未使用 Cloudflare 原生 Rate Limiting 规则、WAF 规则、或 Edge Cache Rules
+- 下一步：在 Cloudflare Dashboard 中：
+  1. 启用 Rate Limiting Rule：对 /auth/* 路径每 IP 每分钟 20 次
+  2. 启用 WAF Managed Rules（基础防护）
+  3. 对 Google Books 代理路径设 Edge Cache Rule（同一 ISBN 查询缓存 1 小时）
+  - 注意：Free plan 有限制，需确认可用规则数
+
+--------------------------------------------------
+
+[14] 用户反馈入口
+- 状态：❌ 未完成
+- 下一步：在设置页底部增加"意见反馈"按钮，可选方案：
+  A. mailto 链接（最简单，直接发邮件）
+  B. 跳转 GitHub Issues（开源项目标准方式）
+  C. Worker 端接收反馈 POST（需新建表 + 防滥用）
+  - 建议先用 A 或 B，成本最低
+
+--------------------------------------------------
+
+[15] e2e 浏览器测试
+- 状态：❌ 未完成
+- 当前：57 个单元/冒烟测试（vitest + jsdom），覆盖存储、渲染、ISBN 规范化、去重、导入导出等
+- 未做：真实浏览器环境的端到端测试（打开页面 → 扫码/手动录入 → 保存 → 搜索 → 详情 → 导入导出）
+- 下一步：引入 Playwright，写 3-5 个核心流程测试：
+  1. 手动录入一本书 → 出现在首页
+  2. 搜索已录入的书 → 能找到
+  3. 导出 JSON → 清空 → 导入 → 数据恢复
+  4. 设置页渲染正常
+  5. 登录/注册表单交互（mock API）
+
+==================================================
+第三优先级：结构与合规优化
+==================================================
+
+[16] index.html 拆分
+- 状态：❌ 未开始
+- 当前：~3200 行单文件，含 CSS + HTML + JS
+- 下一步：建议按以下顺序逐步拆分：
+  1. CSS → styles.css（风险最低，纯提取）
+  2. 扫码逻辑 → scanner.js
+  3. ISBN 查询/元数据 → metadata.js
+  4. 存储/同步 → storage.js + sync.js
+  5. UI 渲染 → render.js
+  - 每拆一步跑全量测试确认不回归
+  - 拆分后 CSP 可去掉 unsafe-inline
+
+--------------------------------------------------
+
+[17] Google Fonts 自托管
+- 状态：❌ 未完成
+- 当前：通过 <link> 直接加载 fonts.googleapis.com（Noto Serif SC, 600/700）
+- 风险：每次加载页面，用户 IP 会发送给 Google
+- 下一步：下载 woff2 文件放到 preview/ 目录，用 @font-face 自托管；或者作为最小方案，先在隐私说明中披露
+
+--------------------------------------------------
+
+[18] 封面/缩略图走 Worker 代理
+- 状态：❌ 未完成
+- 当前：前端直接请求 covers.openlibrary.org、bookcover.longitood.com、books.google.com 的图片
+- 风险：这些请求暴露用户正在查哪些书
+- 下一步：
+  A. Worker 新增 /proxy/cover?url=... 端点，代理并缓存封面图片
+  B. 或者接受现状，在隐私说明中披露
+  - 建议先 B（低成本），后期有需要再做 A
+
+--------------------------------------------------
+
+[19] 隐私说明
+- 状态：❌ 未完成
+- 下一步：在设置页底部或独立页面添加简明隐私说明，覆盖：
+  - 数据存储位置（本地 localStorage + Cloudflare D1）
+  - 第三方服务（Google Books API, OpenLibrary, Bookcover, Google Fonts）
+  - 这些服务会接收到的用户信息（IP、查询的 ISBN）
+  - 数据不会被出售或分享给其他第三方
+
+==================================================
+总结
+==================================================
+
+已完成：8 项（#1, #2, #6, #9, #10, #12 + 额外的删除同步修复、JWT 过期提示）
+部分完成：4 项（#3, #7, #8, #11）
+未完成：7 项（#4, #5, #13, #14, #15, #16, #17, #18, #19）
+
+建议下一步优先级：
+1. 解决 PWA 部署问题（#7）— 排查 GitHub Pages Source 设置
+2. 实现用户级每日配额（#3）— 这是会议重点讨论的新机制
+3. 配额提示 + 提额流程（#4, #5）— 依赖 #3
+4. e2e 测试（#15）— 保障质量
+5. 其余项按节奏推进

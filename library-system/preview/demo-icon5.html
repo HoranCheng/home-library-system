@@ -1,0 +1,154 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+  <title>整理 icon 对比 v5</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg:#F6F3ED; --text:#2C261F; --muted:#7A6F62; --warn:#B8863A;
+      --serif:"Noto Serif SC","Songti SC",serif;
+    }
+    * { box-sizing:border-box; margin:0; }
+    body { margin:0; color:var(--text); font-family:-apple-system,BlinkMacSystemFont,"PingFang SC",sans-serif; background:var(--bg); }
+    .app { max-width:480px; margin:0 auto; padding:20px; padding-bottom:60px; }
+    h2 { font-size:14px; color:var(--muted); margin:28px 0 16px; letter-spacing:.04em; }
+    h2:first-child { margin-top:12px; }
+    .nav-row {
+      display:flex; align-items:center; gap:0;
+      background:rgba(44,38,31,.75); backdrop-filter:blur(20px);
+      border-radius:22px; padding:0 4px; width:fit-content; margin:0 auto;
+      box-shadow:0 4px 24px rgba(44,38,31,.18);
+    }
+    .nav-row button {
+      border:none; background:transparent; cursor:pointer;
+      padding:14px 16px; position:relative;
+      display:flex; align-items:center; justify-content:center;
+    }
+    .nav-row button svg {
+      width:20px; height:20px; stroke:rgba(255,253,248,.28); stroke-width:1.8;
+      fill:none; stroke-linecap:round; stroke-linejoin:round;
+    }
+    .nav-row button.active svg { stroke:#FFFDF8; }
+    .nav-row button .ghost-dot {
+      position:absolute; bottom:7px; left:50%; transform:translateX(-50%);
+      width:3px; height:3px; border-radius:50%; background:#FFFDF8; opacity:0;
+    }
+    .nav-row button.active .ghost-dot { opacity:1; }
+    .nav-row .ghost-fab { padding:12px 10px; }
+    .nav-row .ghost-fab svg { width:22px; height:22px; stroke:rgba(255,253,248,.45); stroke-width:1.6; }
+    .nav-row .nav-badge {
+      position:absolute; top:6px; right:6px;
+      background:var(--warn); color:#fff; font-size:8px; font-weight:700;
+      padding:1px 4px; border-radius:8px; min-width:12px; text-align:center;
+    }
+    .icon-big {
+      display:flex; align-items:center; justify-content:center;
+      width:64px; height:64px; margin:0 auto 8px;
+      background:rgba(44,38,31,.75); border-radius:16px;
+    }
+    .icon-big svg {
+      width:32px; height:32px; stroke:#FFFDF8; stroke-width:1.8;
+      fill:none; stroke-linecap:round; stroke-linejoin:round;
+    }
+    .label { text-align:center; font-size:12px; color:var(--muted); margin-top:10px; }
+    .label strong { color:var(--text); }
+  </style>
+</head>
+<body>
+<div class="app">
+
+  <h2>A · 标签 + 铅笔 — "有标签要补"</h2>
+  <div class="icon-big">
+    <svg viewBox="0 0 24 24">
+      <!-- tag shape -->
+      <path d="M4 4h7.586a1 1 0 0 1 .707.293l7.414 7.414a1 1 0 0 1 0 1.414l-5.586 5.586a1 1 0 0 1-1.414 0L5.293 11.293A1 1 0 0 1 5 10.586V5a1 1 0 0 1 1-1z"/>
+      <circle cx="8.5" cy="8.5" r="1" fill="#FFFDF8" stroke="none"/>
+      <!-- small pencil at bottom right -->
+      <path d="M16 20l2-2m0 0l1.5-1.5a.5.5 0 0 0 0-.7l-.3-.3a.5.5 0 0 0-.7 0L17 17m1 1l-1.5.5.5-1.5"/>
+    </svg>
+  </div>
+  <div class="nav-row">
+    <button class="active"><svg viewBox="0 0 24 24"><path d="M12 5c-2.5-2-6-2-8 0v14c2.5-1.2 5.5-1.2 8 .5"/><path d="M12 5c2.5-2 6-2 8 0v14c-2.5-1.2-5.5-1.2-8 .5"/></svg><span class="ghost-dot"></span></button>
+    <button><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><span class="ghost-dot"></span></button>
+    <button class="ghost-fab"><svg viewBox="0 0 24 24"><path d="M4 8V6a2 2 0 0 1 2-2h2"/><path d="M4 16v2a2 2 0 0 0 2 2h2"/><path d="M16 4h2a2 2 0 0 1 2 2v2"/><path d="M16 20h2a2 2 0 0 0 2-2v-2"/><path d="M12 8v8"/><path d="M8 12h8"/></svg></button>
+    <button style="position:relative">
+      <svg viewBox="0 0 24 24"><path d="M4 4h7.586a1 1 0 0 1 .707.293l7.414 7.414a1 1 0 0 1 0 1.414l-5.586 5.586a1 1 0 0 1-1.414 0L5.293 11.293A1 1 0 0 1 5 10.586V5a1 1 0 0 1 1-1z"/><circle cx="8.5" cy="8.5" r="1" fill="#FFFDF8" stroke="none"/><path d="M16 20l2-2m0 0l1.5-1.5a.5.5 0 0 0 0-.7l-.3-.3a.5.5 0 0 0-.7 0L17 17m1 1l-1.5.5.5-1.5"/></svg>
+      <span class="ghost-dot"></span><span class="nav-badge">9</span>
+    </button>
+    <button><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M5 20a7 7 0 0 1 14 0"/></svg><span class="ghost-dot"></span></button>
+  </div>
+  <div class="label"><strong>标签笔</strong> — 有个标签需要补信息，铅笔暗示"要编辑"</div>
+
+  <h2>B · 卡片 + 虚线缺口 — "信息不完整"</h2>
+  <div class="icon-big">
+    <svg viewBox="0 0 24 24">
+      <!-- card with missing corner -->
+      <path d="M6 4h8l4 4v12a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z"/>
+      <path d="M14 4v4h4"/>
+      <!-- dashed lines inside = incomplete fields -->
+      <line x1="8" y1="12" x2="16" y2="12" stroke-dasharray="2 2"/>
+      <line x1="8" y1="15.5" x2="13" y2="15.5" stroke-dasharray="2 2"/>
+    </svg>
+  </div>
+  <div class="nav-row">
+    <button class="active"><svg viewBox="0 0 24 24"><path d="M12 5c-2.5-2-6-2-8 0v14c2.5-1.2 5.5-1.2 8 .5"/><path d="M12 5c2.5-2 6-2 8 0v14c-2.5-1.2-5.5-1.2-8 .5"/></svg><span class="ghost-dot"></span></button>
+    <button><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><span class="ghost-dot"></span></button>
+    <button class="ghost-fab"><svg viewBox="0 0 24 24"><path d="M4 8V6a2 2 0 0 1 2-2h2"/><path d="M4 16v2a2 2 0 0 0 2 2h2"/><path d="M16 4h2a2 2 0 0 1 2 2v2"/><path d="M16 20h2a2 2 0 0 0 2-2v-2"/><path d="M12 8v8"/><path d="M8 12h8"/></svg></button>
+    <button style="position:relative">
+      <svg viewBox="0 0 24 24"><path d="M6 4h8l4 4v12a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z"/><path d="M14 4v4h4"/><line x1="8" y1="12" x2="16" y2="12" stroke-dasharray="2 2"/><line x1="8" y1="15.5" x2="13" y2="15.5" stroke-dasharray="2 2"/></svg>
+      <span class="ghost-dot"></span><span class="nav-badge">9</span>
+    </button>
+    <button><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M5 20a7 7 0 0 1 14 0"/></svg><span class="ghost-dot"></span></button>
+  </div>
+  <div class="label"><strong>缺口卡片</strong> — 文件有折角，里面虚线表示"还没填完"</div>
+
+  <h2>C · 铅笔 + 横线 — "在填表"</h2>
+  <div class="icon-big">
+    <svg viewBox="0 0 24 24">
+      <!-- pencil -->
+      <path d="M15 3l3 3L7 17H4v-3L15 3z"/>
+      <!-- lines being written -->
+      <line x1="4" y1="21" x2="20" y2="21"/>
+    </svg>
+  </div>
+  <div class="nav-row">
+    <button class="active"><svg viewBox="0 0 24 24"><path d="M12 5c-2.5-2-6-2-8 0v14c2.5-1.2 5.5-1.2 8 .5"/><path d="M12 5c2.5-2 6-2 8 0v14c-2.5-1.2-5.5-1.2-8 .5"/></svg><span class="ghost-dot"></span></button>
+    <button><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><span class="ghost-dot"></span></button>
+    <button class="ghost-fab"><svg viewBox="0 0 24 24"><path d="M4 8V6a2 2 0 0 1 2-2h2"/><path d="M4 16v2a2 2 0 0 0 2 2h2"/><path d="M16 4h2a2 2 0 0 1 2 2v2"/><path d="M16 20h2a2 2 0 0 0 2-2v-2"/><path d="M12 8v8"/><path d="M8 12h8"/></svg></button>
+    <button style="position:relative">
+      <svg viewBox="0 0 24 24"><path d="M15 3l3 3L7 17H4v-3L15 3z"/><line x1="4" y1="21" x2="20" y2="21"/></svg>
+      <span class="ghost-dot"></span><span class="nav-badge">9</span>
+    </button>
+    <button><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M5 20a7 7 0 0 1 14 0"/></svg><span class="ghost-dot"></span></button>
+  </div>
+  <div class="label"><strong>编辑笔</strong> — 经典铅笔图标，"有东西要编辑补全"</div>
+
+  <h2>D · 小气泡感叹号 — "有事要处理"</h2>
+  <div class="icon-big">
+    <svg viewBox="0 0 24 24">
+      <!-- rounded square notification -->
+      <rect x="3" y="3" width="18" height="18" rx="5"/>
+      <!-- exclamation mark -->
+      <line x1="12" y1="8" x2="12" y2="13"/>
+      <circle cx="12" cy="16.5" r=".8" fill="#FFFDF8" stroke="none"/>
+    </svg>
+  </div>
+  <div class="nav-row">
+    <button class="active"><svg viewBox="0 0 24 24"><path d="M12 5c-2.5-2-6-2-8 0v14c2.5-1.2 5.5-1.2 8 .5"/><path d="M12 5c2.5-2 6-2 8 0v14c-2.5-1.2-5.5-1.2-8 .5"/></svg><span class="ghost-dot"></span></button>
+    <button><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><span class="ghost-dot"></span></button>
+    <button class="ghost-fab"><svg viewBox="0 0 24 24"><path d="M4 8V6a2 2 0 0 1 2-2h2"/><path d="M4 16v2a2 2 0 0 0 2 2h2"/><path d="M16 4h2a2 2 0 0 1 2 2v2"/><path d="M16 20h2a2 2 0 0 0 2-2v-2"/><path d="M12 8v8"/><path d="M8 12h8"/></svg></button>
+    <button style="position:relative">
+      <svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="5"/><line x1="12" y1="8" x2="12" y2="13"/><circle cx="12" cy="16.5" r=".8" fill="#FFFDF8" stroke="none"/></svg>
+      <span class="ghost-dot"></span><span class="nav-badge">9</span>
+    </button>
+    <button><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M5 20a7 7 0 0 1 14 0"/></svg><span class="ghost-dot"></span></button>
+  </div>
+  <div class="label"><strong>提醒方块</strong> — 圆角方块+感叹号，"有待办要处理"</div>
+
+</div>
+</body>
+</html>

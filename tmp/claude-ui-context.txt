@@ -1,0 +1,62 @@
+你好，我是毛毛书房（home-library-system）的开发者。下面附的是我项目的完整前端代码（单文件 HTML app，约 3500 行）。请先理解整体结构，然后我会跟你讨论 UI 改进。
+
+== 项目概况 ==
+
+名称：毛毛书房（毛毛图书管理系统）
+类型：纯 HTML/CSS/JS 单文件 PWA（不用 React/Vue）
+平台：手机端优先（max-width 480px，iOS safe-area 适配）
+语言：中文（zh-CN）
+字体：Noto Serif SC（衬线体，书香气质）
+
+== 页面结构（底部导航切换）==
+
+1. 首页（home）
+   - 仪表盘模式（dashboard）：温馨文字摘要 + 阅读进度条 + 书海漫游轮播
+   - 录入模式（entry）：扫码/手动录入新书（通过 FAB 按钮进入）
+
+2. 搜索页（search）
+   - 搜索框 + 分类筛选 chips + 书籍列表
+   - 支持扫码搜索
+
+3. 整理页（organize）
+   - 三个子标签：待补充 / 阅读统计 / 书架分布
+   - 待补充：列出未完善的书，可单本入库或批量入库
+   - 阅读统计：在读/要读/读完 卡片 + 月度录入时间线
+   - 书架分布：按存放位置分布
+
+4. 设置页（settings）
+   - 账号登录/注册（邮箱密码）
+   - 云同步状态
+   - 数据导入/导出（JSON + CSV）
+
+== UI 设计语言 ==
+
+- 暖色系：主色 #5a3e28（深棕），强调色 #b8860b（暗金）
+- 卡片圆角 14px，阴影柔和
+- 底部导航栏固定，4 个 tab + 中间 FAB 按钮
+- 书籍卡片：封面图 + 标题/作者/分类标签
+- 分类用彩色标签（category chips），颜色根据分类名哈希生成
+
+== 关键组件 ==
+
+- topbar：应用标题 + "XX的书房" 副标题
+- bottomNav：首页 / 搜索 / FAB(+) / 整理 / 设置
+- scannerBox：全屏摄像头扫码界面（含瞄准框、闪光灯按钮、镜头切换）
+- detailModal：书籍详情弹窗（封面大图 + 全字段 + 编辑/删除）
+- authModal：登录/注册表单（邮箱密码，可切换模式）
+
+== 数据 ==
+
+- 本地存储：localStorage（lib:books:v1）
+- 云同步：Cloudflare Worker + D1（可选，登录后启用）
+- 书籍字段：id, isbn, title, author, category, readingStatus, readingProgress, publishedYear, location, description, notes, coverUrl, bookLang, metadataSources, status, createdAt, updatedAt
+
+== 你可以帮我做的事 ==
+
+1. 用 Artifact 生成可交互的 UI 原型（React JSX 没关系，我只看效果）
+2. 讨论 UI 改进方向（布局、配色、交互、动画等）
+3. 帮我整理具体的 CSS/HTML 修改方案
+
+注意：最终代码由另一个工程 Agent 执行，你只需要出设计方案和修改说明就好。
+
+== 完整代码见附件 ==

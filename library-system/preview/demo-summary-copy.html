@@ -1,0 +1,160 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+  <title>Summary Card · 进度条对比</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg:#F6F3ED; --bg2:#EDE8E0; --card:#FFFDF8; --line:rgba(44,38,31,.07);
+      --text:#2C261F; --muted:#7A6F62; --accent:#3D5E4C; --accent-light:#E8EFE9;
+      --accent2:#8B6F4E; --brown-light:#F5EDE2;
+      --ok:#4A7C59; --ok-light:#EAF3EC; --warn:#B8863A; --warn-light:#FFF7E6; --danger:#A84E4E;
+      --surface:#F3EFE8; --surface-2:#EBE6DC;
+      --shadow:0 2px 12px rgba(44,38,31,.06);
+      --serif:"Noto Serif SC","Songti SC","STSong","Georgia",serif;
+    }
+    * { box-sizing:border-box; margin:0; }
+    body {
+      margin:0; color:var(--text);
+      font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","PingFang SC","Noto Sans SC",sans-serif;
+      background:var(--bg); padding:20px;
+    }
+    .app { max-width:480px; margin:0 auto; padding-bottom:60px; }
+
+    h2 { font-size:14px; color:var(--muted); margin:32px 0 12px; letter-spacing:.04em; }
+    h2:first-child { margin-top:12px; }
+
+    .summary-card {
+      background:var(--card); border-radius:20px; padding:20px; box-shadow:var(--shadow);
+      border:1px solid rgba(255,255,255,.6); margin-bottom:16px;
+    }
+    .summary-greeting { font-size:14px; color:var(--muted); margin-bottom:6px; }
+    .summary-headline {
+      font-size:20px; font-family:var(--serif); font-weight:700; line-height:1.4; margin-bottom:4px;
+    }
+    .summary-headline .num { color:var(--accent); font-weight:900; }
+    .summary-sub {
+      font-size:13px; color:var(--muted); line-height:1.5; margin-bottom:16px;
+    }
+    .summary-sub:last-child { margin-bottom:0; }
+
+    /* Progress bar */
+    .summary-bar-wrap { margin-bottom:14px; }
+    .summary-bar { height:10px; border-radius:5px; background:var(--surface-2); overflow:hidden; display:flex; }
+    .summary-bar .seg { height:100%; transition:width .8s ease; }
+    .summary-bar-legend { display:flex; gap:14px; margin-top:8px; flex-wrap:wrap; }
+    .summary-legend-item { display:flex; align-items:center; gap:5px; font-size:11px; color:var(--muted); }
+    .summary-legend-item .dot { width:8px; height:8px; border-radius:50%; flex-shrink:0; }
+    .summary-legend-item .val { font-weight:700; color:var(--text); }
+
+    /* Soft tags - alternative to progress bar */
+    .soft-tags { display:flex; gap:8px; flex-wrap:wrap; margin-top:12px; }
+    .soft-tag {
+      display:inline-flex; align-items:center; gap:5px;
+      padding:6px 12px; border-radius:20px; font-size:12px; font-weight:500;
+    }
+    .soft-tag.green { background:var(--ok-light); color:var(--ok); }
+    .soft-tag.brown { background:var(--brown-light); color:var(--accent2); }
+    .soft-tag.muted { background:var(--surface); color:var(--muted); }
+
+    /* Recent book line - another alternative */
+    .recent-line {
+      display:flex; align-items:center; gap:10px; margin-top:14px;
+      padding:10px 14px; border-radius:12px; background:var(--surface);
+      font-size:13px; color:var(--muted);
+    }
+    .recent-line .book-icon { font-size:16px; flex-shrink:0; }
+    .recent-line .book-title { color:var(--text); font-weight:600; }
+
+    .divider { border:none; border-top:1px dashed var(--surface-2); margin:28px 0; }
+  </style>
+</head>
+<body>
+<div class="app">
+
+  <h2>A · 有进度条（当前方案）</h2>
+  <div class="summary-card" id="cardA"></div>
+
+  <h2>B · 无进度条，纯文案</h2>
+  <div class="summary-card" id="cardB"></div>
+
+  <h2>C · 无进度条，用柔和标签替代</h2>
+  <div class="summary-card" id="cardC"></div>
+
+  <h2>D · 无进度条，用最近在读替代</h2>
+  <div class="summary-card" id="cardD"></div>
+
+</div>
+
+<script>
+const TOTAL = 58;
+const DONE = 28;
+const FAV = 5;
+const USER = '毛毛';
+const unread = TOTAL - DONE;
+const doneP = (DONE / TOTAL * 100).toFixed(0);
+const unreadP = (unread / TOTAL * 100).toFixed(0);
+const sub = '还有一些书可以补充更多信息';
+
+// A: 有进度条
+document.getElementById('cardA').innerHTML = `
+  <div class="summary-greeting">${USER}的书房 📖</div>
+  <div class="summary-headline">
+    书架上整理了 <span class="num">${TOTAL}</span> 本书
+  </div>
+  <div class="summary-sub">${sub}</div>
+  <div class="summary-bar-wrap">
+    <div class="summary-bar">
+      <div class="seg" style="width:${doneP}%;background:var(--ok)"></div>
+      <div class="seg" style="width:${unreadP}%;background:#CCBFB0"></div>
+    </div>
+    <div class="summary-bar-legend">
+      <div class="summary-legend-item"><span class="dot" style="background:var(--ok)"></span>读过 <span class="val">${DONE}</span></div>
+      <div class="summary-legend-item"><span class="dot" style="background:#CCBFB0"></span>未读 <span class="val">${unread}</span></div>
+      ${FAV > 0 ? `<div class="summary-legend-item"><span class="dot" style="background:#C2785C"></span>收藏 <span class="val">${FAV}</span></div>` : ''}
+    </div>
+  </div>
+`;
+
+// B: 纯文案，干净
+document.getElementById('cardB').innerHTML = `
+  <div class="summary-greeting">${USER}的书房 📖</div>
+  <div class="summary-headline">
+    书架上整理了 <span class="num">${TOTAL}</span> 本书
+  </div>
+  <div class="summary-sub">${sub}</div>
+`;
+
+// C: 柔和标签
+document.getElementById('cardC').innerHTML = `
+  <div class="summary-greeting">${USER}的书房 📖</div>
+  <div class="summary-headline">
+    书架上整理了 <span class="num">${TOTAL}</span> 本书
+  </div>
+  <div class="summary-sub">${sub}</div>
+  <div class="soft-tags">
+    <span class="soft-tag green">读过 ${DONE} 本</span>
+    <span class="soft-tag brown">收藏 ${FAV} 本</span>
+    <span class="soft-tag muted">未读 ${unread} 本</span>
+  </div>
+`;
+
+// D: 最近在读
+document.getElementById('cardD').innerHTML = `
+  <div class="summary-greeting">${USER}的书房 📖</div>
+  <div class="summary-headline">
+    书架上整理了 <span class="num">${TOTAL}</span> 本书
+  </div>
+  <div class="summary-sub">${sub}</div>
+  <div class="recent-line">
+    <span class="book-icon">📖</span>
+    <span>最近在读 <span class="book-title">百年孤独</span></span>
+  </div>
+`;
+</script>
+</body>
+</html>

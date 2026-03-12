@@ -1,0 +1,408 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+  <title>首页预览 · 全部改动</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg:#F6F3ED; --bg2:#EDE8E0; --card:#FFFDF8; --line:rgba(44,38,31,.07);
+      --text:#2C261F; --muted:#7A6F62; --accent:#3D5E4C; --accent-light:#E8EFE9;
+      --accent2:#8B6F4E; --brown-light:#F5EDE2;
+      --ok:#4A7C59; --ok-light:#EAF3EC; --warn:#B8863A; --warn-light:#FFF7E6; --danger:#A84E4E;
+      --surface:#F3EFE8; --surface-2:#EBE6DC;
+      --shadow:0 2px 12px rgba(44,38,31,.06);
+      --shadow-md:0 4px 20px rgba(44,38,31,.10);
+      --safe-bottom: env(safe-area-inset-bottom, 12px);
+      --serif:"Noto Serif SC","Songti SC","STSong","Georgia",serif;
+    }
+    * { box-sizing:border-box; margin:0; }
+    html { -webkit-text-size-adjust:100%; }
+    body {
+      margin:0; color:var(--text);
+      font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","PingFang SC","Noto Sans SC",sans-serif;
+      background:var(--bg);
+    }
+    .app { max-width:480px; margin:0 auto; min-height:100vh; position:relative; }
+
+    /* ── Topbar: 只留一行 "xx的书房" ── */
+    .topbar {
+      position:sticky; top:0; z-index:20; padding:50px 20px 14px;
+      background:rgba(246,243,237,.92); backdrop-filter:blur(12px);
+    }
+    .topbar-title { font-size:22px; font-family:var(--serif); font-weight:700; color:var(--text); line-height:1.2; }
+
+    .content { padding:0 20px calc(var(--safe-bottom) + 72px); }
+    .subsection-title { margin:20px 0 10px; font-size:12px; color:var(--muted); font-weight:600; letter-spacing:.04em; }
+    .section-label {
+      font-size:9px; font-weight:400; letter-spacing:.2em;
+      text-transform:uppercase; color:rgba(44,38,31,.22); margin-left:2px;
+    }
+    .muted { color:var(--muted); font-size:13px; }
+    .card { background:var(--card); border-radius:16px; padding:16px; box-shadow:var(--shadow); border:1px solid rgba(255,255,255,.6); }
+
+    /* ── Summary card: 无 greeting, 无进度条 ── */
+    .summary-card {
+      background:var(--card); border-radius:20px; padding:20px; box-shadow:var(--shadow);
+      border:1px solid rgba(255,255,255,.6); cursor:pointer;
+    }
+    .summary-headline {
+      font-size:20px; font-family:var(--serif); font-weight:700; line-height:1.4; margin-bottom:4px;
+    }
+    .summary-headline .num { color:var(--accent); font-weight:900; }
+    .summary-sub { font-size:13px; color:var(--muted); line-height:1.5; }
+
+    /* ── Wander carousel ── */
+    .wander-section { margin:0 -20px; padding:0 20px; position:relative; }
+    .wander-card {
+      background:var(--card); border-radius:18px; overflow:hidden;
+      box-shadow:var(--shadow-md); border:1px solid rgba(255,255,255,.7);
+      display:flex; flex-direction:row; align-items:stretch;
+      height:192px; cursor:pointer; position:relative;
+    }
+    .wander-cover-area {
+      width:122px; flex-shrink:0; position:relative; overflow:hidden;
+      display:flex; align-items:center; justify-content:center;
+      padding:18px 14px; background:linear-gradient(145deg, #f0e8d8, #e2d6c4);
+    }
+    .wander-cover-bg {
+      position:absolute; inset:0; opacity:.18; filter:blur(26px) saturate(1.5);
+      background-size:cover; background-position:center;
+    }
+    .wander-cover {
+      width:82px; height:116px; border-radius:5px; object-fit:cover;
+      box-shadow:0 8px 26px rgba(44,38,31,.22), 0 2px 6px rgba(44,38,31,.1);
+      position:relative; z-index:3; flex-shrink:0;
+    }
+    .wander-deco {
+      position:absolute; font-size:68px; opacity:.05;
+      font-family:var(--serif); color:var(--accent2);
+      pointer-events:none; right:-4px; bottom:-8px; line-height:1;
+    }
+    .wander-info {
+      flex:1; min-width:0; padding:16px 14px 14px 12px;
+      display:flex; flex-direction:column; justify-content:space-between;
+    }
+    .wander-cat {
+      display:inline-block; font-size:10px; font-weight:600;
+      padding:2px 8px; border-radius:20px;
+      background:var(--accent-light); color:var(--accent);
+      margin-bottom:6px; width:fit-content;
+    }
+    .wander-title {
+      font-size:15px; font-family:var(--serif); font-weight:700;
+      line-height:1.4; color:var(--text);
+      overflow:hidden; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical;
+    }
+    .wander-meta { font-size:11px; color:var(--muted); margin-top:4px; }
+    .wander-bottom { display:flex; align-items:center; justify-content:space-between; }
+    .wander-status {
+      font-size:10px; font-weight:600; padding:3px 10px; border-radius:20px;
+      background:var(--ok-light); color:var(--ok);
+    }
+    .wander-wish-btn {
+      border:none; background:transparent; font-size:18px;
+      cursor:pointer; opacity:.3; padding:4px;
+    }
+
+    /* Favorites gallery */
+    .fav-gallery { position:relative; margin-bottom:24px; }
+    .fav-gallery-scroll {
+      display:flex; gap:12px; overflow-x:auto; padding:12px 0 14px;
+      -webkit-overflow-scrolling:touch; scrollbar-width:none;
+    }
+    .fav-gallery-scroll::-webkit-scrollbar { display:none; }
+    .fav-gallery-item { flex-shrink:0; width:92px; cursor:pointer; }
+    .fav-gallery-cover {
+      width:92px; height:132px; border-radius:6px;
+      object-fit:cover; background:var(--surface-2);
+      box-shadow:0 4px 16px rgba(44,38,31,.12);
+    }
+    .fav-gallery-baseline {
+      position:absolute; bottom:14px; left:0; right:0;
+      height:1px; background:rgba(44,38,31,.08); pointer-events:none;
+    }
+
+    /* Category bar chart */
+    .cat-bar-row { display:flex; align-items:center; gap:10px; margin-bottom:10px; }
+    .cat-bar-row:last-child { margin-bottom:0; }
+    .cat-bar-label { font-size:12px; color:var(--text); width:48px; flex-shrink:0; text-align:right; }
+    .cat-bar-track { flex:1; height:8px; background:var(--surface-2); border-radius:4px; overflow:hidden; }
+    .cat-bar-fill { height:100%; border-radius:4px; }
+    .cat-bar-count { font-size:12px; color:var(--muted); width:24px; text-align:right; }
+
+    /* Book grid */
+    .book-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(90px, 1fr)); gap:12px; margin-top:12px; }
+    .book-grid-item { text-align:center; cursor:pointer; max-width:140px; }
+    .book-grid-item .cover-wrap {
+      position:relative; width:100%; padding-top:150%; border-radius:10px;
+      overflow:hidden; background:var(--surface-2); border:1px solid var(--line);
+    }
+    .book-grid-item .cover-wrap .cover-placeholder {
+      position:absolute; top:0; left:0; width:100%; height:100%;
+      display:flex; align-items:center; justify-content:center; font-size:28px; color:var(--muted);
+    }
+    .book-grid-item .book-grid-title {
+      font-size:12px; margin-top:6px; line-height:1.3;
+      overflow:hidden; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical;
+    }
+    .book-grid-item .book-grid-author { font-size:11px; color:var(--muted); margin-top:2px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .shelf-letter-head {
+      display:block; font-size:13px; font-weight:700; color:var(--accent);
+      letter-spacing:.08em; padding:10px 2px 4px; margin-top:8px;
+      border-bottom:1px solid var(--line);
+    }
+
+    /* ── Ghost nav: icon 版 ── */
+    .ghost-nav {
+      position:fixed; bottom:calc(18px + var(--safe-bottom));
+      left:50%; transform:translateX(-50%);
+      display:flex; align-items:center; gap:0;
+      background:rgba(44,38,31,.75); backdrop-filter:blur(20px); -webkit-backdrop-filter:blur(20px);
+      border-radius:22px; padding:0 4px;
+      z-index:40; box-shadow:0 4px 24px rgba(44,38,31,.18);
+      transition:opacity .5s ease, transform .5s ease;
+    }
+    .ghost-nav.faded {
+      opacity:0; transform:translateX(-50%) translateY(6px); pointer-events:none;
+    }
+    .ghost-nav button {
+      border:none; background:transparent; cursor:pointer;
+      padding:14px 16px; position:relative;
+      display:flex; align-items:center; justify-content:center;
+      -webkit-tap-highlight-color:transparent;
+    }
+    .ghost-nav button svg {
+      width:20px; height:20px;
+      stroke:rgba(255,253,248,.28); stroke-width:1.8;
+      fill:none; stroke-linecap:round; stroke-linejoin:round;
+      transition:stroke .2s, opacity .2s;
+    }
+    .ghost-nav button.active svg { stroke:#FFFDF8; }
+    .ghost-nav button .ghost-dot {
+      position:absolute; bottom:7px; left:50%; transform:translateX(-50%);
+      width:3px; height:3px; border-radius:50%; background:#FFFDF8;
+      opacity:0; transition:opacity .2s;
+    }
+    .ghost-nav button.active .ghost-dot { opacity:1; }
+    .ghost-nav .ghost-fab {
+      padding:12px 10px;
+    }
+    .ghost-nav .ghost-fab svg {
+      width:22px; height:22px;
+      stroke:rgba(255,253,248,.45); stroke-width:1.6;
+    }
+    .ghost-nav .nav-badge {
+      position:absolute; top:6px; right:6px;
+      background:var(--warn); color:#fff; font-size:8px; font-weight:700;
+      padding:1px 4px; border-radius:8px; min-width:12px; text-align:center;
+    }
+  </style>
+</head>
+<body>
+<div class="app">
+  <!-- ✅ Topbar: 只有一行标题 -->
+  <div class="topbar">
+    <div class="topbar-title">毛毛的书房</div>
+  </div>
+
+  <div class="content">
+    <!-- ✅ Summary card: 无 greeting, 无进度条, 可点击 -->
+    <div class="summary-card" id="summaryCard"></div>
+
+    <!-- ✅ "随手一本" 替代 "书海漫游", 无副标题 -->
+    <div class="subsection-title">随手一本</div>
+    <div class="wander-section">
+      <div class="wander-card" id="wanderCard">
+        <div class="wander-cover-area">
+          <div class="wander-cover-bg" id="wanderBg"></div>
+          <div class="wander-cover" id="wanderCover" style="background:var(--surface-2);display:flex;align-items:center;justify-content:center;font-size:28px;color:var(--muted)">📖</div>
+          <div class="wander-deco">书</div>
+        </div>
+        <div class="wander-info">
+          <div>
+            <div class="wander-cat" id="wanderCat"></div>
+            <div class="wander-title" id="wanderTitle"></div>
+            <div class="wander-meta">
+              <span id="wanderAuthor"></span> · <span id="wanderYear"></span>
+            </div>
+          </div>
+          <div class="wander-bottom">
+            <div class="wander-status" id="wanderStatus"></div>
+            <button class="wander-wish-btn">♡</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Favorites -->
+    <div id="favSection">
+      <div class="subsection-title"><span class="section-label" id="favLabel"></span></div>
+      <div class="fav-gallery">
+        <div class="fav-gallery-scroll" id="favScroll"></div>
+        <div class="fav-gallery-baseline"></div>
+      </div>
+    </div>
+
+    <!-- Categories -->
+    <div class="subsection-title">分类分布 <span class="section-label">CATEGORIES</span></div>
+    <div class="card" id="categoryChips"></div>
+
+    <!-- Bookshelf -->
+    <div class="subsection-title" style="display:flex;align-items:center;justify-content:space-between">
+      我的书架 <span class="section-label" style="flex:1"></span>
+      <span style="font-size:12px;color:var(--muted);cursor:pointer;font-weight:600">按字母 ↕时间</span>
+    </div>
+    <div id="bookList"></div>
+  </div>
+
+  <!-- ✅ Ghost Nav: icon 版 + 闲置淡出 -->
+  <nav class="ghost-nav" id="ghostNav">
+    <!-- 首页: 翻开的书 — 书房app的首页就是"翻书" -->
+    <button class="active">
+      <svg viewBox="0 0 24 24"><path d="M12 5c-2.5-2-6-2-8 0v14c2.5-1.2 5.5-1.2 8 .5"/><path d="M12 5c2.5-2 6-2 8 0v14c-2.5-1.2-5.5-1.2-8 .5"/></svg>
+      <span class="ghost-dot"></span>
+    </button>
+    <!-- 搜索: 放大镜 — 全世界都认识 -->
+    <button>
+      <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+      <span class="ghost-dot"></span>
+    </button>
+    <!-- FAB: 扫码取景框 — 核心录入是扫ISBN -->
+    <button class="ghost-fab">
+      <svg viewBox="0 0 24 24"><path d="M4 8V6a2 2 0 0 1 2-2h2"/><path d="M4 16v2a2 2 0 0 0 2 2h2"/><path d="M16 4h2a2 2 0 0 1 2 2v2"/><path d="M16 20h2a2 2 0 0 0 2-2v-2"/><path d="M12 8v8"/><path d="M8 12h8"/></svg>
+    </button>
+    <!-- 整理: 调节滑块 — 精心打理你的藏书 -->
+    <button style="position:relative">
+      <svg viewBox="0 0 24 24"><path d="M4 8h16"/><circle cx="9" cy="8" r="2.5" fill="none"/><path d="M4 16h16"/><circle cx="15" cy="16" r="2.5" fill="none"/></svg>
+      <span class="ghost-dot"></span>
+      <span class="nav-badge" id="navBadge"></span>
+    </button>
+    <!-- 我: 人形 — 最直觉的"我的空间" -->
+    <button>
+      <svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M5 20a7 7 0 0 1 14 0"/></svg>
+      <span class="ghost-dot"></span>
+    </button>
+  </nav>
+</div>
+
+<script>
+// ── Fake data ──
+const BOOKS = [
+  { title:'百年孤独', author:'加西亚·马尔克斯', category:'文学', year:'1967', status:'in_library', reading:'读过', fav:true, cover:'https://img2.doubanio.com/view/subject/s/public/s6384944.jpg' },
+  { title:'活着', author:'余华', category:'文学', year:'1993', status:'in_library', reading:'读过', fav:true, cover:'https://img1.doubanio.com/view/subject/s/public/s29053580.jpg' },
+  { title:'三体', author:'刘慈欣', category:'科幻', year:'2008', status:'in_library', reading:'读过', fav:true, cover:'https://img2.doubanio.com/view/subject/s/public/s2768378.jpg' },
+  { title:'人类简史', author:'尤瓦尔·赫拉利', category:'历史', year:'2014', status:'in_library', reading:'读过', fav:false },
+  { title:'小王子', author:'圣埃克苏佩里', category:'文学', year:'1943', status:'in_library', reading:'读过', fav:true },
+  { title:'1984', author:'乔治·奥威尔', category:'文学', year:'1949', status:'in_library', reading:'读过', fav:false },
+  { title:'红楼梦', author:'曹雪芹', category:'文学', year:'1791', status:'in_library', reading:'读过', fav:true },
+  { title:'围城', author:'钱锺书', category:'文学', year:'1947', status:'in_library', reading:'读过', fav:false },
+  { title:'杀死一只知更鸟', author:'哈珀·李', category:'文学', year:'1960', status:'in_library', reading:'未读', fav:false },
+  { title:'沉默的大多数', author:'王小波', category:'随笔', year:'1997', status:'in_library', reading:'读过', fav:false },
+  { title:'黄金时代', author:'王小波', category:'文学', year:'1994', status:'in_library', reading:'读过', fav:false },
+  { title:'月亮与六便士', author:'毛姆', category:'文学', year:'1919', status:'in_library', reading:'未读', fav:false },
+  { title:'看不见的城市', author:'卡尔维诺', category:'文学', year:'1972', status:'in_library', reading:'未读', fav:false },
+  { title:'枪炮、病菌与钢铁', author:'贾雷德·戴蒙德', category:'历史', year:'1997', status:'in_library', reading:'读过', fav:false },
+  { title:'苏菲的世界', author:'乔斯坦·贾德', category:'哲学', year:'1991', status:'in_library', reading:'未读', fav:false },
+  { title:'挪威的森林', author:'村上春树', category:'文学', year:'1987', status:'in_library', reading:'读过', fav:false },
+  { title:'银河帝国', author:'阿西莫夫', category:'科幻', year:'1951', status:'in_library', reading:'未读', fav:false },
+  { title:'菊与刀', author:'鲁思·本尼迪克特', category:'历史', year:'1946', status:'in_library', reading:'未读', fav:false },
+  { title:'存在与时间', author:'海德格尔', category:'哲学', year:'1927', status:'to_be_sorted', reading:'未读', fav:false },
+  { title:'瓦尔登湖', author:'梭罗', category:'随笔', year:'1854', status:'in_library', reading:'未读', fav:false },
+  { title:'局外人', author:'加缪', category:'文学', year:'1942', status:'in_library', reading:'读过', fav:false },
+  { title:'了不起的盖茨比', author:'菲茨杰拉德', category:'文学', year:'1925', status:'to_be_sorted', reading:'未读', fav:false },
+  { title:'动物农场', author:'乔治·奥威尔', category:'文学', year:'1945', status:'to_be_sorted', reading:'未读', fav:false },
+  { title:'理想国', author:'柏拉图', category:'哲学', year:'前375', status:'to_be_sorted', reading:'未读', fav:false },
+  { title:'呐喊', author:'鲁迅', category:'文学', year:'1922', status:'to_be_sorted', reading:'读过', fav:false },
+  { title:'海边的卡夫卡', author:'村上春树', category:'文学', year:'2002', status:'to_be_sorted', reading:'未读', fav:false },
+  { title:'万历十五年', author:'黄仁宇', category:'历史', year:'1981', status:'to_be_sorted', reading:'未读', fav:false },
+  { title:'霍乱时期的爱情', author:'马尔克斯', category:'文学', year:'1985', status:'to_be_sorted', reading:'未读', fav:false },
+  { title:'追风筝的人', author:'胡赛尼', category:'文学', year:'2003', status:'to_be_sorted', reading:'未读', fav:false },
+];
+
+const TOTAL = BOOKS.length;
+const todoCount = BOOKS.filter(b => b.status === 'to_be_sorted').length;
+const doneCount = BOOKS.filter(b => b.reading === '读过').length;
+const favBooks = BOOKS.filter(b => b.fav);
+const CAT_COLORS = { '文学':'#3D5E4C','历史':'#5E6B4E','科幻':'#4A6B7B','哲学':'#6B5B7B','随笔':'#7B5B5B','未分类':'#8B6F4E' };
+function catColor(c) { return CAT_COLORS[c] || '#8B6F4E'; }
+
+// ── Summary card ──
+let sub;
+if (todoCount > 5) sub = '还有一些书可以补充更多信息';
+else if (todoCount >= 1) sub = '大部分书都已经整理得很完整了';
+else sub = '每一本书的信息都已经整理好了';
+
+document.getElementById('summaryCard').innerHTML = `
+  <div class="summary-headline">书架上整理了 <span class="num">${TOTAL}</span> 本书</div>
+  <div class="summary-sub">${sub}</div>
+`;
+
+// ── Wander ──
+const wb = BOOKS[0];
+document.getElementById('wanderCat').textContent = wb.category;
+document.getElementById('wanderTitle').textContent = wb.title;
+document.getElementById('wanderAuthor').textContent = wb.author;
+document.getElementById('wanderYear').textContent = wb.year;
+document.getElementById('wanderStatus').textContent = wb.reading;
+if (wb.cover) {
+  document.getElementById('wanderCover').outerHTML = `<img class="wander-cover" src="${wb.cover}" alt="" onerror="this.style.background='var(--surface-2)'" />`;
+  document.getElementById('wanderBg').style.backgroundImage = `url(${wb.cover})`;
+}
+
+// ── Favorites ──
+document.getElementById('favLabel').textContent = `FAVORITES · ${favBooks.length}`;
+document.getElementById('favScroll').innerHTML = favBooks.map(b =>
+  `<div class="fav-gallery-item">${b.cover
+    ? `<img class="fav-gallery-cover" src="${b.cover}" alt="" style="background:${catColor(b.category)}" onerror="this.style.background='${catColor(b.category)}'" />`
+    : `<div class="fav-gallery-cover" style="background:${catColor(b.category)};display:flex;align-items:flex-end;justify-content:center;padding:8px"><span style="font-size:10px;color:rgba(255,255,255,.7);font-weight:600;text-align:center;line-height:1.3">${b.title.slice(0,6)}</span></div>`
+  }</div>`
+).join('');
+
+// ── Categories ──
+const cc = BOOKS.reduce((a,b)=>{a[b.category]=(a[b.category]||0)+1;return a},{});
+const sorted = Object.entries(cc).sort((a,b)=>b[1]-a[1]);
+const mx = sorted[0][1];
+document.getElementById('categoryChips').innerHTML = sorted.map(([n,c])=>
+  `<div class="cat-bar-row"><span class="cat-bar-label">${n}</span><div class="cat-bar-track"><div class="cat-bar-fill" style="width:${(c/mx)*100}%;background:${catColor(n)}"></div></div><span class="cat-bar-count">${c}</span></div>`
+).join('');
+
+// ── Bookshelf ──
+const alpha = {};
+BOOKS.forEach(b => { const f=b.title[0]; if(!alpha[f])alpha[f]=[]; alpha[f].push(b); });
+let sh = '';
+for (const k of Object.keys(alpha).sort((a,b)=>a.localeCompare(b,'zh-CN'))) {
+  sh += `<div class="shelf-letter-head">${k}</div><div class="book-grid">`;
+  for (const b of alpha[k]) {
+    sh += `<div class="book-grid-item"><div class="cover-wrap">${b.cover
+      ? `<img src="${b.cover}" alt="" style="position:absolute;top:0;left:0;width:100%;height:100%;object-fit:cover" onerror="this.outerHTML='<div class=cover-placeholder>📖</div>'" />`
+      : `<div class="cover-placeholder" style="background:${catColor(b.category)}20">📖</div>`
+    }</div><div class="book-grid-title">${b.title}</div><div class="book-grid-author">${b.author}</div></div>`;
+  }
+  sh += '</div>';
+}
+document.getElementById('bookList').innerHTML = sh;
+
+// ── Nav badge ──
+document.getElementById('navBadge').textContent = todoCount;
+
+// ── ✅ Ghost nav: 闲置3秒淡出, 交互淡入 ──
+const nav = document.getElementById('ghostNav');
+let idleTimer = null;
+function showNav() {
+  nav.classList.remove('faded');
+  clearTimeout(idleTimer);
+  idleTimer = setTimeout(() => nav.classList.add('faded'), 3000);
+}
+// Start idle timer
+idleTimer = setTimeout(() => nav.classList.add('faded'), 3000);
+// Any interaction brings it back
+['scroll','touchstart','touchmove','click','mousemove'].forEach(evt =>
+  window.addEventListener(evt, showNav, { passive:true })
+);
+</script>
+</body>
+</html>
