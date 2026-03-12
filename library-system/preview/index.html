@@ -515,28 +515,7 @@
     .wander-wish-btn:hover  { opacity: .75; transform: scale(1.12); }
     .wander-wish-btn:active { transform: scale(1.2); }
     .wander-wish-btn.wished { opacity: 1; color: #C2785C; }
-    /* 翻页箭头：覆盖在卡片上，半透明 */
-    .wander-nav {
-      position: absolute;
-      top: 50%; transform: translateY(-50%);
-      left: 0; right: 0;
-      display: flex; justify-content: space-between;
-      padding: 0 5px;
-      pointer-events: none; z-index: 10;
-    }
-    .wander-arr {
-      width: 24px; height: 24px; border-radius: 50%;
-      border: 1px solid rgba(139,111,78,.15);
-      background: rgba(255,253,248,.8); backdrop-filter: blur(4px);
-      color: var(--accent2); font-size: 13px;
-      cursor: pointer;
-      display: flex; align-items: center; justify-content: center;
-      pointer-events: all;
-      opacity: .45; transition: opacity .15s;
-      box-shadow: 0 1px 4px rgba(0,0,0,.07);
-    }
-    .wander-arr:hover  { opacity: 1; }
-    .wander-arr:active { opacity: 1; transform: scale(.92); }
+
 
     /* ── Organize: tabs ── */
     .org-tabs{display:flex;gap:0;background:var(--surface-2);border-radius:12px;padding:3px;margin-bottom:16px}
@@ -694,11 +673,7 @@
                 <button class="wander-wish-btn" id="wanderWishBtn" title="标记想读">♡</button>
               </div>
             </div>
-            <!-- 翻页箭头（覆盖整个卡片，半透明） -->
-            <div class="wander-nav">
-              <button class="wander-arr" id="wanderPrev">‹</button>
-              <button class="wander-arr" id="wanderNext">›</button>
-            </div>
+
           </div>
         </div>
 
@@ -1724,6 +1699,9 @@
         <div class="setting-info"><div class="setting-label">${item.label}</div><div class="setting-sub">${item.sub}</div></div>
         <span class="setting-arrow">›</span>
       </div>`).join('');
+
+      // Sync wander carousel if displayed book's data changed
+      if (typeof syncWanderIfDirty === 'function') syncWanderIfDirty();
     }
 
     function validIsbn(v) {
@@ -3520,8 +3498,68 @@
       e.currentTarget.textContent = newFav ? '♥' : '♡';
       e.currentTarget.classList.toggle('wished', newFav);
     });
-    document.getElementById('wanderPrev').addEventListener('click', (e) => { e.stopPropagation(); prevWander(); });
-    document.getElementById('wanderNext').addEventListener('click', (e) => { e.stopPropagation(); nextWander(); });
+
+    // Swipe gesture for wander carousel
+    {
+      const card = document.getElementById('wanderCard');
+      let touchStartX = 0, touchStartY = 0, swiping = false;
+      const SWIPE_THRESHOLD = 45;
+
+      card.addEventListener('touchstart', (e) => {
+        if (e.touches.length !== 1) return;
+        touchStartX = e.touches[0].clientX;
+        touchStartY = e.touches[0].clientY;
+        swiping = true;
+      }, { passive: true });
+
+      card.addEventListener('touchmove', (e) => {
+        if (!swiping || e.touches.length !== 1) return;
+        const dx = Math.abs(e.touches[0].clientX - touchStartX);
+        const dy = Math.abs(e.touches[0].clientY - touchStartY);
+        // If vertical scroll dominates, abort swipe detection
+        if (dy > dx && dy > 15) swiping = false;
+      }, { passive: true });
+
+      card.addEventListener('touchend', (e) => {
+        if (!swiping) return;
+        swiping = false;
+        const endX = e.changedTouches[0].clientX;
+        const dx = endX - touchStartX;
+        if (Math.abs(dx) < SWIPE_THRESHOLD) return;
+        if (dx < 0) nextWander();   // swipe left → next
+        else        prevWander();   // swipe right → prev
+      }, { passive: true });
+    }
+
+    // ── Dirty-flag sync: re-render wander only when displayed book changed ──
+    let _wanderSyncBookId = null;
+    let _wanderSyncHash = '';
+
+    function wanderBookHash(book) {
+      if (!book) return '';
+      return `${book.favorite ? 1 : 0}|${book.readingStatus || ''}|${book.title}`;
+    }
+
+    function syncWanderIfDirty() {
+      if (!_wanderSyncBookId) return;
+      const book = loadActiveBooks().find(b => b.id === _wanderSyncBookId);
+      const hash = wanderBookHash(book);
+      if (hash !== _wanderSyncHash) {
+        renderWander();
+      }
+    }
+
+    // Patch renderWander to track displayed book for dirty checking
+    const _origRenderWander = renderWander;
+    renderWander = function() {
+      _origRenderWander();
+      const pool = buildWanderPool(loadActiveBooks());
+      if (pool.length) {
+        const b = pool[wanderIdx % pool.length];
+        _wanderSyncBookId = b.id;
+        _wanderSyncHash = wanderBookHash(b);
+      }
+    };
 
     // Initialize wander
     renderWander();
