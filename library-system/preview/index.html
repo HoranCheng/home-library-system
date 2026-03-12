@@ -337,8 +337,8 @@
       animation:modalScaleIn .3s ease;
     }
     .modal-sheet .detail-anim { opacity:0; animation:detailContentIn .35s ease forwards; }
-    .modal-handle { display:flex; justify-content:center; padding:12px 0 0; }
-    .modal-handle-bar { width:36px; height:4px; background:var(--surface-2); border-radius:2px; }
+    .modal-handle { display:none; } /* hidden — centered modal doesn't need pull handle */
+    .modal-handle-bar { display:none; }
     .modal-header { display:flex; gap:16px; padding:16px 24px 20px; border-bottom:1px solid var(--line); }
     .modal-cover-mini { width:56px; height:80px; border-radius:6px; flex-shrink:0; box-shadow:3px 3px 10px rgba(0,0,0,.15); object-fit:cover; background:var(--accent2); }
     .modal-title { font-size:19px; font-family:var(--serif); line-height:1.3; }
