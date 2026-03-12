@@ -58,16 +58,36 @@ async function incrementUsed(kv, uid, date, current) {
 
 // ─── Gemini API call ─────────────────────────────────────────────────────────
 
-const RECEIPT_PROMPT = `You are a receipt data extractor for an Australian user. Analyze this receipt and extract structured data.
+const RECEIPT_PROMPT = `You are a receipt data extractor for an Australian user. Analyze this image and extract structured data.
 
-RULES:
-- Dates: prefer DD/MM/YYYY (Australian). Output as YYYY-MM-DD.
-- Merchant: the SPECIFIC store/brand name. Examples: "Coles", "Woolworths", "7-Eleven", "McDonald's", "JB Hi-Fi", "Bunnings". NEVER use a generic word like "Supermarket", "Grocery", "Restaurant", "Petrol Station". If you can read the store name from the receipt, use it exactly (title case).
-- Amount: the TOTAL paid (after discounts, including GST). Number only, no currency symbol.
+CRITICAL — is_receipt MUST default to true. Set is_receipt=false ONLY if the image is clearly NOT any kind of financial document. Specifically:
+
+is_receipt = TRUE for ALL of these:
+- Paper receipts (thermal, dot-matrix, inkjet, handwritten)
+- Faded, crumpled, partial, or blurry receipts (do your best to extract data)
+- Electronic/digital receipts (screenshots, emails, app confirmations)
+- Tax invoices, invoices, bills, statements
+- Payment confirmations (EFTPOS, credit card, PayPal, etc.)
+- Fuel dockets, parking tickets, toll receipts
+- Foreign language receipts
+- ANY image that shows a transaction amount, merchant name, or itemized list
+
+is_receipt = FALSE ONLY for:
+- Photos of people, animals, scenery, food (not a receipt photo of food)
+- Screenshots of non-financial apps (social media, games, etc.)
+- Documents that are clearly not financial (letters, articles, books)
+- Blank or completely unreadable images
+
+When in doubt, ALWAYS set is_receipt=true and use a lower confidence score. It is far better to mark a non-receipt as a low-confidence receipt than to reject a real receipt.
+
+EXTRACTION RULES:
+- Dates: prefer DD/MM/YYYY (Australian). Output as YYYY-MM-DD. If no date visible, use today's date.
+- Merchant: the SPECIFIC store/brand name. Examples: "Coles", "Woolworths", "7-Eleven", "McDonald's", "JB Hi-Fi", "Bunnings". NEVER use a generic word like "Supermarket", "Grocery", "Restaurant", "Petrol Station". If you can read the store name from the receipt, use it exactly (title case). If truly unreadable, use "Unknown Merchant".
+- Amount: the TOTAL paid (after discounts, including GST). Number only, no currency symbol. If multiple totals shown, use the final "TOTAL" or "Amount Due".
 - Currency: usually AUD unless clearly otherwise.
 - Category: exactly ONE of: Grocery, Dining, Fuel, Medical, Hardware & Garden, Outdoor & Camping, Transport, Utilities, Entertainment, Shopping, Education, Insurance, Subscription, Other
-- Confidence: 0-100 your certainty about ALL fields combined
-- is_receipt: true if this image is clearly a receipt, invoice, or tax document. false if it appears to be something else entirely (scenery, food photo, selfie, book, random object, etc.)
+- Confidence: 0-100 your certainty about ALL extracted fields combined. Even faded/partial receipts should get 30-60 confidence, not 0.
+- items: list the first 5-10 line items if visible. Empty array if items not readable.
 
 Respond ONLY with this JSON, no markdown, no backticks:
 {"is_receipt":true,"date":"YYYY-MM-DD","merchant":"Specific Store Name","amount":0.00,"currency":"AUD","category":"Category","items":["item1","item2"],"confidence":85}`;
