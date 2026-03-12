@@ -1,0 +1,12 @@
+:root {
+  --safe-bottom: env(safe-area-inset-bottom, 12px);
+}
+
+.mobile-bottom-bar {
+  padding-bottom: calc(var(--safe-bottom) + 8px);
+}
+
+.mobile-submit {
+  position: sticky;
+  bottom: calc(var(--safe-bottom) + 12px);
+}

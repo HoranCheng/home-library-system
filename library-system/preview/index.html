@@ -506,8 +506,9 @@
       color: var(--muted); line-height: 1.55;
       display: -webkit-box;
       -webkit-line-clamp: 2; -webkit-box-orient: vertical;
-      overflow: hidden; flex: 1; min-height: 0; margin-bottom: 8px;
+      overflow: hidden; margin-bottom: 8px;
     }
+    .wander-summary:empty { display:none !important; margin:0; }
     .wander-bottom {
       display: flex; align-items: center; justify-content: space-between;
     }
@@ -3504,14 +3505,7 @@
     const WANDER_DECOS = ['书','阅','读','思','知','梦','文','墨','章','韵','诗','卷'];
     let wanderIdx = 0, wanderTimer = null;
 
-    // 摘要兜底文案（无 description 时使用）
-    const WANDER_FALLBACK_SUMMARIES = [
-      '安静地等在书架上。',
-      '翻开它，总会有所收获。',
-      '每次拿起都有不同感受。',
-      '文字的重量，握在手里才知道。',
-      '一个故事，一段不同的人生。',
-    ];
+    const WANDER_SUMMARY_MAX = 70;
 
     // 展示池：优先有封面的书；不足3本时纳入全部
     function buildWanderPool(books) {
@@ -3559,9 +3553,21 @@
           yearDotEl.style.display = 'none';
         }
 
-        document.getElementById('wanderSummary').textContent = b.description
-          ? b.description.slice(0, 90)
-          : WANDER_FALLBACK_SUMMARIES[wanderIdx % WANDER_FALLBACK_SUMMARIES.length];
+        const summaryEl = document.getElementById('wanderSummary');
+        if (b.description && b.description.trim()) {
+          let desc = b.description.trim();
+          if (desc.length > WANDER_SUMMARY_MAX) {
+            // Truncate at last sentence boundary within limit, or last word boundary
+            const cut = desc.slice(0, WANDER_SUMMARY_MAX);
+            const sentEnd = Math.max(cut.lastIndexOf('。'), cut.lastIndexOf('！'), cut.lastIndexOf('？'), cut.lastIndexOf('. '));
+            desc = sentEnd > WANDER_SUMMARY_MAX * 0.4 ? desc.slice(0, sentEnd + 1) : cut.replace(/[\s,，、;；]+$/, '') + '…';
+          }
+          summaryEl.textContent = desc;
+          summaryEl.style.display = '';
+        } else {
+          summaryEl.textContent = '';
+          summaryEl.style.display = 'none';
+        }
 
         const statusEl = document.getElementById('wanderStatus');
         statusEl.className = 'wander-status ' + cls;
@@ -3615,6 +3621,7 @@
       updateBook(id, { favorite: newFav });
       btn.textContent = newFav ? '♥' : '♡';
       btn.classList.toggle('wished', newFav);
+      render(); // sync favorites gallery + dashboard
     });
 
     // Swipe gesture for wander carousel
