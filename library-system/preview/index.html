@@ -617,15 +617,9 @@
       <div class="page-header" id="pageHeader"></div>
       <div class="hidden" id="scanSection"></div>
 
-      <!-- Entry form -->
+      <!-- Entry: unified scan + form -->
       <div class="hidden" id="manualCard">
-        <div class="field">
-          <label>ISBN</label>
-          <div class="input-with-action">
-            <input id="isbn" placeholder="输入13位ISBN…" />
-            <button class="input-action-btn" id="isbnScanBtn" title="扫码填入 ISBN">📷</button>
-          </div>
-        </div>
+        <!-- Scanner area (primary) -->
         <div class="scanner-box" id="scannerBox">
           <video id="scannerVideo" autoplay playsinline muted class="scanner-video"></video>
           <div class="scanner-freeze-flash" id="scannerFlash"></div>
@@ -644,45 +638,62 @@
           </div>
         </div>
         <div id="scanNotice"></div>
+
+        <!-- Quick ISBN fallback -->
+        <div class="field" style="margin-top:8px">
+          <div class="input-with-action">
+            <input id="isbn" placeholder="扫码失败？手动输入 ISBN…" />
+            <button class="input-action-btn" id="isbnScanBtn" title="扫码填入 ISBN">📷</button>
+          </div>
+        </div>
+
+        <!-- Session counter -->
+        <div class="hint" id="entrySessionHint">自动从 Open Library · Google Books 补全书目信息</div>
+
+        <!-- Review card (after scan/lookup) -->
         <div id="formFields">
         <div class="review-card" id="reviewCard">
-          <div class="muted">先输入或扫描 ISBN，系统会自动补全信息。</div>
+          <div class="muted">扫码或输入 ISBN，系统自动补全信息</div>
         </div>
         <div style="display:flex;justify-content:flex-end;margin-bottom:4px">
           <button class="btn ghost" id="clearFieldsBtn" style="font-size:12px;padding:4px 10px;display:none">🗑 清空预填</button>
         </div>
-        <div class="field">
-          <label>书名</label>
-          <input id="title" placeholder="例如：计算机程序的构造和解释" />
-        </div>
-        <div class="field">
-          <label>作者</label>
-          <input id="author" placeholder="例如：Harold Abelson" />
-        </div>
-        <div class="compact-grid">
+
+        <!-- Expandable detail fields -->
+        <div id="entryDetailFields">
           <div class="field">
-            <label>分类</label>
-            <input id="category" placeholder="技术 / 小说" />
+            <label>书名</label>
+            <input id="title" placeholder="例如：计算机程序的构造和解释" />
           </div>
           <div class="field">
-            <label>出版年份</label>
-            <input id="publishedYear" placeholder="2021" />
+            <label>作者</label>
+            <input id="author" placeholder="例如：Harold Abelson" />
+          </div>
+          <div class="compact-grid">
+            <div class="field">
+              <label>分类</label>
+              <input id="category" placeholder="技术 / 小说" />
+            </div>
+            <div class="field">
+              <label>出版年份</label>
+              <input id="publishedYear" placeholder="2021" />
+            </div>
+          </div>
+          <div id="categoryPresets" style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px;padding-bottom:2px"></div>
+          <div class="field">
+            <label>存放位置</label>
+            <input id="location" placeholder="客厅书架 / 书房左柜 / 床头" />
+            <div class="chips" id="locationPresetChips"></div>
           </div>
         </div>
-        <div id="categoryPresets" style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px;padding-bottom:2px"></div>
-        <div class="field">
-          <label>存放位置</label>
-          <input id="location" placeholder="客厅书架 / 书房左柜 / 床头" />
-          <div class="chips" id="locationPresetChips"></div>
-        </div>
+
         <div class="sticky-actions">
           <div class="actions">
             <button class="btn primary" id="saveBtn">导入库中</button>
-            <button class="btn ghost" id="finishEntryBtn">结束扫描</button>
+            <button class="btn ghost" id="finishEntryBtn">结束录入</button>
           </div>
         </div>
         </div>
-        <div class="hint" id="entrySessionHint">自动从 Open Library · Google Books 补全书目信息</div>
         <div id="manualNotice"></div>
       </div>
 
@@ -1790,8 +1801,22 @@
     handleNavTap(els.navSearch, 'search');
     handleNavTap(els.navOrganize, 'organize');
     handleNavTap(els.navSettings, 'settings');
-    // FAB button triggers entry mode
-    document.getElementById('navFab').onclick = () => { entrySessionCount = 0; setPage('home', { mode: 'entry' }); window.scrollTo({ top: 0, behavior: 'smooth' }); };
+    // FAB button triggers entry mode — auto-start scanner
+    document.getElementById('navFab').onclick = () => {
+      entrySessionCount = 0;
+      scannerIntent = 'entry';
+      lastEntryMethod = 'scan';
+      setPage('home', { mode: 'entry' });
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      // Auto-start scanner after page renders
+      requestAnimationFrame(() => {
+        if (!scannerActive) {
+          clearDraftFields({ keepIsbn: false });
+          render();
+          startScanner();
+        }
+      });
+    };
 
     // ── Ghost Nav: scroll direction + idle fade ──
     {
