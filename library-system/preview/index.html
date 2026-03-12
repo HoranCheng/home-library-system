@@ -1425,15 +1425,20 @@
         return acc;
       }, {});
       const sortedCategories = Object.entries(categoryCounts).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], 'zh-CN'));
+      const CAT_COLLAPSE_LIMIT = 5;
       if (sortedCategories.length) {
         const maxCount = sortedCategories[0][1];
-        els.categoryChips.innerHTML = sortedCategories.map(([name, count]) =>
-          `<div class="cat-bar-row category-filter-chip" data-category="${escapeHtml(name)}" style="cursor:pointer">
+        const catRows = sortedCategories.map(([name, count], i) =>
+          `<div class="cat-bar-row category-filter-chip${i >= CAT_COLLAPSE_LIMIT ? ' cat-hidden' : ''}" data-category="${escapeHtml(name)}" style="cursor:pointer${i >= CAT_COLLAPSE_LIMIT ? ';display:none' : ''}">
             <span class="cat-bar-label">${escapeHtml(name)}</span>
             <div class="cat-bar-track"><div class="cat-bar-fill" style="width:${(count/maxCount)*100}%;background:${catColor(name)}"></div></div>
             <span class="cat-bar-count">${count}</span>
           </div>`
         ).join('');
+        const toggleBtn = sortedCategories.length > CAT_COLLAPSE_LIMIT
+          ? `<div class="cat-expand-btn" id="catExpandBtn" style="text-align:center;padding:8px 0;font-size:12px;color:var(--accent);cursor:pointer;font-weight:600">展开全部 (${sortedCategories.length}) ▾</div>`
+          : '';
+        els.categoryChips.innerHTML = catRows + toggleBtn;
       } else {
         els.categoryChips.innerHTML = '<div class="muted">还没有分类数据</div>';
       }
@@ -1508,8 +1513,15 @@
       });
       // Search category chips
       const searchCategories = [...new Set(books.map(b => b.category).filter(Boolean))];
-      els.searchCatChips.innerHTML = `<button class="chip category-filter-chip ${!selectedCategoryFilter ? 'active' : ''}" data-category="">全部</button>` +
-        searchCategories.map(cat => `<button class="chip category-filter-chip ${selectedCategoryFilter === cat ? 'active' : ''}" data-category="${escapeHtml(cat)}">${escapeHtml(cat)}</button>`).join('');
+      const SEARCH_CAT_LIMIT = 6;
+      const searchCatAll = `<button class="chip category-filter-chip ${!selectedCategoryFilter ? 'active' : ''}" data-category="">全部</button>`;
+      const searchCatItems = searchCategories.map((cat, i) =>
+        `<button class="chip category-filter-chip search-cat-chip${i >= SEARCH_CAT_LIMIT ? ' cat-hidden' : ''}" ${i >= SEARCH_CAT_LIMIT ? 'style="display:none"' : ''} data-category="${escapeHtml(cat)}">${escapeHtml(cat)}</button>`
+      ).join('');
+      const searchCatToggle = searchCategories.length > SEARCH_CAT_LIMIT
+        ? `<button class="chip search-cat-expand" id="searchCatExpand" style="color:var(--accent);border-color:var(--accent);font-weight:600">+${searchCategories.length - SEARCH_CAT_LIMIT}</button>`
+        : '';
+      els.searchCatChips.innerHTML = searchCatAll + searchCatItems + searchCatToggle;
 
       const exactIsbnMatches = query ? books.filter(b => String(b.isbn || '').replace(/[^0-9Xx]/g, '') === query.replace(/[^0-9Xx]/g, '')) : [];
       if (!books.length) {
@@ -2217,6 +2229,26 @@
         if (action === 'exportCsv') els.exportCsvBtn_handler();
         if (action === 'validate') els.validateBtn.click();
         if (action === 'importJson') { els.importText.focus(); }
+        return;
+      }
+
+      // Category expand/collapse
+      if (event.target.closest('#catExpandBtn')) {
+        const btn = event.target.closest('#catExpandBtn');
+        const hidden = els.categoryChips.querySelectorAll('.cat-hidden');
+        const isExpanded = btn.dataset.expanded === '1';
+        hidden.forEach(el => el.style.display = isExpanded ? 'none' : '');
+        btn.dataset.expanded = isExpanded ? '0' : '1';
+        btn.textContent = isExpanded ? `展开全部 ▾` : '收起 ▴';
+        return;
+      }
+      if (event.target.closest('#searchCatExpand')) {
+        const btn = event.target.closest('#searchCatExpand');
+        const hidden = els.searchCatChips.querySelectorAll('.cat-hidden');
+        const isExpanded = btn.dataset.expanded === '1';
+        hidden.forEach(el => el.style.display = isExpanded ? 'none' : '');
+        btn.dataset.expanded = isExpanded ? '0' : '1';
+        btn.textContent = isExpanded ? '收起' : `+${hidden.length}`;
         return;
       }
 
