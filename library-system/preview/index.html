@@ -719,14 +719,14 @@
         </div>
 
         <div id="favGallerySection" style="display:none">
-          <div class="subsection-title"><span class="section-label" id="favGalleryLabel">FAVORITES · 0</span></div>
+          <div class="subsection-title">收藏书籍 <span class="section-label" id="favGalleryLabel" style="margin-left:6px">0</span></div>
           <div class="fav-gallery">
             <div class="fav-gallery-scroll" id="favGalleryScroll"></div>
             <div class="fav-gallery-baseline"></div>
           </div>
         </div>
 
-        <div class="subsection-title">分类分布 <span class="section-label">CATEGORIES</span></div>
+        <div class="subsection-title">分类分布</div>
         <div class="card" id="categoryChips"></div>
 
         <div class="subsection-title" style="display:flex;align-items:center;justify-content:space-between">
@@ -1450,7 +1450,7 @@
       const favSection = document.getElementById('favGallerySection');
       if (favBooks.length > 0) {
         favSection.style.display = '';
-        document.getElementById('favGalleryLabel').textContent = `FAVORITES · ${favBooks.length}`;
+        document.getElementById('favGalleryLabel').textContent = favBooks.length;
         document.getElementById('favGalleryScroll').innerHTML = favBooks.map(b => {
           const cu = coverUrl(b);
           const cc = catColor(b.category);
