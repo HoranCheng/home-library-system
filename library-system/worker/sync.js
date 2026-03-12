@@ -30,8 +30,9 @@ function bookToRow(book, userId) {
     title: book.title || '',
     author: book.author || '',
     category: book.category || '',
-    reading_status: book.readingStatus || 'want',
+    reading_status: book.readingStatus || '',
     reading_progress: book.readingProgress || 0,
+    favorite: book.favorite ? 1 : 0,
     published_year: book.publishedYear || '',
     location: book.location || '',
     description: book.description || '',
@@ -56,6 +57,7 @@ function rowToBook(row) {
     category: row.category,
     readingStatus: row.reading_status,
     readingProgress: row.reading_progress,
+    favorite: !!row.favorite,
     publishedYear: row.published_year,
     location: row.location,
     description: row.description,
@@ -118,24 +120,24 @@ export async function handleSync(request, env, path, corsHeaders) {
         await env.DB.prepare(
           `UPDATE books SET isbn=?, title=?, author=?, category=?, reading_status=?, reading_progress=?,
            published_year=?, location=?, description=?, notes=?, book_lang=?, cover_url=?,
-           metadata_sources=?, status=?, created_at=?, updated_at=?, is_deleted=?
+           metadata_sources=?, status=?, created_at=?, updated_at=?, is_deleted=?, favorite=?
            WHERE id=? AND user_id=?`
         ).bind(
           row.isbn, row.title, row.author, row.category, row.reading_status, row.reading_progress,
           row.published_year, row.location, row.description, row.notes, row.book_lang, row.cover_url,
-          row.metadata_sources, row.status, row.created_at, row.updated_at, row.is_deleted,
+          row.metadata_sources, row.status, row.created_at, row.updated_at, row.is_deleted, row.favorite,
           row.id, userId
         ).run();
       } else {
         await env.DB.prepare(
           `INSERT INTO books (id, user_id, isbn, title, author, category, reading_status, reading_progress,
            published_year, location, description, notes, book_lang, cover_url, metadata_sources, status,
-           created_at, updated_at, is_deleted)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+           created_at, updated_at, is_deleted, favorite)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
         ).bind(
           row.id, userId, row.isbn, row.title, row.author, row.category, row.reading_status, row.reading_progress,
           row.published_year, row.location, row.description, row.notes, row.book_lang, row.cover_url,
-          row.metadata_sources, row.status, row.created_at, row.updated_at, row.is_deleted
+          row.metadata_sources, row.status, row.created_at, row.updated_at, row.is_deleted, row.favorite
         ).run();
       }
       accepted++;

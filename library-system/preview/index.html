@@ -83,18 +83,7 @@
     .alert-banner.warn { background:var(--warn-light); color:#8B6A20; }
     .alert-banner .alert-action { font-weight:600; color:var(--warn); cursor:pointer; }
 
-    /* ── Currently reading card ── */
-    .reading-hero {
-      border-radius:16px; padding:18px 20px; cursor:pointer; margin-top:12px;
-      color:#fff; position:relative; overflow:hidden;
-    }
-    .reading-hero-inner { display:flex; align-items:center; gap:14px; margin-bottom:14px; }
-    .reading-hero-cover { width:44px; height:62px; background:rgba(255,255,255,.18); border-radius:4px; flex-shrink:0; }
-    .reading-hero-author { color:rgba(255,255,255,.7); font-size:12px; }
-    .reading-hero-title { font-size:17px; font-family:var(--serif); margin-top:3px; }
-    .reading-hero-pct { margin-left:auto; color:rgba(255,255,255,.7); font-size:13px; font-weight:700; }
-    .reading-hero-bar { height:4px; background:rgba(255,255,255,.2); border-radius:4px; overflow:hidden; }
-    .reading-hero-fill { height:100%; background:rgba(255,255,255,.8); border-radius:4px; }
+    /* ── (reading-hero removed — simplified to read/unread model) ── */
 
     /* ── Category bar chart ── */
     .cat-bar-row { display:flex; align-items:center; gap:10px; margin-bottom:10px; }
@@ -120,12 +109,10 @@
       display:inline-flex; align-items:center; gap:4px; padding:3px 9px; border-radius:20px; font-size:11px; font-weight:600;
     }
     .status-badge .dot { width:5px; height:5px; border-radius:50%; flex-shrink:0; }
-    .status-badge.want { background:#EBF2F8; color:#2D6A9F; }
-    .status-badge.want .dot { background:#5B9BD5; }
-    .status-badge.reading { background:var(--warn-light); color:#8B6A20; }
-    .status-badge.reading .dot { background:var(--warn); }
     .status-badge.done { background:var(--ok-light); color:#2D6A3A; }
     .status-badge.done .dot { background:var(--ok); }
+    .status-badge.fav { background:#FFF0EB; color:#C2785C; }
+    .status-badge.fav .dot { background:#C2785C; }
     .lib-badge {
       font-size:10px; font-weight:600; padding:2px 7px; border-radius:20px;
     }
@@ -512,12 +499,10 @@
       padding: 2px 8px; border-radius: 20px;
     }
     .wander-status .sdot { width: 4px; height: 4px; border-radius: 50%; flex-shrink: 0; }
-    .wander-status.reading { background: var(--warn-light); color: #8B6A20; }
-    .wander-status.reading .sdot { background: var(--warn); }
-    .wander-status.want    { background: #EBF2F8; color: #2D6A9F; }
-    .wander-status.want .sdot    { background: #5B9BD5; }
     .wander-status.done    { background: var(--ok-light); color: #2D6A3A; }
     .wander-status.done .sdot    { background: var(--ok); }
+    .wander-status.unread  { background: var(--surface-2); color: var(--muted); }
+    .wander-status.unread .sdot  { background: var(--muted); }
     /* 想读按钮 */
     .wander-wish-btn {
       width: 28px; height: 28px;
@@ -679,9 +664,6 @@
       <!-- Dashboard -->
       <div id="homeSection">
         <div class="summary-card" id="summaryCard"></div>
-
-        <div class="subsection-title">现在在读</div>
-        <div id="currentReadingCard"></div>
 
         <div class="subsection-title" style="display:flex;align-items:center;gap:8px">
           书海漫游
@@ -1192,7 +1174,7 @@
       entrySessionHint: document.getElementById('entrySessionHint'),
       manualNotice: document.getElementById('manualNotice'),
       reviewCard: document.getElementById('reviewCard'),
-      currentReadingCard: document.getElementById('currentReadingCard'),
+      // currentReadingCard removed (simplified reading model)
       detailModalRoot: document.getElementById('detailModalRoot'),
       categoryChips: document.getElementById('categoryChips'),
       bookList: document.getElementById('bookList'),
@@ -1238,11 +1220,8 @@
 
     function normalizeReadingStatus(v) {
       const s = String(v || '').trim();
-      if (!s) return '要读';
-      if (['要读', '想读'].includes(s)) return '要读';
-      if (['在读', '正在读'].includes(s)) return '在读';
-      if (['读完', '已读完', '已完成'].includes(s)) return '读完';
-      return s;
+      if (['读完', '已读完', '已完成', 'done'].includes(s)) return '读过';
+      return '';  // 未读（默认）
     }
 
     function coverUrl(book) {
@@ -1342,7 +1321,7 @@
     function renderBookRow(b, options = {}) {
       const actionHtml = options.actionHtml || '';
       const showMenu = options.showMenu !== false;
-      const metaLine = [b.author || '未知作者', b.category || '未分类', b.isbn || '无 ISBN', normalizeReadingStatus(b.readingStatus || ''), b.status === 'to_be_sorted' ? '待补充' : '已入库'].join(' · ');
+      const metaLine = [b.author || '未知作者', b.category || '未分类', b.isbn || '无 ISBN', normalizeReadingStatus(b.readingStatus) || '未读', b.favorite ? '♥ 收藏' : '', b.status === 'to_be_sorted' ? '待补充' : '已入库'].filter(Boolean).join(' · ');
       return `
         <div class="book-item">
           <div class="book-head">
@@ -1364,10 +1343,12 @@
     };
     function catColor(cat) { return CAT_COLORS[cat] || '#8B6F4E'; }
 
-    function statusBadgeHtml(status) {
+    function statusBadgeHtml(status, favorite) {
       const s = normalizeReadingStatus(status);
-      const cls = s === '在读' ? 'reading' : s === '读完' ? 'done' : 'want';
-      return `<span class="status-badge ${cls}"><span class="dot"></span>${escapeHtml(s)}</span>`;
+      const badges = [];
+      if (s) badges.push(`<span class="status-badge done"><span class="dot"></span>${escapeHtml(s)}</span>`);
+      if (favorite) badges.push(`<span class="status-badge fav"><span class="dot"></span>收藏</span>`);
+      return badges.join('');
     }
     function libBadgeHtml(status) {
       return status === 'in_library'
@@ -1424,31 +1405,28 @@
       const books = loadActiveBooks();
       const todoCount = books.filter(b => b.status === 'to_be_sorted').length;
       const inLibCount = books.filter(b => b.status === 'in_library').length;
-      const readingBooks = books.filter(b => normalizeReadingStatus(b.readingStatus) === '在读');
 
       // Dashboard summary card
-      const doneCount = books.filter(b => normalizeReadingStatus(b.readingStatus) === '读完').length;
-      const readingCount2 = readingBooks.length;
-      const wantCount = books.filter(b => normalizeReadingStatus(b.readingStatus) === '要读').length;
+      const doneCount = books.filter(b => normalizeReadingStatus(b.readingStatus) === '读过').length;
+      const favCount = books.filter(b => b.favorite).length;
+      const unreadCount = books.length - doneCount;
       const doneP = books.length ? (doneCount / books.length * 100).toFixed(0) : 0;
-      const readingP = books.length ? (readingCount2 / books.length * 100).toFixed(0) : 0;
-      const wantP = books.length ? (wantCount / books.length * 100).toFixed(0) : 0;
+      const unreadP = books.length ? (unreadCount / books.length * 100).toFixed(0) : 0;
 
       document.getElementById('summaryCard').innerHTML = `
         <div class="summary-greeting">${escapeHtml(userName)}的书房 📖</div>
         <div class="summary-headline">
-          书架上有 <span class="num">${books.length}</span> 本书，已读完 <span class="num">${doneCount}</span> 本
+          书架上有 <span class="num">${books.length}</span> 本书，读过 <span class="num">${doneCount}</span> 本${favCount > 0 ? `，收藏 <span class="num">${favCount}</span> 本` : ''}
         </div>
         <div class="summary-bar-wrap">
           <div class="summary-bar">
             <div class="seg" style="width:${doneP}%;background:var(--ok)"></div>
-            <div class="seg" style="width:${readingP}%;background:var(--warn)"></div>
-            <div class="seg" style="width:${wantP}%;background:#5B9BD5"></div>
+            <div class="seg" style="width:${unreadP}%;background:var(--surface-2)"></div>
           </div>
           <div class="summary-bar-legend">
-            <div class="summary-legend-item"><span class="dot" style="background:var(--ok)"></span>读完 <span class="val">${doneCount}</span></div>
-            <div class="summary-legend-item"><span class="dot" style="background:var(--warn)"></span>在读 <span class="val">${readingCount2}</span></div>
-            <div class="summary-legend-item"><span class="dot" style="background:#5B9BD5"></span>要读 <span class="val">${wantCount}</span></div>
+            <div class="summary-legend-item"><span class="dot" style="background:var(--ok)"></span>读过 <span class="val">${doneCount}</span></div>
+            <div class="summary-legend-item"><span class="dot" style="background:var(--surface-2)"></span>未读 <span class="val">${unreadCount}</span></div>
+            ${favCount > 0 ? `<div class="summary-legend-item"><span class="dot" style="background:#C2785C"></span>收藏 <span class="val">${favCount}</span></div>` : ''}
           </div>
         </div>
         ${todoCount > 0 ? `<div class="alert-banner warn"><span>📋 有 ${todoCount} 本书信息待补充</span><span class="alert-action quick-action-btn" data-action="organize">去补充 →</span></div>` : ''}
@@ -1462,24 +1440,6 @@
         badge.className = 'nav-badge';
         badge.textContent = String(todoCount);
         els.navOrganize.appendChild(badge);
-      }
-
-      // Currently reading
-      const currentReading = readingBooks[0] || null;
-      if (currentReading) {
-        const cc = catColor(currentReading.category);
-        els.currentReadingCard.innerHTML = `
-          <div class="reading-hero book-detail-btn" data-id="${escapeHtml(currentReading.id)}" style="background:${cc};box-shadow:0 6px 24px ${cc}55">
-            <div class="reading-hero-inner">
-              <div class="reading-hero-cover"></div>
-              <div>
-                <div class="reading-hero-author">${escapeHtml(currentReading.author || '未知作者')}</div>
-                <div class="reading-hero-title">${escapeHtml(currentReading.title || '未命名图书')}</div>
-              </div>
-            </div>
-          </div>`;
-      } else {
-        els.currentReadingCard.innerHTML = '<div class="muted" style="margin-top:4px">还没有在读的书</div>';
       }
 
       // Category distribution (bar chart)
@@ -1564,8 +1524,9 @@
       els.searchClearBtn.style.display = query ? 'block' : 'none';
       const matchedBooks = books.filter(b => {
         const statusLabel = b.status === 'to_be_sorted' ? '待补充' : '已入库';
-        const readLabel = normalizeReadingStatus(b.readingStatus || '');
-        const queryMatched = !query || [b.title, b.author, b.isbn, b.category, statusLabel, readLabel, b.location].some(v => String(v || '').toLowerCase().includes(query));
+        const readLabel = normalizeReadingStatus(b.readingStatus) || '未读';
+        const favLabel = b.favorite ? '收藏' : '';
+        const queryMatched = !query || [b.title, b.author, b.isbn, b.category, statusLabel, readLabel, favLabel, b.location].some(v => String(v || '').toLowerCase().includes(query));
         const categoryMatched = !selectedCategoryFilter || String(b.category || '').trim() === selectedCategoryFilter;
         return queryMatched && categoryMatched;
       });
@@ -1591,7 +1552,7 @@
                   ${b.location ? `<div style="font-size:11px;color:var(--muted);margin-top:2px">📍 ${escapeHtml(b.location)}</div>` : ''}
                 </div>
                 <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px">
-                  ${statusBadgeHtml(b.readingStatus)}
+                  ${statusBadgeHtml(b.readingStatus, b.favorite)}
                   ${b.status === 'to_be_sorted' ? libBadgeHtml(b.status) : ''}
                 </div>
               </div>`;
@@ -1632,11 +1593,12 @@
       const orgStatsGrid = document.getElementById('orgStatsGrid');
       if (orgStatsGrid) {
         const catCount = [...new Set(books.map(b => b.category).filter(Boolean))].length;
-        const doneBooks = books.filter(b => normalizeReadingStatus(b.readingStatus) === '读完').length;
+        const orgDoneBooks = books.filter(b => normalizeReadingStatus(b.readingStatus) === '读过').length;
+        const orgFavBooks = books.filter(b => b.favorite).length;
         orgStatsGrid.innerHTML = `
           <div class="stats-card"><div class="sc-icon">📚</div><div class="sc-num">${books.length}</div><div class="sc-label">总藏书量</div></div>
-          <div class="stats-card"><div class="sc-icon">✅</div><div class="sc-num">${doneBooks}</div><div class="sc-label">已读完</div><div class="sc-sub">完成率 ${books.length ? (doneBooks/books.length*100).toFixed(0) : 0}%</div></div>
-          <div class="stats-card"><div class="sc-icon">📖</div><div class="sc-num">${readingBooks.length}</div><div class="sc-label">在读中</div></div>
+          <div class="stats-card"><div class="sc-icon">✅</div><div class="sc-num">${orgDoneBooks}</div><div class="sc-label">读过</div><div class="sc-sub">完成率 ${books.length ? (orgDoneBooks/books.length*100).toFixed(0) : 0}%</div></div>
+          <div class="stats-card"><div class="sc-icon">❤️</div><div class="sc-num">${orgFavBooks}</div><div class="sc-label">收藏</div></div>
           <div class="stats-card"><div class="sc-icon">🏷️</div><div class="sc-num">${catCount}</div><div class="sc-label">分类数</div></div>
         `;
       }
@@ -1826,7 +1788,6 @@
       if (!keepLocation) els.location.value = '';
       if (els.description) els.description.value = '';
       if (els.readingStatus) els.readingStatus.value = '';
-      if (els.readingProgress) els.readingProgress.value = '';
       if (els.notes) els.notes.value = '';
       delete els.manualCard.dataset.bookLang;
       delete els.manualCard.dataset.bookSources;
@@ -1933,8 +1894,8 @@
       let title = els.title.value.trim();
       let author = els.author.value.trim();
       let category = els.category.value.trim();
-      let readingStatus = normalizeReadingStatus(String(els.readingStatus?.value || '').trim());
-      let readingProgress = Math.max(0, Math.min(100, Number(els.readingProgress?.value || 0)));
+      let readingStatus = String(els.readingStatus?.value || '').trim();
+      let readingProgress = 0;
       let publishedYear = els.publishedYear.value.trim();
       let location = els.location.value.trim();
       let description = String(els.description?.value || '').trim();
@@ -2121,16 +2082,25 @@
                 <div class="modal-title">${escapeHtml(book.title || '未命名图书')}</div>
                 <div class="modal-meta">${escapeHtml(book.author || '未知作者')} · ${escapeHtml(book.publishedYear || '')}</div>
                 <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px">
-                  ${statusBadgeHtml(book.readingStatus)}
+                  ${statusBadgeHtml(book.readingStatus, book.favorite)}
                   ${libBadgeHtml(book.status)}
                 </div>
               </div>
             </div>
             <div class="modal-body">
               <div style="margin-bottom:20px">
-                <div style="font-size:12px;font-weight:600;color:var(--muted);margin-bottom:10px">阅读状态</div>
-                <div class="option-row">
-                  ${['要读','在读','读完'].map(status => `<button class="option-pill reading-status-btn ${normalizeReadingStatus(book.readingStatus || '要读') === status ? 'active' : ''}" data-id="${escapeHtml(book.id)}" data-status="${status}">${status}</button>`).join('')}
+                <div style="display:flex;gap:10px;align-items:center">
+                  <div style="flex:1">
+                    <div style="font-size:12px;font-weight:600;color:var(--muted);margin-bottom:10px">阅读状态</div>
+                    <div class="option-row">
+                      <button class="option-pill reading-status-btn ${normalizeReadingStatus(book.readingStatus) === '' ? 'active' : ''}" data-id="${escapeHtml(book.id)}" data-status="">未读</button>
+                      <button class="option-pill reading-status-btn ${normalizeReadingStatus(book.readingStatus) === '读过' ? 'active' : ''}" data-id="${escapeHtml(book.id)}" data-status="读过">读过</button>
+                    </div>
+                  </div>
+                  <div>
+                    <div style="font-size:12px;font-weight:600;color:var(--muted);margin-bottom:10px">收藏</div>
+                    <button class="option-pill favorite-btn ${book.favorite ? 'active' : ''}" data-id="${escapeHtml(book.id)}" style="font-size:16px">${book.favorite ? '♥' : '♡'}</button>
+                  </div>
                 </div>
               </div>
               <div style="background:var(--card);border-radius:14px;overflow:hidden;margin-bottom:16px">
@@ -2165,9 +2135,22 @@
       const readingStatusBtn = event.target.closest('.reading-status-btn');
       if (readingStatusBtn) {
         const id = readingStatusBtn.dataset.id;
-        updateBook(id, { readingStatus: readingStatusBtn.dataset.status });
+        const newStatus = readingStatusBtn.dataset.status;
+        updateBook(id, { readingStatus: newStatus || '' });
         render();
         showBookDetail(id);
+        return;
+      }
+
+      const favoriteBtn = event.target.closest('.favorite-btn');
+      if (favoriteBtn) {
+        const id = favoriteBtn.dataset.id;
+        const book = loadActiveBooks().find(b => b.id === id);
+        if (book) {
+          updateBook(id, { favorite: !book.favorite });
+          render();
+          showBookDetail(id);
+        }
         return;
       }
 
@@ -2231,8 +2214,8 @@
           els.searchInput.value = '已入库';
         } else if (filter === 'to_be_sorted') {
           els.searchInput.value = '待补充';
-        } else if (filter === 'reading') {
-          els.searchInput.value = '在读';
+        } else if (filter === 'favorite') {
+          els.searchInput.value = '收藏';
         }
         render();
         return;
@@ -2285,7 +2268,6 @@
           els.author.value = book.author || '';
           els.category.value = book.category || '';
           if (els.readingStatus) els.readingStatus.value = book.readingStatus || '';
-          if (els.readingProgress) els.readingProgress.value = book.readingProgress ?? '';
           els.publishedYear.value = book.publishedYear || '';
           els.location.value = book.location || '';
           if (els.description) els.description.value = book.description || '';
@@ -2342,7 +2324,8 @@
           b.author || '',
           b.category || '',
           b.isbn || '',
-          normalizeReadingStatus(b.readingStatus),
+          normalizeReadingStatus(b.readingStatus) || '未读',
+          b.favorite ? '是' : '否',
           b.location || '',
           b.status === 'in_library' ? '已入库' : '待补充',
           b.createdAt ? new Date(b.createdAt).toLocaleDateString('zh-CN') : ''
@@ -2357,7 +2340,7 @@
     const BOOK_FIELD_WHITELIST = new Set([
       'id', 'isbn', 'title', 'author', 'category', 'readingStatus', 'readingProgress',
       'publishedYear', 'location', 'description', 'notes', 'bookLang', 'coverUrl',
-      'metadataSources', 'status', 'createdAt', 'updatedAt', '_deleted',
+      'metadataSources', 'status', 'createdAt', 'updatedAt', '_deleted', 'favorite',
     ]);
     const SAFE_URL_PROTOCOLS = new Set(['http:', 'https:', 'data:']);
     const MAX_IMPORT_BOOKS = 5000;
@@ -3450,8 +3433,7 @@
 
       const cover = document.getElementById('wanderCover');
       const cu = coverUrl(b);
-      const cls = normalizeReadingStatus(b.readingStatus) === '在读' ? 'reading'
-        : normalizeReadingStatus(b.readingStatus) === '读完' ? 'done' : 'want';
+      const cls = normalizeReadingStatus(b.readingStatus) === '读过' ? 'done' : 'unread';
 
       cover.classList.add('out');
       setTimeout(() => {
@@ -3491,12 +3473,12 @@
         const statusEl = document.getElementById('wanderStatus');
         statusEl.className = 'wander-status ' + cls;
         statusEl.innerHTML =
-          `<span class="sdot"></span>${escapeHtml(normalizeReadingStatus(b.readingStatus))}`;
+          `<span class="sdot"></span>${escapeHtml(normalizeReadingStatus(b.readingStatus) || '未读')}`;
 
         const wishBtn = document.getElementById('wanderWishBtn');
-        const isWant  = normalizeReadingStatus(b.readingStatus) === '要读';
-        wishBtn.textContent = isWant ? '♥' : '♡';
-        wishBtn.className   = 'wander-wish-btn' + (isWant ? ' wished' : '');
+        const isFav  = !!b.favorite;
+        wishBtn.textContent = isFav ? '♥' : '♡';
+        wishBtn.className   = 'wander-wish-btn' + (isFav ? ' wished' : '');
         wishBtn.dataset.id  = b.id;
 
         cover.classList.remove('out');
@@ -3533,16 +3515,10 @@
       if (!id) return;
       const book = loadActiveBooks().find(b => b.id === id);
       if (!book) return;
-      const isWant = normalizeReadingStatus(book.readingStatus) === '要读';
-      if (isWant) {
-        updateBook(id, { readingStatus: '' });
-        e.currentTarget.textContent = '♡';
-        e.currentTarget.classList.remove('wished');
-      } else {
-        updateBook(id, { readingStatus: '要读' });
-        e.currentTarget.textContent = '♥';
-        e.currentTarget.classList.add('wished');
-      }
+      const newFav = !book.favorite;
+      updateBook(id, { favorite: newFav });
+      e.currentTarget.textContent = newFav ? '♥' : '♡';
+      e.currentTarget.classList.toggle('wished', newFav);
     });
     document.getElementById('wanderPrev').addEventListener('click', (e) => { e.stopPropagation(); prevWander(); });
     document.getElementById('wanderNext').addEventListener('click', (e) => { e.stopPropagation(); nextWander(); });
@@ -3563,6 +3539,26 @@
       });
     });
     // ── End Organize tabs ─────────────────────────────────────────────────────
+
+    // One-time migration: simplify readingStatus to binary (读过/空) + preserve favorite
+    (function migrateReadingStatus() {
+      const MIG_KEY = 'lib:reading-migration:v1';
+      if (localStorage.getItem(MIG_KEY)) return;
+      const books = loadBooks();
+      let changed = false;
+      books.forEach(b => {
+        const s = String(b.readingStatus || '').trim();
+        if (['读完', '已读完', '已完成', 'done'].includes(s)) {
+          b.readingStatus = '读过';
+          changed = true;
+        } else if (['要读', '想读', '在读', '正在读', 'want', 'reading'].includes(s)) {
+          b.readingStatus = '';
+          changed = true;
+        }
+      });
+      if (changed) saveBooks(books);
+      localStorage.setItem(MIG_KEY, '1');
+    })();
 
     // One-time migration: re-translate all existing categories to Chinese
     (function migrateCategories() {
