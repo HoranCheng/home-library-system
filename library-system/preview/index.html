@@ -53,7 +53,7 @@
     .mode-toggle button.accent-active { background:var(--accent); color:#fff; box-shadow:0 2px 8px rgba(61,94,76,.25); }
 
     /* ── Content area ── */
-    .content { padding:0 20px calc(var(--safe-bottom) + 88px); }
+    .content { padding:0 20px calc(var(--safe-bottom) + 72px); }
     .hidden { display:none !important; }
 
     /* ── Section title ── */
@@ -323,11 +323,21 @@
     .menu-panel button:hover { background:var(--accent-light); }
 
     /* ── Modal bottom sheet ── */
-    .modal-backdrop { position:fixed; inset:0; background:rgba(44,38,31,.5); backdrop-filter:blur(6px); display:flex; align-items:flex-end; justify-content:center; z-index:50; }
-    .modal-sheet {
-      width:100%; max-width:480px; background:var(--bg); border-radius:24px 24px 0 0;
-      padding:0 0 40px; max-height:85vh; overflow-y:auto;
+    @keyframes modalFadeIn { from { opacity:0; } to { opacity:1; } }
+    @keyframes modalScaleIn { from { opacity:0; transform:scale(.95) translateY(12px); } to { opacity:1; transform:scale(1) translateY(0); } }
+    @keyframes detailContentIn { from { opacity:0; transform:translateY(16px); } to { opacity:1; transform:translateY(0); } }
+    .modal-backdrop {
+      position:fixed; inset:0; background:rgba(44,38,31,.45); backdrop-filter:blur(8px);
+      display:flex; align-items:center; justify-content:center; z-index:50;
+      animation:modalFadeIn .25s ease;
     }
+    .modal-sheet {
+      width:calc(100% - 32px); max-width:420px; background:var(--bg); border-radius:20px;
+      padding:0 0 24px; max-height:82vh; overflow-y:auto;
+      box-shadow:0 16px 48px rgba(44,38,31,.2);
+      animation:modalScaleIn .3s ease;
+    }
+    .modal-sheet .detail-anim { opacity:0; animation:detailContentIn .35s ease forwards; }
     .modal-handle { display:flex; justify-content:center; padding:12px 0 0; }
     .modal-handle-bar { width:36px; height:4px; background:var(--surface-2); border-radius:2px; }
     .modal-header { display:flex; gap:16px; padding:16px 24px 20px; border-bottom:1px solid var(--line); }
@@ -340,6 +350,8 @@
     .modal-meta-label { font-size:13px; color:var(--muted); width:72px; flex-shrink:0; }
     .modal-meta-value { font-size:13px; color:var(--text); }
     .option-row { display:flex; gap:8px; margin-top:10px; }
+    @keyframes favBounce { 0%{transform:scale(1)} 30%{transform:scale(.85)} 60%{transform:scale(1.1)} 100%{transform:scale(1)} }
+    .favorite-btn.bounce { animation:favBounce .35s ease; }
     .option-pill {
       flex:1; padding:10px 0; border:2px solid var(--surface-2); border-radius:12px;
       background:transparent; color:var(--muted); font-size:13px; font-weight:600; cursor:pointer; text-align:center;
@@ -355,30 +367,43 @@
     .modal-note-text { font-size:13px; color:var(--text); line-height:1.6; }
 
     /* ── Bottom nav ── */
-    .bottom-nav {
-      position:fixed; bottom:0; left:50%; transform:translateX(-50%);
-      width:100%; max-width:480px;
-      background:rgba(255,253,248,.96); backdrop-filter:blur(20px); -webkit-backdrop-filter:blur(20px);
-      border-top:1px solid var(--line); padding:0 8px calc(var(--safe-bottom) + 4px);
-      display:flex; align-items:flex-end; justify-content:space-around; z-index:40; height:72px;
+    /* ── Ghost Nav ── */
+    .ghost-nav {
+      position:fixed; bottom:calc(18px + var(--safe-bottom));
+      left:50%; transform:translateX(-50%);
+      display:flex; align-items:center; gap:0;
+      background:rgba(44,38,31,.75); backdrop-filter:blur(20px); -webkit-backdrop-filter:blur(20px);
+      border-radius:22px; padding:0 6px;
+      z-index:40; transition:opacity .35s ease, transform .35s ease;
+      box-shadow:0 4px 24px rgba(44,38,31,.18);
     }
-    .bottom-nav button:not(.fab) {
-      flex:1; border:none; background:transparent; display:flex; flex-direction:column; align-items:center;
-      gap:3px; cursor:pointer; padding:6px 0; position:relative;
-      -webkit-tap-highlight-color:transparent; appearance:none;
+    .ghost-nav.hidden {
+      opacity:0; transform:translateX(-50%) translateY(14px); pointer-events:none;
     }
-    .bottom-nav button .nav-icon { font-size:20px; display:flex; align-items:center; justify-content:center; }
-    .bottom-nav button .nav-label { font-size:11px; font-weight:600; color:var(--muted); }
-    .bottom-nav button.active .nav-label { color:var(--accent); }
-    .bottom-nav button .nav-indicator {
-      position:absolute; bottom:-4px; width:20px; height:3px; background:var(--accent); border-radius:2px;
-      opacity:0; transition:opacity .15s;
+    .ghost-nav button {
+      border:none; background:transparent; cursor:pointer;
+      font-family:var(--serif); font-size:13px; letter-spacing:.08em;
+      color:rgba(255,253,248,.25); padding:12px 14px;
+      position:relative; display:flex; align-items:center; justify-content:center;
+      -webkit-tap-highlight-color:transparent; transition:color .2s;
     }
-    .bottom-nav button.active .nav-indicator { opacity:1; }
-    .bottom-nav .nav-badge {
-      position:absolute; top:2px; right:calc(50% - 20px);
-      background:var(--warn); color:#fff; font-size:10px; font-weight:700;
-      padding:1px 5px; border-radius:10px; min-width:16px; text-align:center;
+    .ghost-nav button.active { color:#FFFDF8; }
+    .ghost-nav button .ghost-dot {
+      position:absolute; bottom:6px; left:50%; transform:translateX(-50%);
+      width:3px; height:3px; border-radius:50%; background:#FFFDF8;
+      opacity:0; transition:opacity .2s;
+    }
+    .ghost-nav button.active .ghost-dot { opacity:1; }
+    .ghost-nav .ghost-fab {
+      font-family:-apple-system,BlinkMacSystemFont,sans-serif;
+      font-size:18px; color:rgba(255,253,248,.45); font-weight:300;
+      padding:12px 12px;
+    }
+    .ghost-nav .ghost-fab.active { color:#FFFDF8; }
+    .ghost-nav .nav-badge {
+      position:absolute; top:4px; right:4px;
+      background:var(--warn); color:#fff; font-size:8px; font-weight:700;
+      padding:1px 4px; border-radius:8px; min-width:12px; text-align:center;
     }
 
     /* ── Page header (collapsible) ── */
@@ -502,8 +527,8 @@
     .wander-status .sdot { width: 4px; height: 4px; border-radius: 50%; flex-shrink: 0; }
     .wander-status.done    { background: var(--ok-light); color: #2D6A3A; }
     .wander-status.done .sdot    { background: var(--ok); }
-    .wander-status.unread  { background: var(--surface-2); color: var(--muted); }
-    .wander-status.unread .sdot  { background: var(--muted); }
+    .wander-status.unread  { background: #F3EFE8; color: #7A6F62; }
+    .wander-status.unread .sdot  { background: #B0A99E; }
     /* 想读按钮 */
     .wander-wish-btn {
       width: 28px; height: 28px;
@@ -548,13 +573,37 @@
     .loc-count{font-size:12px;color:var(--muted);margin-top:2px}
 
     /* ── FAB (floating action button in bottom nav) ── */
-    .fab{
-      width:52px;height:52px;border-radius:50%;border:none;cursor:pointer;
-      background:linear-gradient(135deg,#3D5E4C 0%,#5A8C6C 100%);color:#fff;font-size:26px;font-weight:300;
-      box-shadow:0 6px 20px rgba(61,94,76,.35);transform:translateY(-12px);
-      transition:transform .12s,box-shadow .12s;display:flex;align-items:center;justify-content:center;flex-shrink:0;
+    /* ── Section labels ── */
+    .section-label {
+      font-size:9px; font-weight:400; letter-spacing:.2em;
+      text-transform:uppercase; color:rgba(44,38,31,.22);
+      margin-left:2px; margin-top:-2px;
     }
-    .fab:active{transform:translateY(-12px) scale(.9);box-shadow:0 3px 10px rgba(61,94,76,.3)}
+    /* ── Favorites gallery ── */
+    .fav-gallery {
+      position:relative; margin-bottom:24px;
+    }
+    .fav-gallery-scroll {
+      display:flex; gap:12px; overflow-x:auto; padding:12px 0 14px;
+      -webkit-overflow-scrolling:touch; scrollbar-width:none;
+    }
+    .fav-gallery-scroll::-webkit-scrollbar { display:none; }
+    .fav-gallery-item {
+      flex-shrink:0; width:92px; cursor:pointer;
+      transition:transform .12s;
+    }
+    .fav-gallery-item:active { transform:scale(.95); }
+    .fav-gallery-cover {
+      width:92px; height:132px; border-radius:6px;
+      object-fit:cover; background:var(--surface-2);
+      box-shadow:0 4px 16px rgba(44,38,31,.12);
+    }
+    .fav-gallery-baseline {
+      position:absolute; bottom:14px; left:0; right:0;
+      height:1px; background:rgba(44,38,31,.08);
+      pointer-events:none;
+    }
+    /* (old FAB removed — now part of ghost-nav) */
   </style>
   <script src="./vendor/zxing-browser.min.js"></script>
 </head>
@@ -647,7 +696,7 @@
 
         <div class="subsection-title" style="display:flex;align-items:center;gap:8px">
           书海漫游
-          <span style="font-size:11px;color:var(--accent2);font-weight:400" id="wanderLabel">轻触翻阅</span>
+          <span class="section-label" id="wanderLabel">轻触翻阅</span>
         </div>
         <div class="wander-section">
           <div class="wander-card" id="wanderCard">
@@ -678,11 +727,19 @@
           </div>
         </div>
 
-        <div class="subsection-title">分类分布</div>
+        <div id="favGallerySection" style="display:none">
+          <div class="subsection-title"><span class="section-label" id="favGalleryLabel">FAVORITES · 0</span></div>
+          <div class="fav-gallery">
+            <div class="fav-gallery-scroll" id="favGalleryScroll"></div>
+            <div class="fav-gallery-baseline"></div>
+          </div>
+        </div>
+
+        <div class="subsection-title">分类分布 <span class="section-label">CATEGORIES</span></div>
         <div class="card" id="categoryChips"></div>
 
         <div class="subsection-title" style="display:flex;align-items:center;justify-content:space-between">
-          我的书架
+          我的书架 <span class="section-label" style="flex:1"></span>
           <span id="shelfSortToggle" style="font-size:12px;color:var(--muted);cursor:pointer;user-select:none;font-weight:600"></span>
         </div>
         <div class="book-list" id="bookList"></div>
@@ -747,22 +804,14 @@
       </div>
     </div>
 
-    <!-- Bottom nav -->
-    <div class="bottom-nav">
-      <button id="navHome" class="active">
-        <span class="nav-icon"><svg width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M3 12l9-8 9 8"/><path d="M5 10v9a1 1 0 001 1h3v-5h6v5h3a1 1 0 001-1v-9"/></svg></span><span class="nav-label">首页</span><span class="nav-indicator"></span>
-      </button>
-      <button id="navSearch">
-        <span class="nav-icon"><svg width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg></span><span class="nav-label">搜索</span><span class="nav-indicator"></span>
-      </button>
-      <button class="fab" id="navFab">+</button>
-      <button id="navOrganize" style="position:relative">
-        <span class="nav-icon"><svg width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M4 6h16M4 12h10M4 18h7"/><circle cx="19" cy="15" r="3"/><path d="M19 13v4M17 15h4"/></svg></span><span class="nav-label">整理</span><span class="nav-indicator"></span>
-      </button>
-      <button id="navSettings">
-        <span class="nav-icon"><svg width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 01-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg></span><span class="nav-label">设置</span><span class="nav-indicator"></span>
-      </button>
-    </div>
+    <!-- Ghost Nav -->
+    <nav class="ghost-nav" id="ghostNav">
+      <button id="navHome" class="active">首<span class="ghost-dot"></span></button>
+      <button id="navSearch">寻<span class="ghost-dot"></span></button>
+      <button class="ghost-fab" id="navFab">+</button>
+      <button id="navOrganize" style="position:relative">理<span class="ghost-dot"></span></button>
+      <button id="navSettings">设<span class="ghost-dot"></span></button>
+    </nav>
     <div id="detailModalRoot"></div>
   </div>
 
@@ -1397,11 +1446,11 @@
         <div class="summary-bar-wrap">
           <div class="summary-bar">
             <div class="seg" style="width:${doneP}%;background:var(--ok)"></div>
-            <div class="seg" style="width:${unreadP}%;background:var(--surface-2)"></div>
+            <div class="seg" style="width:${unreadP}%;background:#CCBFB0"></div>
           </div>
           <div class="summary-bar-legend">
             <div class="summary-legend-item"><span class="dot" style="background:var(--ok)"></span>读过 <span class="val">${doneCount}</span></div>
-            <div class="summary-legend-item"><span class="dot" style="background:var(--surface-2)"></span>未读 <span class="val">${unreadCount}</span></div>
+            <div class="summary-legend-item"><span class="dot" style="background:#CCBFB0"></span>未读 <span class="val">${unreadCount}</span></div>
             ${favCount > 0 ? `<div class="summary-legend-item"><span class="dot" style="background:#C2785C"></span>收藏 <span class="val">${favCount}</span></div>` : ''}
           </div>
         </div>
@@ -1416,6 +1465,26 @@
         badge.className = 'nav-badge';
         badge.textContent = String(todoCount);
         els.navOrganize.appendChild(badge);
+      }
+
+      // Favorites gallery
+      const favBooks = books.filter(b => b.favorite);
+      const favSection = document.getElementById('favGallerySection');
+      if (favBooks.length > 0) {
+        favSection.style.display = '';
+        document.getElementById('favGalleryLabel').textContent = `FAVORITES · ${favBooks.length}`;
+        document.getElementById('favGalleryScroll').innerHTML = favBooks.map(b => {
+          const cu = coverUrl(b);
+          const cc = catColor(b.category);
+          return `<div class="fav-gallery-item book-detail-btn" data-id="${escapeHtml(b.id)}">
+            ${cu
+              ? `<img class="fav-gallery-cover" src="${escapeHtml(cu)}" alt="" style="background:${cc}" onerror="this.style.background='${cc}';this.removeAttribute('src')" />`
+              : `<div class="fav-gallery-cover" style="background:${cc};display:flex;align-items:flex-end;justify-content:center;padding:8px"><span style="font-size:10px;color:rgba(255,255,255,.7);font-weight:600;text-align:center;line-height:1.3">${escapeHtml((b.title||'').slice(0,8))}</span></div>`
+            }
+          </div>`;
+        }).join('');
+      } else {
+        favSection.style.display = 'none';
       }
 
       // Category distribution (bar chart)
@@ -1741,6 +1810,33 @@
     handleNavTap(els.navSettings, 'settings');
     // FAB button triggers entry mode
     document.getElementById('navFab').onclick = () => { entrySessionCount = 0; setPage('home', { mode: 'entry' }); window.scrollTo({ top: 0, behavior: 'smooth' }); };
+
+    // ── Ghost Nav auto-hide on scroll ──
+    {
+      const ghostNav = document.getElementById('ghostNav');
+      let lastScrollY = 0, hideTimer = null, navVisible = true;
+
+      function showNav() {
+        if (!navVisible) { ghostNav.classList.remove('hidden'); navVisible = true; }
+        clearTimeout(hideTimer);
+        // Auto-hide after 3s if not near top
+        hideTimer = setTimeout(() => {
+          if (window.scrollY > 80) { ghostNav.classList.add('hidden'); navVisible = false; }
+        }, 3000);
+      }
+      function hideNav() {
+        if (navVisible) { ghostNav.classList.add('hidden'); navVisible = false; }
+        clearTimeout(hideTimer);
+      }
+
+      window.addEventListener('scroll', () => {
+        const y = window.scrollY;
+        if (y < 50) { showNav(); }
+        else if (y < lastScrollY) { showNav(); }  // scrolling up
+        else if (y > lastScrollY + 3) { hideNav(); }  // scrolling down (with 3px dead zone)
+        lastScrollY = y;
+      }, { passive: true });
+    }
     document.getElementById('shelfSortToggle').onclick = () => {
       bookSortMode = bookSortMode === 'alpha' ? 'time' : 'alpha';
       render();
@@ -2067,7 +2163,7 @@
         <div class="modal-backdrop" id="detailBackdrop">
           <div class="modal-sheet">
             <div class="modal-handle"><div class="modal-handle-bar"></div></div>
-            <div class="modal-header">
+            <div class="modal-header detail-anim" style="animation-delay:.05s">
               ${cu ? `<img class="modal-cover-mini" src="${escapeHtml(cu)}" alt="" onerror="this.style.background='${cc}';this.removeAttribute('src')" style="background:${cc}" />` : `<div class="modal-cover-mini" style="background:${cc};display:flex;align-items:flex-end;padding:6px"><span style="font-size:8px;color:rgba(255,255,255,.7);font-weight:600">${escapeHtml((book.bookLang||'').toUpperCase())}</span></div>`}
               <div style="flex:1;min-width:0">
                 <div class="modal-title">${escapeHtml(book.title || '未命名图书')}</div>
@@ -2079,7 +2175,7 @@
               </div>
             </div>
             <div class="modal-body">
-              <div style="margin-bottom:20px">
+              <div class="detail-anim" style="margin-bottom:20px;animation-delay:.1s">
                 <div style="display:flex;gap:10px;align-items:center">
                   <div style="flex:1">
                     <div style="font-size:12px;font-weight:600;color:var(--muted);margin-bottom:10px">阅读状态</div>
@@ -2094,7 +2190,7 @@
                   </div>
                 </div>
               </div>
-              <div style="background:var(--card);border-radius:14px;overflow:hidden;margin-bottom:16px">
+              <div class="detail-anim" style="background:var(--card);border-radius:14px;overflow:hidden;margin-bottom:16px;animation-delay:.15s">
                 ${[
                   { label: '分类', value: book.category || '未分类' },
                   { label: '存放位置', value: book.location || '未填写' },
@@ -2102,13 +2198,13 @@
                   { label: 'ISBN', value: book.isbn || '未填写' },
                 ].map(row => `<div class="modal-meta-row"><span class="modal-meta-label">${row.label}</span><span class="modal-meta-value">${escapeHtml(row.value)}</span></div>`).join('')}
               </div>
-              ${book.notes ? `<div class="modal-note"><div class="modal-note-label">我的笔记</div><div class="modal-note-text">${escapeHtml(book.notes)}</div></div>` : ''}
-              ${book.description ? `<div style="margin-bottom:16px"><div style="font-size:12px;font-weight:600;color:var(--muted);margin-bottom:6px">内容简介</div><div class="muted">${escapeHtml(book.description)}</div></div>` : ''}
-              <div class="actions">
+              ${book.notes ? `<div class="detail-anim modal-note" style="animation-delay:.2s"><div class="modal-note-label">我的笔记</div><div class="modal-note-text">${escapeHtml(book.notes)}</div></div>` : ''}
+              ${book.description ? `<div class="detail-anim" style="margin-bottom:16px;animation-delay:.25s"><div style="font-size:12px;font-weight:600;color:var(--muted);margin-bottom:6px">内容简介</div><div class="muted">${escapeHtml(book.description)}</div></div>` : ''}
+              <div class="detail-anim actions" style="animation-delay:.3s">
                 <button class="btn secondary" data-action="edit" data-id="${escapeHtml(book.id)}" style="cursor:pointer">编辑</button>
                 <button class="btn ghost" id="closeDetailBtn">关闭</button>
               </div>
-              <div style="margin-top:16px;padding-top:16px;border-top:1px solid var(--line);text-align:center">
+              <div class="detail-anim" style="margin-top:16px;padding-top:16px;border-top:1px solid var(--line);text-align:center;animation-delay:.35s">
                 <button class="btn ghost delete-book-btn" data-id="${escapeHtml(book.id)}" style="color:#d44;font-size:13px;cursor:pointer">删除此书</button>
               </div>
             </div>
@@ -2138,6 +2234,9 @@
         const id = favoriteBtn.dataset.id;
         const book = loadActiveBooks().find(b => b.id === id);
         if (book) {
+          favoriteBtn.classList.remove('bounce');
+          void favoriteBtn.offsetWidth; // force reflow
+          favoriteBtn.classList.add('bounce');
           updateBook(id, { favorite: !book.favorite });
           render();
           showBookDetail(id);
@@ -3522,14 +3621,17 @@
     });
     document.getElementById('wanderWishBtn').addEventListener('click', (e) => {
       e.stopPropagation();
-      const id = e.currentTarget.dataset.id;
+      const btn = e.currentTarget;
+      const id = btn.dataset.id;
       if (!id) return;
       const book = loadActiveBooks().find(b => b.id === id);
       if (!book) return;
       const newFav = !book.favorite;
+      btn.style.animation = 'none'; void btn.offsetWidth;
+      btn.style.animation = 'favBounce .35s ease';
       updateBook(id, { favorite: newFav });
-      e.currentTarget.textContent = newFav ? '♥' : '♡';
-      e.currentTarget.classList.toggle('wished', newFav);
+      btn.textContent = newFav ? '♥' : '♡';
+      btn.classList.toggle('wished', newFav);
     });
 
     // Swipe gesture for wander carousel
