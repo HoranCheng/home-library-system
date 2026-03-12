@@ -1396,8 +1396,10 @@
       els.topbarTitle.textContent = `${userName}的书房`;
 
       // Nav active states
-      els.navHome.classList.toggle('active', page === 'home');
+      const isEntryMode = page === 'home' && mode === 'entry';
+      els.navHome.classList.toggle('active', page === 'home' && !isEntryMode);
       els.navSearch.classList.toggle('active', page === 'search');
+      document.getElementById('navFab').classList.toggle('active', isEntryMode);
       els.navOrganize.classList.toggle('active', page === 'organize');
       els.navSettings.classList.toggle('active', page === 'settings');
       els.scanSection.classList.add('hidden');
