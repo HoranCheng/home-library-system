@@ -452,6 +452,7 @@
       display: flex; align-items: center; justify-content: center;
       padding: 18px 14px;
       background: linear-gradient(145deg, #f0e8d8, #e2d6c4);
+      border-radius: 18px 0 0 18px;
     }
     .wander-cover-bg {
       position: absolute; inset: 0;
@@ -2197,8 +2198,20 @@
         const id = readingStatusBtn.dataset.id;
         const newStatus = readingStatusBtn.dataset.status;
         updateBook(id, { readingStatus: newStatus || '' });
-        render();
-        showBookDetail(id);
+        // In-place update: toggle active pills without rebuilding modal
+        const modal = readingStatusBtn.closest('.modal-sheet');
+        if (modal) {
+          modal.querySelectorAll('.reading-status-btn').forEach(btn => {
+            btn.classList.toggle('active', btn.dataset.status === (newStatus || ''));
+          });
+          // Update status badges in header
+          const book = loadActiveBooks().find(b => b.id === id);
+          if (book) {
+            const badgeContainer = modal.querySelector('.modal-header [style*="display:flex;gap:6px"]');
+            if (badgeContainer) badgeContainer.innerHTML = statusBadgeHtml(book.readingStatus, book.favorite) + libBadgeHtml(book.status);
+          }
+        }
+        render(); // background sync (dashboard, gallery, etc.)
         return;
       }
 
@@ -2208,11 +2221,23 @@
         const book = loadActiveBooks().find(b => b.id === id);
         if (book) {
           favoriteBtn.classList.remove('bounce');
-          void favoriteBtn.offsetWidth; // force reflow
+          void favoriteBtn.offsetWidth;
           favoriteBtn.classList.add('bounce');
-          updateBook(id, { favorite: !book.favorite });
-          render();
-          showBookDetail(id);
+          const newFav = !book.favorite;
+          updateBook(id, { favorite: newFav });
+          // In-place update: toggle favorite without rebuilding modal
+          favoriteBtn.classList.toggle('active', newFav);
+          favoriteBtn.textContent = newFav ? '♥' : '♡';
+          // Update status badges in header
+          const modal = favoriteBtn.closest('.modal-sheet');
+          if (modal) {
+            const updatedBook = loadActiveBooks().find(b => b.id === id);
+            if (updatedBook) {
+              const badgeContainer = modal.querySelector('.modal-header [style*="display:flex;gap:6px"]');
+              if (badgeContainer) badgeContainer.innerHTML = statusBadgeHtml(updatedBook.readingStatus, updatedBook.favorite) + libBadgeHtml(updatedBook.status);
+            }
+          }
+          render(); // background sync
         }
         return;
       }
