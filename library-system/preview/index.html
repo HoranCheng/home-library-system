@@ -41,7 +41,6 @@
       display:flex; align-items:flex-end; justify-content:space-between;
     }
     .topbar-title { font-size:22px; font-family:var(--serif); font-weight:700; color:var(--text); line-height:1.2; }
-    .topbar-sub { font-size:12px; color:var(--muted); margin-bottom:2px; letter-spacing:.03em; }
     .mode-toggle {
       display:flex; background:var(--surface-2); border-radius:10px; padding:3px; gap:3px;
     }
@@ -382,29 +381,23 @@
     }
     .ghost-nav button {
       border:none; background:transparent; cursor:pointer;
-      font-family:var(--serif); font-size:13px; letter-spacing:.08em;
-      color:rgba(255,253,248,.25); padding:12px 14px;
+      padding:14px 16px;
       position:relative; display:flex; align-items:center; justify-content:center;
-      -webkit-tap-highlight-color:transparent; transition:color .2s;
+      -webkit-tap-highlight-color:transparent;
     }
-    .ghost-nav button.active { color:#FFFDF8; }
+    .ghost-nav button svg {
+      width:20px; height:20px; stroke:rgba(255,253,248,.28); stroke-width:1.8;
+      fill:none; stroke-linecap:round; stroke-linejoin:round;
+    }
+    .ghost-nav button.active svg { stroke:#FFFDF8; }
     .ghost-nav button .ghost-dot {
       position:absolute; bottom:6px; left:50%; transform:translateX(-50%);
       width:3px; height:3px; border-radius:50%; background:#FFFDF8;
       opacity:0; transition:opacity .2s;
     }
     .ghost-nav button.active .ghost-dot { opacity:1; }
-    .ghost-nav .ghost-fab {
-      font-family:-apple-system,BlinkMacSystemFont,sans-serif;
-      font-size:18px; color:rgba(255,253,248,.45); font-weight:300;
-      padding:12px 12px;
-    }
-    .ghost-nav .ghost-fab.active { color:#FFFDF8; }
-    .ghost-nav .nav-badge {
-      position:absolute; top:4px; right:4px;
-      background:var(--warn); color:#fff; font-size:8px; font-weight:700;
-      padding:1px 4px; border-radius:8px; min-width:12px; text-align:center;
-    }
+    .ghost-nav .ghost-fab { padding:12px 10px; }
+    .ghost-nav .ghost-fab svg { width:22px; height:22px; stroke:rgba(255,253,248,.45); stroke-width:1.6; }
 
     /* ── Page header (collapsible) ── */
     .page-header { transition:max-height .25s ease, opacity .25s ease; overflow:hidden; }
@@ -426,9 +419,9 @@
       background:var(--card);border-radius:20px;padding:20px;box-shadow:var(--shadow);
       border:1px solid rgba(255,255,255,.6);
     }
-    .summary-greeting{font-size:14px;color:var(--muted);margin-bottom:6px}
-    .summary-headline{font-size:20px;font-family:var(--serif);font-weight:700;line-height:1.4;margin-bottom:16px}
+    .summary-headline{font-size:20px;font-family:var(--serif);font-weight:700;line-height:1.4;margin-bottom:4px;cursor:pointer}
     .summary-headline .num{color:var(--accent);font-weight:900}
+    .summary-sub{font-size:13px;color:var(--muted);line-height:1.5;cursor:pointer}
     .summary-bar-wrap{margin-bottom:14px}
     .summary-bar{height:10px;border-radius:5px;background:var(--surface-2);overflow:hidden;display:flex}
     .summary-bar .seg{height:100%;transition:width .8s ease}
@@ -612,8 +605,7 @@
     <!-- Top bar -->
     <div class="topbar" id="topbarEl">
       <div>
-        <div class="topbar-sub" id="modePill">毛毛的书房</div>
-        <div class="topbar-title" id="topbarTitle">我的藏书</div>
+        <div class="topbar-title" id="topbarTitle">我的书房</div>
       </div>
     </div>
 
@@ -694,10 +686,7 @@
       <div id="homeSection">
         <div class="summary-card" id="summaryCard"></div>
 
-        <div class="subsection-title" style="display:flex;align-items:center;gap:8px">
-          书海漫游
-          <span class="section-label" id="wanderLabel">轻触翻阅</span>
-        </div>
+        <div class="subsection-title">随手一本</div>
         <div class="wander-section">
           <div class="wander-card" id="wanderCard">
             <!-- 左：封面 -->
@@ -806,11 +795,25 @@
 
     <!-- Ghost Nav -->
     <nav class="ghost-nav" id="ghostNav">
-      <button id="navHome" class="active">首<span class="ghost-dot"></span></button>
-      <button id="navSearch">寻<span class="ghost-dot"></span></button>
-      <button class="ghost-fab" id="navFab">+</button>
-      <button id="navOrganize" style="position:relative">理<span class="ghost-dot"></span></button>
-      <button id="navSettings">设<span class="ghost-dot"></span></button>
+      <button id="navHome" class="active">
+        <svg viewBox="0 0 24 24"><path d="M12 5c-2.5-2-6-2-8 0v14c2.5-1.2 5.5-1.2 8 .5"/><path d="M12 5c2.5-2 6-2 8 0v14c-2.5-1.2-5.5-1.2-8 .5"/></svg>
+        <span class="ghost-dot"></span>
+      </button>
+      <button id="navSearch">
+        <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+        <span class="ghost-dot"></span>
+      </button>
+      <button class="ghost-fab" id="navFab">
+        <svg viewBox="0 0 24 24"><path d="M4 8V6a2 2 0 0 1 2-2h2"/><path d="M4 16v2a2 2 0 0 0 2 2h2"/><path d="M16 4h2a2 2 0 0 1 2 2v2"/><path d="M16 20h2a2 2 0 0 0 2-2v-2"/><path d="M12 8v8"/><path d="M8 12h8"/></svg>
+      </button>
+      <button id="navOrganize" style="position:relative">
+        <svg viewBox="0 0 24 24"><path d="M4 4h7.586a1 1 0 0 1 .707.293l7.414 7.414a1 1 0 0 1 0 1.414l-5.586 5.586a1 1 0 0 1-1.414 0L5.293 11.293A1 1 0 0 1 5 10.586V5a1 1 0 0 1 1-1z"/><circle cx="8.5" cy="8.5" r="1" fill="#FFFDF8" stroke="none"/><path d="M16 20l2-2m0 0l1.5-1.5a.5.5 0 0 0 0-.7l-.3-.3a.5.5 0 0 0-.7 0L17 17m1 1l-1.5.5.5-1.5"/></svg>
+        <span class="ghost-dot"></span>
+      </button>
+      <button id="navSettings">
+        <svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M5 20a7 7 0 0 1 14 0"/></svg>
+        <span class="ghost-dot"></span>
+      </button>
     </nav>
     <div id="detailModalRoot"></div>
   </div>
@@ -1178,7 +1181,6 @@
     }
 
     const els = {
-      modePill: document.getElementById('modePill'),
       topbarTitle: document.getElementById('topbarTitle'),
       scanNotice: document.getElementById('scanNotice'),
       isbn: document.getElementById('isbn'),
@@ -1387,10 +1389,7 @@
 
       // Top bar
       const userName = auth.isLoggedIn() && auth.user?.display_name ? auth.user.display_name : '我';
-      const pageTitles = { home: '我的藏书', search: '找一本书', organize: '信息补充', settings: '设置' };
-      const pageSubs = { home: `${userName}的书房`, search: '搜索', organize: '补充信息', settings: '设置' };
-      els.topbarTitle.textContent = pageTitles[page] || '我的藏书';
-      els.modePill.textContent = pageSubs[page] || '';
+      els.topbarTitle.textContent = `${userName}的书房`;
 
       // Nav active states
       els.navHome.classList.toggle('active', page === 'home');
@@ -1431,41 +1430,18 @@
       const todoCount = books.filter(b => b.status === 'to_be_sorted').length;
       const inLibCount = books.filter(b => b.status === 'in_library').length;
 
-      // Dashboard summary card
-      const doneCount = books.filter(b => normalizeReadingStatus(b.readingStatus) === '读过').length;
-      const favCount = books.filter(b => b.favorite).length;
-      const unreadCount = books.length - doneCount;
-      const doneP = books.length ? (doneCount / books.length * 100).toFixed(0) : 0;
-      const unreadP = books.length ? (unreadCount / books.length * 100).toFixed(0) : 0;
+      // Dashboard summary card (warm copy, no progress bar)
+      let summarySub;
+      if (todoCount > 5) summarySub = '还有一些书可以补充更多信息';
+      else if (todoCount >= 1) summarySub = '大部分书都已经整理得很完整了';
+      else summarySub = '每一本书的信息都已经整理好了';
 
       document.getElementById('summaryCard').innerHTML = `
-        <div class="summary-greeting">${escapeHtml(userName)}的书房 📖</div>
         <div class="summary-headline">
-          书架上有 <span class="num">${books.length}</span> 本书，读过 <span class="num">${doneCount}</span> 本${favCount > 0 ? `，收藏 <span class="num">${favCount}</span> 本` : ''}
+          书架上整理了 <span class="num">${books.length}</span> 本书
         </div>
-        <div class="summary-bar-wrap">
-          <div class="summary-bar">
-            <div class="seg" style="width:${doneP}%;background:var(--ok)"></div>
-            <div class="seg" style="width:${unreadP}%;background:#CCBFB0"></div>
-          </div>
-          <div class="summary-bar-legend">
-            <div class="summary-legend-item"><span class="dot" style="background:var(--ok)"></span>读过 <span class="val">${doneCount}</span></div>
-            <div class="summary-legend-item"><span class="dot" style="background:#CCBFB0"></span>未读 <span class="val">${unreadCount}</span></div>
-            ${favCount > 0 ? `<div class="summary-legend-item"><span class="dot" style="background:#C2785C"></span>收藏 <span class="val">${favCount}</span></div>` : ''}
-          </div>
-        </div>
-        ${todoCount > 0 ? `<div class="alert-banner warn"><span>📋 有 ${todoCount} 本书信息待补充</span><span class="alert-action quick-action-btn" data-action="organize">去补充 →</span></div>` : ''}
+        <div class="summary-sub">${escapeHtml(summarySub)}</div>
       `;
-
-      // Nav organize badge
-      const existingBadge = els.navOrganize.querySelector('.nav-badge');
-      if (existingBadge) existingBadge.remove();
-      if (todoCount > 0) {
-        const badge = document.createElement('span');
-        badge.className = 'nav-badge';
-        badge.textContent = String(todoCount);
-        els.navOrganize.appendChild(badge);
-      }
 
       // Favorites gallery
       const favBooks = books.filter(b => b.favorite);
@@ -1811,31 +1787,27 @@
     // FAB button triggers entry mode
     document.getElementById('navFab').onclick = () => { entrySessionCount = 0; setPage('home', { mode: 'entry' }); window.scrollTo({ top: 0, behavior: 'smooth' }); };
 
-    // ── Ghost Nav auto-hide on scroll ──
+    // ── Ghost Nav idle-fade ──
     {
       const ghostNav = document.getElementById('ghostNav');
-      let lastScrollY = 0, hideTimer = null, navVisible = true;
+      let idleTimer = null;
 
       function showNav() {
-        if (!navVisible) { ghostNav.classList.remove('hidden'); navVisible = true; }
-        clearTimeout(hideTimer);
-        // Auto-hide after 3s if not near top
-        hideTimer = setTimeout(() => {
-          if (window.scrollY > 80) { ghostNav.classList.add('hidden'); navVisible = false; }
+        ghostNav.classList.remove('hidden');
+        clearTimeout(idleTimer);
+        idleTimer = setTimeout(() => {
+          if (window.scrollY > 50) ghostNav.classList.add('hidden');
         }, 3000);
       }
-      function hideNav() {
-        if (navVisible) { ghostNav.classList.add('hidden'); navVisible = false; }
-        clearTimeout(hideTimer);
-      }
 
-      window.addEventListener('scroll', () => {
-        const y = window.scrollY;
-        if (y < 50) { showNav(); }
-        else if (y < lastScrollY) { showNav(); }  // scrolling up
-        else if (y > lastScrollY + 3) { hideNav(); }  // scrolling down (with 3px dead zone)
-        lastScrollY = y;
-      }, { passive: true });
+      // Initial: fade out after 3s if scrolled
+      idleTimer = setTimeout(() => {
+        if (window.scrollY > 50) ghostNav.classList.add('hidden');
+      }, 3000);
+
+      ['scroll','touchstart','touchmove','click','mousemove'].forEach(evt =>
+        window.addEventListener(evt, showNav, { passive: true })
+      );
     }
     document.getElementById('shelfSortToggle').onclick = () => {
       bookSortMode = bookSortMode === 'alpha' ? 'time' : 'alpha';
@@ -2318,6 +2290,17 @@
         if (action === 'search') setPage('search');
         if (action === 'organize') setPage('organize');
         if (action === 'settings') setPage('settings');
+        return;
+      }
+
+      // Summary card interactions (easter eggs)
+      if (event.target.closest('.summary-sub')) {
+        setPage('organize');
+        return;
+      }
+      if (event.target.closest('.summary-headline')) {
+        const shelf = document.getElementById('bookList');
+        if (shelf) shelf.scrollIntoView({ behavior: 'smooth' });
         return;
       }
 
