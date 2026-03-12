@@ -1789,27 +1789,31 @@
     // FAB button triggers entry mode
     document.getElementById('navFab').onclick = () => { entrySessionCount = 0; setPage('home', { mode: 'entry' }); window.scrollTo({ top: 0, behavior: 'smooth' }); };
 
-    // ── Ghost Nav idle-fade ──
+    // ── Ghost Nav: scroll direction + idle fade ──
     {
       const ghostNav = document.getElementById('ghostNav');
-      let idleTimer = null;
+      let lastY = 0, idleTimer = null, hasScrolledDown = false;
 
       function showNav() {
         ghostNav.classList.remove('hidden');
         clearTimeout(idleTimer);
-        idleTimer = setTimeout(() => {
-          if (window.scrollY > 50) ghostNav.classList.add('hidden');
-        }, 3000);
+        // After first scroll-down, idle = fade out after 3s
+        if (hasScrolledDown && window.scrollY > 60) {
+          idleTimer = setTimeout(() => ghostNav.classList.add('hidden'), 3000);
+        }
+      }
+      function hideNav() {
+        ghostNav.classList.add('hidden');
+        clearTimeout(idleTimer);
       }
 
-      // Initial: fade out after 3s if scrolled
-      idleTimer = setTimeout(() => {
-        if (window.scrollY > 50) ghostNav.classList.add('hidden');
-      }, 3000);
-
-      ['scroll','touchstart','touchmove','click','mousemove'].forEach(evt =>
-        window.addEventListener(evt, showNav, { passive: true })
-      );
+      window.addEventListener('scroll', () => {
+        const y = window.scrollY;
+        if (y <= 60) { showNav(); hasScrolledDown = false; }  // near top: always show, reset
+        else if (y > lastY + 4) { hideNav(); hasScrolledDown = true; }  // scrolling down
+        else if (y < lastY - 4) { showNav(); }  // scrolling up
+        lastY = y;
+      }, { passive: true });
     }
     document.getElementById('shelfSortToggle').onclick = () => {
       bookSortMode = bookSortMode === 'alpha' ? 'time' : 'alpha';
