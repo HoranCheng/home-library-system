@@ -294,15 +294,16 @@
     .alpha-scrubber {
       position:fixed; right:2px; top:50%; transform:translateY(-50%);
       z-index:35; display:flex; flex-direction:column; align-items:center;
-      padding:4px 2px; border-radius:12px;
+      padding:2px 2px; border-radius:10px;
       background:rgba(44,38,31,.06); backdrop-filter:blur(8px); -webkit-backdrop-filter:blur(8px);
       touch-action:none; user-select:none; -webkit-user-select:none;
       transition:opacity .3s;
+      max-height:calc(100vh - 120px); /* fit viewport minus topbar + nav */
     }
     .alpha-scrubber.hidden { opacity:0; pointer-events:none; }
     .alpha-scrubber-letter {
-      font-size:9px; font-weight:700; line-height:1; padding:2.5px 5px;
-      color:var(--muted); cursor:pointer; border-radius:6px;
+      font-size:8px; font-weight:700; line-height:1; padding:1.5px 4px;
+      color:var(--muted); cursor:pointer; border-radius:4px;
       transition:color .15s, background .15s;
     }
     .alpha-scrubber-letter.active { color:var(--accent); background:var(--accent-light); }
