@@ -520,6 +520,19 @@
       background:var(--card);border-radius:20px;padding:20px;box-shadow:var(--shadow);
       border:1px solid rgba(255,255,255,.6);
     }
+    .backup-reminder{
+      margin:10px 0;padding:10px 14px;border-radius:12px;
+      background:var(--warn-light);border:1px solid rgba(184,134,58,.15);
+      display:flex;align-items:center;gap:8px;font-size:13px;color:var(--text);
+    }
+    .backup-reminder span{flex:1}
+    .backup-remind-btn{
+      background:var(--accent);color:#fff;border:none;border-radius:8px;
+      padding:5px 12px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;
+    }
+    .backup-remind-dismiss{
+      background:none;border:none;color:var(--muted);font-size:14px;cursor:pointer;padding:2px 4px;
+    }
     .summary-headline{font-size:20px;font-family:var(--serif);font-weight:700;line-height:1.4;margin-bottom:4px;cursor:pointer}
     .summary-headline .num{color:var(--accent);font-weight:900}
     .summary-sub{font-size:13px;color:var(--muted);line-height:1.5;cursor:pointer}
@@ -801,6 +814,7 @@
       <!-- Dashboard -->
       <div id="homeSection">
         <div class="summary-card" id="summaryCard"></div>
+        <div class="backup-reminder" id="backupReminder" style="display:none"></div>
 
         <div class="subsection-title">随手一本</div>
         <div class="wander-section">
@@ -991,6 +1005,35 @@
     // API Key 安全存在 Cloudflare Worker 里，前端不暴露任何 key
     const GBOOKS_PROXY = 'https://maomao-books-proxy.henrycdev26.workers.dev';
     // ────────────────────────────────────────────────────────
+
+    // ── Backup tracking ──────────────────────────────────────────────────
+    const EXPORT_LAST_KEY = 'lib:export:last:v1';
+    const EXPORT_BOOK_COUNT_KEY = 'lib:export:count:v1';
+    function recordExport(bookCount) {
+      localStorage.setItem(EXPORT_LAST_KEY, new Date().toISOString());
+      localStorage.setItem(EXPORT_BOOK_COUNT_KEY, String(bookCount));
+    }
+    function getBackupStatus() {
+      const lastExport = localStorage.getItem(EXPORT_LAST_KEY);
+      const lastCount = parseInt(localStorage.getItem(EXPORT_BOOK_COUNT_KEY) || '0', 10);
+      const currentCount = loadActiveBooks().length;
+      const newSinceExport = currentCount - lastCount;
+      const daysSinceExport = lastExport ? Math.floor((Date.now() - new Date(lastExport).getTime()) / 86400000) : null;
+      return { lastExport, lastCount, currentCount, newSinceExport, daysSinceExport };
+    }
+    function shouldShowBackupReminder() {
+      if (auth.isLoggedIn()) return false; // cloud sync active
+      const { lastExport, newSinceExport, daysSinceExport } = getBackupStatus();
+      if (!lastExport) return loadActiveBooks().length >= 5; // never exported + has books
+      return newSinceExport >= 10 || daysSinceExport >= 7;
+    }
+
+    // ── Fetch with timeout ──────────────────────────────────────────────
+    function fetchWithTimeout(url, options = {}, timeoutMs = 8000) {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), timeoutMs);
+      return fetch(url, { ...options, signal: controller.signal }).finally(() => clearTimeout(timer));
+    }
 
     // ── Auth & Sync ──────────────────────────────────────────────────────
     const AUTH_TOKEN_KEY = 'lib:auth:token:v1';
@@ -1611,6 +1654,22 @@
         <div class="summary-sub">${escapeHtml(summarySub)}</div>
       `;
 
+      // Backup reminder (non-intrusive)
+      const backupBanner = document.getElementById('backupReminder');
+      if (backupBanner) {
+        if (shouldShowBackupReminder()) {
+          const bs = getBackupStatus();
+          let msg;
+          if (!bs.lastExport) msg = `你已经有 ${bs.currentCount} 本书了，建议导出备份一下`;
+          else if (bs.newSinceExport >= 10) msg = `新增了 ${bs.newSinceExport} 本书，建议更新备份`;
+          else msg = `距上次备份已经 ${bs.daysSinceExport} 天了，建议导出一下`;
+          backupBanner.innerHTML = `<span>💾 ${escapeHtml(msg)}</span><button class="backup-remind-btn" onclick="setPage('settings');this.closest('.backup-reminder').style.display='none'">去备份</button><button class="backup-remind-dismiss" onclick="this.closest('.backup-reminder').style.display='none'">✕</button>`;
+          backupBanner.style.display = '';
+        } else {
+          backupBanner.style.display = 'none';
+        }
+      }
+
       // Favorites gallery
       const favBooks = books.filter(b => b.favorite);
       const favSection = document.getElementById('favGallerySection');
@@ -1934,6 +1993,14 @@
             ${auth.isLoggedIn()
               ? '☁️ 数据已开启云同步，会自动备份到云端。'
               : '💡 数据保存在你的浏览器本地，建议定期备份。登录后可开启云同步。'}
+            ${(() => {
+              const bs = getBackupStatus();
+              if (bs.lastExport) {
+                const d = new Date(bs.lastExport);
+                return `<div style="margin-top:6px;font-size:11px">上次备份：${d.toLocaleDateString('zh-CN')} · ${bs.lastCount} 本${bs.newSinceExport > 0 ? ` · 此后新增 ${bs.newSinceExport} 本` : ''}</div>`;
+              }
+              return bs.currentCount > 0 ? '<div style="margin-top:6px;font-size:11px;color:var(--warn)">⚠️ 还没有导出过备份</div>' : '';
+            })()}
           </div>
         </div>` + [
         { icon: '💾', label: '备份数据', sub: '导出完整的藏书记录', action: 'exportJson' },
@@ -2045,11 +2112,12 @@
     function clearDraftFields(options = {}) {
       const keepIsbn = options.keepIsbn === true;
       const keepLocation = options.keepLocation === true;
+      const keepCategory = options.keepCategory === true;
       const clearNotices = options.clearNotices !== false;
       if (!keepIsbn) els.isbn.value = '';
       els.title.value = '';
       els.author.value = '';
-      els.category.value = '';
+      if (!keepCategory) els.category.value = '';
       els.publishedYear.value = '';
       if (!keepLocation) els.location.value = '';
       if (els.description) els.description.value = '';
@@ -2195,7 +2263,7 @@
         const compact = isbn.replace(/[^0-9Xx]/g, '');
         if (compact) {
           try {
-            const bcRes = await fetch(`https://bookcover.longitood.com/bookcover/${encodeURIComponent(compact)}`);
+            const bcRes = await fetchWithTimeout(`https://bookcover.longitood.com/bookcover/${encodeURIComponent(compact)}`);
             if (bcRes.ok) {
               const bcData = await bcRes.json();
               if (bcData.url) coverUrl = bcData.url;
@@ -2215,7 +2283,7 @@
         if (dupAction === 'continue') {
           // User chose to continue scanning — clear fields and restart
           const shouldResumeScan = lastEntryMethod === 'scan';
-          clearDraftFields({ keepIsbn: false, keepLocation: true, clearNotices: shouldResumeScan });
+          clearDraftFields({ keepIsbn: false, keepLocation: true, keepCategory: true, clearNotices: shouldResumeScan });
           lookupCompleted = false;
           if (shouldResumeScan) { scannerIntent = 'entry'; startScanner(); }
           else { els.isbn.focus(); }
@@ -2268,8 +2336,8 @@
         // Show success modal (dopamine!)
         return new Promise(resolve => {
           showSuccessModal(title, author, coverUrl, entrySessionCount, () => {
-            // Continue scanning
-            clearDraftFields({ keepIsbn: false, keepLocation: true });
+            // Continue scanning — keep location + category for batch entry
+            clearDraftFields({ keepIsbn: false, keepLocation: true, keepCategory: true });
             lookupCompleted = false;
             lastEntryMethod = 'scan';
             scannerIntent = 'entry';
@@ -2655,6 +2723,7 @@
       const payload = { books: loadActiveBooks(), meta: loadMeta() };
       const date = new Date().toISOString().slice(0, 10);
       downloadFile(JSON.stringify(payload, null, 2), `藏书备份_${date}.json`, 'application/json');
+      recordExport(payload.books.length);
       els.settingsNotice.innerHTML = makeNotice('ok', `已下载备份文件 📥 共 ${payload.books.length} 本书`);
     };
 
@@ -3238,7 +3307,7 @@
 
         const phase1Urls = [gbUrl, gbLangUrl, bcUrl].filter(Boolean);
         const phase1 = await Promise.allSettled(phase1Urls.map(u =>
-          fetch(u).then(r => r.ok ? r.json() : null).catch(() => null)
+          fetchWithTimeout(u).then(r => r.ok ? r.json() : null).catch(() => null)
         ));
 
         const gbRes = phase1[0].status === 'fulfilled' ? phase1[0].value : null;
@@ -3273,7 +3342,7 @@
               const enrichUrls = [olSearchUrl];
               if (altIsbn) enrichUrls.push(`${_gb}/?q=isbn:${encodeURIComponent(altIsbn)}&maxResults=3`);
               const enrichRes = await Promise.allSettled(enrichUrls.map(u =>
-                fetch(u).then(r => r.ok ? r.json() : null).catch(() => null)
+                fetchWithTimeout(u).then(r => r.ok ? r.json() : null).catch(() => null)
               ));
               const olSearchParsed = parseOLSearch(enrichRes[0].status === 'fulfilled' ? enrichRes[0].value : null);
               if (!els.category.value && olSearchParsed?.category) {
@@ -3304,7 +3373,7 @@
           ].filter(Boolean);
 
           const slowRes = await Promise.allSettled(slowUrls.map(u =>
-            fetch(u).then(r => r.ok ? r.json() : null).catch(() => null)
+            fetchWithTimeout(u).then(r => r.ok ? r.json() : null).catch(() => null)
           ));
           const val = (i) => slowRes[i]?.status === 'fulfilled' ? slowRes[i].value : null;
 
@@ -3343,7 +3412,7 @@
         const titleFilled = Boolean(els.title.value);
         const anyFilled = Boolean(els.title.value || els.author.value || els.category.value || els.publishedYear.value);
         if (!anyFilled) {
-          setNotice('warn', `${sourceLabel}：${isbn}，暂未查到书目信息，请手动补充后保存。`);
+          setNotice('warn', `${sourceLabel}：${isbn}，在 Google Books 和 Open Library 中均未找到此书，请手动补充后保存。`);
           return { found: false };
         }
 
@@ -3359,7 +3428,15 @@
 
       } catch (e) {
         const partialFound = Boolean(els.title.value || els.author.value || els.category.value || els.publishedYear.value);
-        setNotice('warn', `${sourceLabel}：${isbn}，${partialFound ? '已拿到部分书目信息，审阅后可导入。' : '联网查询失败，请手动补充后保存。'}`);
+        let errorMsg;
+        if (e.name === 'AbortError') {
+          errorMsg = partialFound ? '已拿到部分信息，但部分查询超时。审阅后可导入。' : '查询超时，请检查网络后重试，或手动补充。';
+        } else if (e instanceof TypeError && e.message?.includes('fetch')) {
+          errorMsg = partialFound ? '已拿到部分信息，但网络连接有问题。' : '网络连接失败，请检查网络后重试，或手动补充。';
+        } else {
+          errorMsg = partialFound ? '已拿到部分书目信息，审阅后可导入。' : '联网查询失败，请手动补充后保存。';
+        }
+        setNotice('warn', `${sourceLabel}：${isbn}，${errorMsg}`);
         return { found: partialFound, error: e };
       }
     }
@@ -4142,7 +4219,7 @@
         const isbn = String(b.isbn).replace(/[^0-9Xx]/g, '');
         if (!isbn) continue;
         try {
-          const res = await fetch(`https://bookcover.longitood.com/bookcover/${encodeURIComponent(isbn)}`);
+          const res = await fetchWithTimeout(`https://bookcover.longitood.com/bookcover/${encodeURIComponent(isbn)}`);
           if (res.ok) {
             const data = await res.json();
             if (data.url) { b.coverUrl = data.url; b.updatedAt = new Date().toISOString(); changed = true; }
