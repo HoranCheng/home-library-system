@@ -2137,6 +2137,7 @@
         { icon: '💾', label: '备份数据', sub: '导出完整的藏书记录', action: 'exportJson' },
         { icon: '📊', label: '导出表格', sub: '导出为 CSV，可用 Excel 打开', action: 'exportCsv' },
         ...(auth.isLoggedIn() ? [{ icon: '🔗', label: '分享书单', sub: '生成只读链接，让朋友看看你的藏书', action: 'shareBookshelf' }] : []),
+        { icon: '💬', label: '反馈建议', sub: '告诉我们你的想法，帮助毛毛书房变得更好', action: 'feedback' },
       ].map(item => `<div class="setting-row setting-action" data-action="${item.action}">
         <span class="setting-icon">${item.icon}</span>
         <div class="setting-info"><div class="setting-label">${item.label}</div><div class="setting-sub">${item.sub}</div></div>
@@ -2752,6 +2753,7 @@
         if (action === 'exportJson') els.exportJsonBtn_handler();
         if (action === 'exportCsv') els.exportCsvBtn_handler();
         if (action === 'shareBookshelf') handleShareBookshelf();
+        if (action === 'feedback') handleFeedback();
         if (action === 'validate') els.validateBtn.click();
         if (action === 'importJson') { els.importText.focus(); }
         return;
@@ -2889,6 +2891,74 @@
       downloadFile('\uFEFF' + rows.join('\n'), `藏书表格_${date}.csv`, 'text/csv;charset=utf-8');
       els.settingsNotice.innerHTML = makeNotice('ok', `已下载表格 📊 共 ${books.length} 本书`);
     };
+
+    // ── Share bookshelf ──
+    async function handleShareBookshelf() {
+      if (!auth.isLoggedIn()) {
+        els.settingsNotice.innerHTML = makeNotice('warn', '需要先登录才能分享书单');
+        return;
+      }
+      els.settingsNotice.innerHTML = makeNotice('warn', '正在生成分享链接…');
+      try {
+        const data = await apiFetch('/share/create', { method: 'POST' });
+        const shareUrl = `${window.location.origin}${window.location.pathname}?share=${data.token}`;
+        // Copy to clipboard
+        if (navigator.clipboard) {
+          await navigator.clipboard.writeText(shareUrl);
+          els.settingsNotice.innerHTML = makeNotice('ok', `分享链接已复制到剪贴板 🔗<br><span style="font-size:11px;color:var(--muted);word-break:break-all">${escapeHtml(shareUrl)}</span>`);
+        } else {
+          els.settingsNotice.innerHTML = makeNotice('ok', `分享链接 🔗<br><span style="font-size:11px;word-break:break-all;user-select:all">${escapeHtml(shareUrl)}</span>`);
+        }
+      } catch (e) {
+        els.settingsNotice.innerHTML = makeNotice('err', `生成失败：${escapeHtml(e.message || '网络错误')}`);
+      }
+    }
+
+    // ── Feedback ──
+    function handleFeedback() {
+      const existing = document.getElementById('feedbackPanel');
+      if (existing) { existing.remove(); return; }
+
+      const panel = document.createElement('div');
+      panel.id = 'feedbackPanel';
+      panel.innerHTML = `
+        <div style="background:var(--card);border-radius:16px;padding:20px;margin:12px 0;box-shadow:var(--shadow);border:1px solid var(--line)">
+          <div style="font-weight:700;margin-bottom:12px;font-family:var(--serif)">💬 反馈建议</div>
+          <textarea id="feedbackText" placeholder="遇到了什么问题？有什么改进想法？" style="width:100%;min-height:80px;border:1px solid var(--line);border-radius:10px;padding:10px;font-size:13px;resize:vertical;background:var(--surface);color:var(--text);box-sizing:border-box"></textarea>
+          <div style="display:flex;gap:8px;margin-top:10px">
+            <button class="btn primary" onclick="submitFeedback()" style="flex:1">提交反馈</button>
+            <button class="btn secondary" onclick="document.getElementById('feedbackPanel')?.remove()">取消</button>
+          </div>
+        </div>`;
+      els.settingsNotice.after(panel);
+      document.getElementById('feedbackText')?.focus();
+    }
+
+    async function submitFeedback() {
+      const text = document.getElementById('feedbackText')?.value?.trim();
+      if (!text) { showToast('请输入反馈内容'); return; }
+
+      try {
+        await apiFetch('/feedback', {
+          method: 'POST',
+          body: JSON.stringify({
+            message: text.slice(0, 2000),
+            userAgent: navigator.userAgent,
+            bookCount: loadActiveBooks().length,
+            timestamp: new Date().toISOString(),
+          }),
+        });
+        document.getElementById('feedbackPanel')?.remove();
+        els.settingsNotice.innerHTML = makeNotice('ok', '感谢你的反馈！我们会认真阅读 ❤️');
+      } catch {
+        // If API not ready, open GitHub issues as fallback
+        const issueUrl = 'https://github.com/HoranCheng/home-library-system/issues/new';
+        const body = encodeURIComponent(`**反馈内容**\n${text}\n\n**环境**\n${navigator.userAgent}`);
+        window.open(`${issueUrl}?body=${body}`, '_blank');
+        document.getElementById('feedbackPanel')?.remove();
+        els.settingsNotice.innerHTML = makeNotice('ok', '已跳转到 GitHub Issues 页面，感谢反馈！');
+      }
+    }
 
     // ── Import validation ──
     const BOOK_FIELD_WHITELIST = new Set([
@@ -4493,6 +4563,53 @@
       }
       if (changed) saveBooks(books);
       localStorage.setItem(MIGRATION_KEY, Date.now().toString());
+    })();
+
+    // ── Share view: if ?share=TOKEN, show read-only bookshelf ──
+    (async function checkShareView() {
+      const params = new URLSearchParams(window.location.search);
+      const shareToken = params.get('share');
+      if (!shareToken) return;
+
+      // Hide normal UI, show share view
+      document.querySelector('.ghost-nav')?.remove();
+      document.getElementById('navFab')?.remove();
+      document.querySelector('.topbar')?.remove();
+
+      try {
+        const data = await fetchWithTimeout(`${GBOOKS_PROXY}/share/${encodeURIComponent(shareToken)}`).then(r => {
+          if (!r.ok) throw new Error(r.status === 404 ? '分享链接不存在或已过期' : '加载失败');
+          return r.json();
+        });
+
+        document.getElementById('app').innerHTML = `
+          <div style="max-width:600px;margin:0 auto;padding:20px">
+            <div style="text-align:center;margin-bottom:24px">
+              <div style="font-size:28px;margin-bottom:8px">📚</div>
+              <div style="font-size:20px;font-weight:700;font-family:var(--serif)">${escapeHtml(data.displayName || '书友')}的书房</div>
+              <div style="font-size:13px;color:var(--muted);margin-top:4px">${data.bookCount} 本书</div>
+            </div>
+            <div class="book-grid">${data.books.map(b => {
+              const cu = b.isbn ? `${GBOOKS_PROXY}/cover/${b.isbn.replace(/[^0-9Xx]/g, '')}` : (b.coverUrl || '');
+              return `<div class="book-grid-item">
+                ${cu ? `<div class="cover-wrap"><img src="${escapeHtml(cu)}" alt="${escapeHtml(b.title || '')}" loading="lazy" onload="onCoverLoad(this)" onerror="showCoverPlaceholder(this)" /></div>` : `<div class="cover-wrap"><div class="cover-placeholder">📖</div></div>`}
+                <div class="book-grid-title">${escapeHtml(b.title || '未命名')}</div>
+                <div class="book-grid-author">${escapeHtml(b.author || '')}</div>
+              </div>`;
+            }).join('')}</div>
+            <div style="text-align:center;margin-top:32px;font-size:12px;color:var(--muted)">
+              <a href="${window.location.pathname}" style="color:var(--accent)">也想整理自己的藏书？试试毛毛书房</a>
+            </div>
+          </div>`;
+      } catch (e) {
+        document.getElementById('app').innerHTML = `
+          <div style="text-align:center;padding:60px 20px;color:var(--muted)">
+            <div style="font-size:48px;margin-bottom:16px">📚</div>
+            <div style="font-size:16px;font-weight:600;color:var(--text);margin-bottom:8px">${escapeHtml(e.message || '加载失败')}</div>
+            <a href="${window.location.pathname}" style="color:var(--accent);font-size:13px">返回首页</a>
+          </div>`;
+      }
+      return; // Don't proceed with normal init
     })();
 
     render();

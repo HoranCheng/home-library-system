@@ -24,8 +24,8 @@
 > 从"能用"到"敢给别人用"
 
 ### 1.1 前端模块化重构
-- ⬜ 拆分为 ES Modules（scanner.js / api.js / ui.js / sync.js / utils.js）
-- ⬜ 引入构建工具（Vite 推荐，轻量）
+- 🔄 拆分为 ES Modules（5/12 完成：constants, utils, storage, auth, sync）
+- ✅ 引入构建工具（Vite 已配置）
 - ⬜ 迁移测试到模块化结构
 - ⬜ 消除全局变量，改用模块作用域
 - ⬜ 注意事项：
@@ -40,7 +40,7 @@
 - ✅ SyncManager 激活 — debounced auto-push、启动时 pull
 - ✅ 同步状态指示器（已同步/同步中/同步失败）
 - ✅ 首次登录数据合并流程
-- ⬜ 离线队列 — 断网时缓存操作，联网后重放
+- ✅ 离线队列 — 断网时缓存操作，联网后重放（含指数退避重试）
 - ⬜ 注意事项：
   - Horan 需要先设置 `GOOGLE_CLIENT_ID`（`wrangler secret put`）
   - 后端已全部就绪并验证通过
@@ -69,18 +69,18 @@
   - 这是最大的业务瓶颈，但没有银弹，需要组合方案
 
 ### 2.2 封面图片防腐
-- ⬜ Worker 图片代理接口（`/cover/:isbn` → 从源获取 → Cloudflare Cache）
-- ⬜ 或 R2 存储桶转存缩略图
-- ⬜ 前端 `coverUrl` 改为指向自己的代理
+- ✅ Worker 图片代理接口（`/cover/:isbn` → Open Library → Bookcover → CF Cache 7天）
+- ⬜ 或 R2 存储桶转存缩略图（当前用 CF Cache，R2 可选升级）
+- ✅ 前端 `coverUrl` 改为指向自己的代理
 - ⬜ 注意事项：
   - R2 免费额度：10GB 存储 + 1000万次读取/月，够用
   - 500本书 × 50KB/封面 ≈ 25MB，远低于限额
 
 ### 2.3 性能优化
-- ⬜ 虚拟滚动（书架列表 >500本时）
-- ⬜ 分页加载或 IntersectionObserver 懒渲染
-- ⬜ 图片懒加载（`loading="lazy"`）
+- ✅ IntersectionObserver 分页渲染（60本/页，滚动自动加载）
+- ✅ 图片懒加载（`loading="lazy"` 全覆盖）
 - ⬜ 基准测试：500 / 1000 / 5000 本书的渲染性能
+- ⬜ render() 输入事件去抖（GPT审计建议，减少打字时整页重绘）
 
 ### 2.4 合规 & 信任
 - ⬜ 隐私政策页面
@@ -89,10 +89,10 @@
 - ⬜ 账号删除功能（GDPR 要求）
 
 ### 2.5 体验打磨
-- ⬜ 更明显的 loading 指示器（skeleton/shimmer）
-- ⬜ Phase 2 enrichment 失败时给轻提示（不再静默吞错误）
-- ⬜ 空状态引导（首次使用时的 onboarding）
-- ⬜ 扫码补全后智能折叠已填字段
+- ✅ Skeleton shimmer loading（ISBN 查询时显示骨架屏）
+- ✅ Phase 2 enrichment 失败时给轻 toast 提示
+- ✅ 空状态引导（首次使用 onboarding 卡片 + CTA）
+- ✅ 扫码补全后智能折叠已填字段
 
 ---
 
@@ -101,7 +101,7 @@
 > 从"别人愿意用"到"很多人同时用"
 
 ### 3.1 多端 & 国际化
-- ⬜ i18n 框架 — 至少中/英双语
+- ✅ i18n 框架 — 中/英双语翻译文件就绪（src/js/i18n.js），待接入前端
 - ⬜ PWA → App Store 打包（Capacitor 或 TWA）
 - ⬜ 响应式布局扩展到 tablet/desktop
 
@@ -112,13 +112,13 @@
 
 ### 3.3 基础设施
 - ⬜ 自定义域名 + CDN 优化
-- ⬜ 错误监控（Sentry 或 Cloudflare Workers Analytics）
-- ⬜ Rate limiting 精细化（per-user 配额、burst 控制）
-- ⬜ 自动化 E2E 测试（Playwright）
+- ✅ 客户端错误收集（sessionStorage log + window.onerror + unhandledrejection）
+- ✅ Rate limiting 已实现（per-key 30/60 req/min，cover 60/min）
+- ✅ Playwright E2E 测试框架搭建（e2e/app.spec.ts，5 个用例）
 
 ### 3.4 增长 & 社区
-- ⬜ 公开书单分享（只读链接）
-- ⬜ 用户反馈入口 + issue tracking
+- ✅ 公开书单分享（Worker /share/* + 前端 ?share=TOKEN 只读视图）
+- ✅ 用户反馈入口（设置页 → 提交到 API 或 fallback GitHub Issues）
 - ⬜ 更多数据源集成
 - ⬜ AI 功能（书评摘要、阅读推荐 — 等核心稳定后再做）
 
