@@ -79,7 +79,7 @@
 ### 2.3 性能优化
 - ✅ IntersectionObserver 分页渲染（60本/页，滚动自动加载）
 - ✅ 图片懒加载（`loading="lazy"` 全覆盖）
-- ⬜ 基准测试：500 / 1000 / 5000 本书的渲染性能
+- ✅ 基准测试：500 / 1000 / 5000 本书的渲染性能（tests/perf/renderBenchmark.test.ts）
 - ✅ render() 输入事件去抖（120ms debounce，减少打字时整页重绘）
 
 ### 2.4 合规 & 信任

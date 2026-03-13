@@ -95,20 +95,48 @@ export default {
 
       // ── Sync routes: /sync/* ──
       if (path.startsWith('/sync/')) {
+        const limited = await checkRateLimit(request, env, { key: 'sync-route', limit: 120, windowSec: 60 });
+        if (limited) return withCors(limited, cors);
         response = await handleSync(request, env, path, cors);
         return withCors(response, cors);
       }
 
       // ── Share routes: /share/* ──
       if (path.startsWith('/share/')) {
+        const limited = await checkRateLimit(request, env, { key: path.startsWith('/share/') && request.method === 'GET' ? 'share-read' : 'share-write', limit: request.method === 'GET' ? 120 : 20, windowSec: 60 });
+        if (limited) return withCors(limited, cors);
         response = await handleShare(request, env, path, cors);
         return withCors(response, cors);
       }
 
       // ── Book cache routes: /cache/* ──
       if (path.startsWith('/cache/')) {
+        if (request.method !== 'GET') {
+          const limited = await checkRateLimit(request, env, { key: 'book-cache-write', limit: 30, windowSec: 60 });
+          if (limited) return withCors(limited, cors);
+        }
         response = await handleBookCache(request, env, path, cors);
         return withCors(response, cors);
+      }
+
+      // ── Feedback route: /feedback ──
+      if (path === '/feedback' && request.method === 'POST') {
+        const limited = await checkRateLimit(request, env, { key: 'feedback-write', limit: 10, windowSec: 60 });
+        if (limited) return withCors(limited, cors);
+        const body = await request.json();
+        const message = String(body?.message || '').trim();
+        if (!message) {
+          return new Response(JSON.stringify({ error: 'MESSAGE_REQUIRED' }), { status: 400, headers: { ...cors, 'Content-Type': 'application/json' } });
+        }
+        try {
+          const now = new Date().toISOString();
+          await env.DB.prepare('INSERT INTO feedback (message, user_agent, book_count, created_at) VALUES (?, ?, ?, ?)')
+            .bind(message.slice(0, 2000), String(body?.userAgent || '').slice(0, 500), Number(body?.bookCount || 0), now)
+            .run();
+          return new Response(JSON.stringify({ ok: true }), { status: 200, headers: { ...cors, 'Content-Type': 'application/json' } });
+        } catch (err) {
+          return new Response(JSON.stringify({ error: 'FEEDBACK_NOT_CONFIGURED', message: 'feedback table missing' }), { status: 503, headers: { ...cors, 'Content-Type': 'application/json' } });
+        }
       }
     } catch (err) {
       return new Response(JSON.stringify({ error: 'INTERNAL_ERROR', message: 'Internal server error' }), {
@@ -136,43 +164,59 @@ export default {
       let cached = await cache.match(cacheKey);
       if (cached) return withCors(cached, cors);
 
-      // Try sources in order: Open Library → Google Books → Bookcover API
-      const sources = [
-        `https://covers.openlibrary.org/b/isbn/${isbn}-M.jpg`,
-        `https://bookcover.longitood.com/bookcover/${isbn}`,
-      ];
-
       let imageResponse = null;
-      for (const src of sources) {
-        try {
-          const srcResp = await fetch(src, { headers: { 'User-Agent': 'MaomaoLibrary/1.0' } });
 
-          // Bookcover API returns JSON with URL
-          if (src.includes('bookcover.longitood.com')) {
-            if (srcResp.ok) {
-              const data = await srcResp.json();
-              const coverUrl = data?.url;
-              if (coverUrl && coverUrl.startsWith('http')) {
-                const imgResp = await fetch(coverUrl, { headers: { 'User-Agent': 'MaomaoLibrary/1.0' } });
-                if (imgResp.ok && imgResp.headers.get('content-type')?.startsWith('image/')) {
-                  imageResponse = imgResp;
-                  break;
-                }
+      // 1) Open Library
+      try {
+        const olResp = await fetch(`https://covers.openlibrary.org/b/isbn/${isbn}-M.jpg`, { headers: { 'User-Agent': 'MaomaoLibrary/1.0' } });
+        if (olResp.ok && (olResp.headers.get('content-type') || '').startsWith('image/')) {
+          const buf = await olResp.arrayBuffer();
+          if (buf.byteLength > 1000) {
+            imageResponse = new Response(buf, { status: 200, headers: { 'Content-Type': olResp.headers.get('content-type') || 'image/jpeg' } });
+          }
+        }
+      } catch {}
+
+      // 2) Google Books thumbnail fallback
+      if (!imageResponse) {
+        try {
+          const gbUrl = new URL('https://www.googleapis.com/books/v1/volumes');
+          gbUrl.searchParams.set('q', `isbn:${isbn}`);
+          gbUrl.searchParams.set('maxResults', '3');
+          if (env.GBOOKS_API_KEY) gbUrl.searchParams.set('key', env.GBOOKS_API_KEY);
+          const gbResp = await fetch(gbUrl.toString(), { headers: { 'User-Agent': 'MaomaoLibrary/1.0' } });
+          if (gbResp.ok) {
+            const gbData = await gbResp.json();
+            const items = Array.isArray(gbData?.items) ? gbData.items : [];
+            for (const item of items) {
+              const thumb = item?.volumeInfo?.imageLinks?.thumbnail || item?.volumeInfo?.imageLinks?.smallThumbnail || '';
+              const normalized = String(thumb).replace(/^http:/, 'https:').replace('&edge=curl', '').replace('zoom=1', 'zoom=2');
+              if (!normalized) continue;
+              const imgResp = await fetch(normalized, { headers: { 'User-Agent': 'MaomaoLibrary/1.0' } });
+              if (imgResp.ok && (imgResp.headers.get('content-type') || '').startsWith('image/')) {
+                imageResponse = imgResp;
+                break;
               }
             }
-            continue;
           }
+        } catch {}
+      }
 
-          // Open Library: returns 1x1 pixel for missing covers
+      // 3) Bookcover API
+      if (!imageResponse) {
+        try {
+          const srcResp = await fetch(`https://bookcover.longitood.com/bookcover/${isbn}`, { headers: { 'User-Agent': 'MaomaoLibrary/1.0' } });
           if (srcResp.ok) {
-            const contentLen = parseInt(srcResp.headers.get('content-length') || '0', 10);
-            const contentType = srcResp.headers.get('content-type') || '';
-            if (contentType.startsWith('image/') && contentLen > 1000) {
-              imageResponse = srcResp;
-              break;
+            const data = await srcResp.json();
+            const coverUrl = data?.url;
+            if (coverUrl && coverUrl.startsWith('http')) {
+              const imgResp = await fetch(coverUrl, { headers: { 'User-Agent': 'MaomaoLibrary/1.0' } });
+              if (imgResp.ok && (imgResp.headers.get('content-type') || '').startsWith('image/')) {
+                imageResponse = imgResp;
+              }
             }
           }
-        } catch { continue; }
+        } catch {}
       }
 
       if (!imageResponse) {

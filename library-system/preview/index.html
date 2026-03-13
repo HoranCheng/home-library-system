@@ -748,7 +748,7 @@
   <script src="./vendor/zxing-browser.min.js"></script>
 </head>
 <body>
-  <div class="app">
+  <div class="app" id="app">
     <!-- Top bar -->
     <div class="topbar" id="topbarEl">
       <div>
@@ -1525,13 +1525,26 @@
 
     function coverUrl(book) {
       if (!book) return '';
-      // Prefer our own cover proxy for stable, cached images
       const isbn = String(book.isbn || '').replace(/[^0-9Xx]/g, '');
       if (isbn && (isbn.length === 10 || isbn.length === 13)) {
         return `${GBOOKS_PROXY}/cover/${isbn}`;
       }
-      // Fallback to stored URL for books without ISBN
       return book.coverUrl || '';
+    }
+    function coverFallbackUrl(book) {
+      if (!book) return '';
+      const primary = coverUrl(book);
+      const stored = String(book.coverUrl || '').trim();
+      return stored && stored !== primary ? stored : '';
+    }
+    function handleCoverError(img) {
+      const fallback = String(img?.dataset?.fallbackSrc || '').trim();
+      if (fallback && img.src !== fallback && !img.dataset.fallbackTried) {
+        img.dataset.fallbackTried = '1';
+        img.src = fallback;
+        return;
+      }
+      showCoverPlaceholder(img);
     }
     // Detect 1x1 placeholder images from OpenLibrary and hide them
     function onCoverLoad(img) {
@@ -1545,8 +1558,8 @@
       // Generic small placeholder detection
       if (w <= 80 && h <= 120) { showCoverPlaceholder(img); return; }
     }
-    function coverHtml(cu, title) {
-      if (cu) return `<div class="cover-wrap"><img src="${escapeHtml(cu)}" alt="${escapeHtml(title || '')}" loading="lazy" onload="onCoverLoad(this)" onerror="showCoverPlaceholder(this)" /></div>`;
+    function coverHtml(cu, title, fallbackSrc = '') {
+      if (cu) return `<div class="cover-wrap"><img src="${escapeHtml(cu)}" alt="${escapeHtml(title || '')}" loading="lazy" ${fallbackSrc ? `data-fallback-src="${escapeHtml(fallbackSrc)}"` : ''} onload="onCoverLoad(this)" onerror="handleCoverError(this)" /></div>`;
       const initial = (title || '').charAt(0) || '📖';
       return `<div class="cover-wrap"><div class="cover-placeholder">${escapeHtml(initial)}</div></div>`;
     }
@@ -1714,7 +1727,7 @@
         const sources = els.manualCard.dataset.bookSources || '';
         previewArea.innerHTML = `<div class="scan-preview">
           ${cu
-            ? `<img class="scan-preview-cover" src="${escapeHtml(cu)}" alt="" style="background:${cc}" onerror="this.style.background='${cc}';this.removeAttribute('src')" />`
+            ? `<img class="scan-preview-cover" src="${escapeHtml(cu)}" alt="${escapeHtml(currentDraftTitle || '')}" style="background:${cc}" onload="onCoverLoad(this)" onerror="handleCoverError(this)" />`
             : `<div class="scan-preview-cover" style="background:${cc};display:flex;align-items:flex-end;justify-content:center;padding:6px"><span style="font-size:9px;color:rgba(255,255,255,.7);font-weight:600;text-align:center;line-height:1.2">${escapeHtml((currentDraftTitle||'').slice(0,8))}</span></div>`
           }
           <div class="scan-preview-info">
@@ -1791,7 +1804,7 @@
           const cc = catColor(b.category);
           return `<div class="fav-gallery-item book-detail-btn" data-id="${escapeHtml(b.id)}">
             ${cu
-              ? `<img class="fav-gallery-cover" src="${escapeHtml(cu)}" alt="" loading="lazy" style="background:${cc}" onerror="this.style.background='${cc}';this.removeAttribute('src')" />`
+              ? `<img class="fav-gallery-cover" src="${escapeHtml(cu)}" alt="${escapeHtml(b.title || '')}" loading="lazy" ${coverFallbackUrl(b) ? `data-fallback-src="${escapeHtml(coverFallbackUrl(b))}"` : ''} style="background:${cc}" onload="onCoverLoad(this)" onerror="handleCoverError(this)" />`
               : `<div class="fav-gallery-cover" style="background:${cc};display:flex;align-items:flex-end;justify-content:center;padding:8px"><span style="font-size:10px;color:rgba(255,255,255,.7);font-weight:600;text-align:center;line-height:1.3">${escapeHtml((b.title||'').slice(0,8))}</span></div>`
             }
           </div>`;
@@ -1849,8 +1862,9 @@
         const gridId = `grid-${++_gridIdCounter}`;
         els.bookList.innerHTML = `<div class="book-grid" id="${gridId}">${firstPage.map(b => {
           const cu = coverUrl(b);
+          const fallbackCu = coverFallbackUrl(b);
           return `<div class="book-grid-item book-detail-btn" data-id="${escapeHtml(b.id)}">
-            ${coverHtml(cu, b.title)}
+            ${coverHtml(cu, b.title, fallbackCu)}
             <div class="book-grid-title">${escapeHtml(b.title || '未命名')}</div>
             <div class="book-grid-author">${escapeHtml(b.author || '未知作者')}</div>
           </div>`;
@@ -1871,7 +1885,7 @@
               tmp.innerHTML = nextBatch.map(b => {
                 const cu = coverUrl(b);
                 return `<div class="book-grid-item book-detail-btn" data-id="${escapeHtml(b.id)}">
-                  ${coverHtml(cu, b.title)}
+                  ${coverHtml(cu, b.title, coverFallbackUrl(b))}
                   <div class="book-grid-title">${escapeHtml(b.title || '未命名')}</div>
                   <div class="book-grid-author">${escapeHtml(b.author || '未知作者')}</div>
                 </div>`;
@@ -1900,7 +1914,7 @@
           const cc = catColor(b.category);
           html += `<div class="book-list-item book-detail-btn" data-id="${escapeHtml(b.id)}">
             ${cu
-              ? `<img class="book-list-cover" src="${escapeHtml(cu)}" alt="" loading="lazy" style="background:${cc}" onerror="this.style.background='${cc}';this.removeAttribute('src')" />`
+              ? `<img class="book-list-cover" src="${escapeHtml(cu)}" alt="${escapeHtml(b.title || '')}" loading="lazy" ${coverFallbackUrl(b) ? `data-fallback-src="${escapeHtml(coverFallbackUrl(b))}"` : ''} style="background:${cc}" onload="onCoverLoad(this)" onerror="handleCoverError(this)" />`
               : `<div class="book-list-cover" style="background:${cc}"></div>`
             }
             <div class="book-list-info">
@@ -2581,7 +2595,7 @@
           <div class="modal-sheet">
             <div class="modal-handle"><div class="modal-handle-bar"></div></div>
             <div class="modal-header detail-anim" style="animation-delay:.05s">
-              ${cu ? `<img class="modal-cover-mini" src="${escapeHtml(cu)}" alt="" onerror="this.style.background='${cc}';this.removeAttribute('src')" style="background:${cc}" />` : `<div class="modal-cover-mini" style="background:${cc};display:flex;align-items:flex-end;padding:6px"><span style="font-size:8px;color:rgba(255,255,255,.7);font-weight:600">${escapeHtml((book.bookLang||'').toUpperCase())}</span></div>`}
+              ${cu ? `<img class="modal-cover-mini" src="${escapeHtml(cu)}" alt="${escapeHtml(book.title || '')}" ${coverFallbackUrl(book) ? `data-fallback-src="${escapeHtml(coverFallbackUrl(book))}"` : ''} onload="onCoverLoad(this)" onerror="handleCoverError(this)" style="background:${cc}" />` : `<div class="modal-cover-mini" style="background:${cc};display:flex;align-items:flex-end;padding:6px"><span style="font-size:8px;color:rgba(255,255,255,.7);font-weight:600">${escapeHtml((book.bookLang||'').toUpperCase())}</span></div>`}
               <div style="flex:1;min-width:0">
                 <div class="modal-title">${escapeHtml(book.title || '未命名图书')}</div>
                 <div class="modal-meta">${escapeHtml(book.author || '未知作者')} · ${escapeHtml(book.publishedYear || '')}</div>
@@ -4446,12 +4460,13 @@ ${list.map(b => `<tr>
     // 展示池：优先有封面的书；不足3本时纳入全部；缓存洗牌结果直到书架变化
     function buildWanderPool(books) {
       // Re-shuffle only when book count changes (add/delete) or first call
-      if (_wanderPoolCache && books.length === _wanderPoolBookCount) return _wanderPoolCache;
-      const withCover = books.filter(b => b.coverUrl && b.coverUrl.trim());
+      const signature = books.map(b => `${b.id}:${coverUrl(b) ? 1 : 0}`).join('|');
+      if (_wanderPoolCache && signature === _wanderPoolBookCount) return _wanderPoolCache;
+      const withCover = books.filter(b => coverUrl(b));
       // Strict: only books with covers; fall back to all only if NONE have covers
       const arr = (withCover.length > 0 ? withCover : books).slice();
       _wanderPoolCache = shuffleArray(arr);
-      _wanderPoolBookCount = books.length;
+      _wanderPoolBookCount = signature;
       wanderIdx = 0;
       return _wanderPoolCache;
     }
@@ -4473,11 +4488,13 @@ ${list.map(b => `<tr>
       const applyContent = () => {
         if (cu) {
           cover.src = cu;
+          const fallbackCu = coverFallbackUrl(b);
+          if (fallbackCu) cover.dataset.fallbackSrc = fallbackCu;
+          else delete cover.dataset.fallbackSrc;
+          delete cover.dataset.fallbackTried;
           cover.style.background = catColor(b.category);
-          cover.onerror = function() {
-            this.style.background = catColor(b.category);
-            this.removeAttribute('src');
-          };
+          cover.onload = function() { onCoverLoad(this); };
+          cover.onerror = function() { handleCoverError(this); };
         } else {
           cover.removeAttribute('src');
           cover.style.background = catColor(b.category);
@@ -4716,10 +4733,12 @@ ${list.map(b => `<tr>
       const shareToken = params.get('share');
       if (!shareToken) return;
 
+      const appRoot = document.getElementById('app');
       // Hide normal UI, show share view
       document.querySelector('.ghost-nav')?.remove();
       document.getElementById('navFab')?.remove();
       document.querySelector('.topbar')?.remove();
+      if (appRoot) appRoot.innerHTML = `<div style="text-align:center;padding:48px 20px;color:var(--muted)">正在加载分享书单…</div>`;
 
       try {
         const data = await fetchWithTimeout(`${GBOOKS_PROXY}/share/${encodeURIComponent(shareToken)}`).then(r => {
@@ -4727,7 +4746,7 @@ ${list.map(b => `<tr>
           return r.json();
         });
 
-        document.getElementById('app').innerHTML = `
+        appRoot.innerHTML = `
           <div style="max-width:600px;margin:0 auto;padding:20px">
             <div style="text-align:center;margin-bottom:24px">
               <div style="font-size:28px;margin-bottom:8px">📚</div>
@@ -4737,7 +4756,7 @@ ${list.map(b => `<tr>
             <div class="book-grid">${data.books.map(b => {
               const cu = b.isbn ? `${GBOOKS_PROXY}/cover/${b.isbn.replace(/[^0-9Xx]/g, '')}` : (b.coverUrl || '');
               return `<div class="book-grid-item">
-                ${cu ? `<div class="cover-wrap"><img src="${escapeHtml(cu)}" alt="${escapeHtml(b.title || '')}" loading="lazy" onload="onCoverLoad(this)" onerror="showCoverPlaceholder(this)" /></div>` : `<div class="cover-wrap"><div class="cover-placeholder">📖</div></div>`}
+                ${cu ? `<div class="cover-wrap"><img src="${escapeHtml(cu)}" alt="${escapeHtml(b.title || '')}" loading="lazy" ${b.coverUrl && b.coverUrl !== cu ? `data-fallback-src="${escapeHtml(b.coverUrl)}"` : ''} onload="onCoverLoad(this)" onerror="handleCoverError(this)" /></div>` : `<div class="cover-wrap"><div class="cover-placeholder">📖</div></div>`}
                 <div class="book-grid-title">${escapeHtml(b.title || '未命名')}</div>
                 <div class="book-grid-author">${escapeHtml(b.author || '')}</div>
               </div>`;
@@ -4747,7 +4766,7 @@ ${list.map(b => `<tr>
             </div>
           </div>`;
       } catch (e) {
-        document.getElementById('app').innerHTML = `
+        appRoot.innerHTML = `
           <div style="text-align:center;padding:60px 20px;color:var(--muted)">
             <div style="font-size:48px;margin-bottom:16px">📚</div>
             <div style="font-size:16px;font-weight:600;color:var(--text);margin-bottom:8px">${escapeHtml(e.message || '加载失败')}</div>
@@ -4757,10 +4776,11 @@ ${list.map(b => `<tr>
       return; // Don't proceed with normal init
     })();
 
-    render();
+    if (!new URLSearchParams(window.location.search).get('share')) render();
 
     // One-time migration: fetch missing/placeholder covers from Bookcover API
     (async function migrateCovers() {
+      if (new URLSearchParams(window.location.search).get('share')) return;
       const COVER_MIG_KEY = 'lib:cover-migration:v2';
       if (localStorage.getItem(COVER_MIG_KEY)) return;
       const books = loadBooks();

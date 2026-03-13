@@ -215,6 +215,8 @@ export async function handleAuth(request, env, path, corsHeaders) {
     // Delete all user data in order: books → shares → user
     await env.DB.batch([
       env.DB.prepare('DELETE FROM books WHERE user_id = ?').bind(userId),
+      env.DB.prepare('DELETE FROM location_presets WHERE user_id = ?').bind(userId),
+      env.DB.prepare('DELETE FROM sync_meta WHERE user_id = ?').bind(userId),
       env.DB.prepare('DELETE FROM shares WHERE user_id = ?').bind(userId),
       env.DB.prepare('DELETE FROM users WHERE id = ?').bind(userId),
     ]);
