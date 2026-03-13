@@ -3710,12 +3710,17 @@
     // ── Alphabet Scrubber ──
     let _alphaScrubberEnabled = false;
     // Show scrubber only when shelf section is in viewport
+    // IntersectionObserver: track which shelf elements are visible (fix: use Set, not entries.some)
     {
+      const _visibleShelfEls = new Set();
       const observer = new IntersectionObserver((entries) => {
         const scrubber = document.getElementById('alphaScrubber');
         if (!scrubber || !_alphaScrubberEnabled) return;
-        const visible = entries.some(e => e.isIntersecting);
-        scrubber.classList.toggle('hidden', !visible);
+        entries.forEach(e => {
+          if (e.isIntersecting) _visibleShelfEls.add(e.target);
+          else _visibleShelfEls.delete(e.target);
+        });
+        scrubber.classList.toggle('hidden', _visibleShelfEls.size === 0);
       }, { threshold: 0 });
       const shelfHeader = document.getElementById('shelfHeader');
       const bookList = document.getElementById('bookList');
@@ -3723,24 +3728,12 @@
       if (bookList) observer.observe(bookList);
     }
 
-    function updateAlphaScrubber(show) {
+    // Scrubber event listeners — attached once, not per-render (fix: memory leak)
+    {
       const scrubber = document.getElementById('alphaScrubber');
       const indicator = document.getElementById('alphaScrubberIndicator');
-      if (!show) { scrubber.classList.add('hidden'); return; }
-
-      // Collect letters that exist in the shelf
-      const heads = els.bookList.querySelectorAll('.shelf-letter-head[data-letter]');
-      const activeLetters = new Set();
-      heads.forEach(h => activeLetters.add(h.dataset.letter));
-
-      const ALL_LETTERS = 'A B C D E F G H I J K L M N O P Q R S T U V W X Y Z #'.split(' ');
-      scrubber.innerHTML = ALL_LETTERS.map(l =>
-        `<div class="alpha-scrubber-letter${activeLetters.has(l) ? '' : ' disabled'}" data-letter="${l}">${l}</div>`
-      ).join('');
-      scrubber.classList.remove('hidden');
-
-      // Touch/drag scrubbing
       let scrubbing = false;
+
       function scrubTo(y) {
         const letters = scrubber.querySelectorAll('.alpha-scrubber-letter:not(.disabled)');
         let closest = null, minDist = Infinity;
@@ -3751,13 +3744,10 @@
         });
         if (!closest) return;
         const letter = closest.dataset.letter;
-        // Highlight active
         scrubber.querySelectorAll('.alpha-scrubber-letter').forEach(el =>
           el.classList.toggle('active', el.dataset.letter === letter));
-        // Show indicator bubble
         indicator.textContent = letter;
         indicator.classList.add('show');
-        // Scroll to letter header (account for sticky topbar height)
         const target = els.bookList.querySelector(`.shelf-letter-head[data-letter="${letter}"]`);
         if (target) {
           const topbar = document.getElementById('topbarEl');
@@ -3776,10 +3766,25 @@
       scrubber.addEventListener('touchmove', e => { if (scrubbing) { scrubTo(e.touches[0].clientY); e.preventDefault(); } }, { passive: false });
       scrubber.addEventListener('touchend', endScrub);
       scrubber.addEventListener('touchcancel', endScrub);
-      // Mouse support (desktop)
       scrubber.addEventListener('mousedown', e => { scrubbing = true; scrubTo(e.clientY); });
       document.addEventListener('mousemove', e => { if (scrubbing) scrubTo(e.clientY); });
       document.addEventListener('mouseup', () => { if (scrubbing) endScrub(); });
+    }
+
+    function updateAlphaScrubber(show) {
+      const scrubber = document.getElementById('alphaScrubber');
+      if (!show) { scrubber.classList.add('hidden'); return; }
+
+      // Collect letters that exist in the shelf
+      const heads = els.bookList.querySelectorAll('.shelf-letter-head[data-letter]');
+      const activeLetters = new Set();
+      heads.forEach(h => activeLetters.add(h.dataset.letter));
+
+      const ALL_LETTERS = 'A B C D E F G H I J K L M N O P Q R S T U V W X Y Z #'.split(' ');
+      scrubber.innerHTML = ALL_LETTERS.map(l =>
+        `<div class="alpha-scrubber-letter${activeLetters.has(l) ? '' : ' disabled'}" data-letter="${l}">${l}</div>`
+      ).join('');
+      // Visibility controlled by IntersectionObserver, not forced here
     }
 
     let wanderIdx = 0, wanderTimer = null;
@@ -3996,7 +4001,7 @@
       // Preload first 5 wander covers + all favorite covers
       const urls = new Set();
       pool.slice(0, 5).forEach(b => { const u = coverUrl(b); if (u) urls.add(u); });
-      favBooks.forEach(b => { const u = coverUrl(b); if (u) urls.add(u); });
+      favBooks.slice(0, 8).forEach(b => { const u = coverUrl(b); if (u) urls.add(u); });
       urls.forEach(u => {
         const link = document.createElement('link');
         link.rel = 'preload'; link.as = 'image'; link.href = u;
