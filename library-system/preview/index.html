@@ -151,6 +151,49 @@
     .sticky-actions { position:sticky; bottom:0; background:rgba(246,243,237,.96); padding-top:12px; margin-top:14px; border-top:1px solid var(--line); }
     .review-card { margin-top:12px; padding:14px 16px; border-radius:14px; background:var(--brown-light); border:1px solid rgba(139,111,78,.1); }
     .review-card .muted { color:var(--accent2); }
+    /* ── Scan Preview Card ── */
+    @keyframes previewSlideUp { from { opacity:0; transform:translateY(24px); } to { opacity:1; transform:translateY(0); } }
+    .scan-preview {
+      background:var(--card); border-radius:16px; padding:14px;
+      box-shadow:0 6px 24px rgba(44,38,31,.12);
+      margin-top:12px; display:flex; gap:14px; align-items:flex-start;
+      animation:previewSlideUp .35s cubic-bezier(.4,0,.2,1);
+    }
+    .scan-preview-cover {
+      width:72px; height:102px; border-radius:6px; flex-shrink:0;
+      object-fit:cover; background:var(--surface-2);
+      box-shadow:0 3px 10px rgba(44,38,31,.12);
+    }
+    .scan-preview-info { flex:1; min-width:0; }
+    .scan-preview-title {
+      font-family:var(--serif); font-size:15px; font-weight:600; line-height:1.3;
+      display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden;
+    }
+    .scan-preview-meta { font-size:12px; color:var(--muted); margin-top:4px; }
+    .scan-preview-source { font-size:10px; color:var(--accent2); margin-top:6px; opacity:.7; }
+    .scan-preview-fields {
+      display:flex; gap:6px; flex-wrap:wrap; margin-top:8px;
+    }
+    .scan-preview-chip {
+      font-size:11px; padding:3px 10px; border-radius:12px;
+      background:var(--surface); border:1px solid var(--line); color:var(--text);
+      cursor:pointer; transition:background .15s;
+    }
+    .scan-preview-chip.editable:active { background:var(--accent-light); }
+    .scan-preview-actions {
+      display:flex; gap:8px; margin-top:12px;
+    }
+    .scan-preview-actions .btn { flex:1; font-size:13px; padding:10px 0; }
+    .scan-preview-querying {
+      display:flex; align-items:center; gap:8px; padding:16px;
+      color:var(--muted); font-size:13px;
+    }
+    .scan-preview-querying .spinner {
+      width:16px; height:16px; border:2px solid var(--line);
+      border-top-color:var(--accent); border-radius:50%;
+      animation:spin .6s linear infinite;
+    }
+    @keyframes spin { to { transform:rotate(360deg); } }
 
     /* ── Notice ── */
     .notice { margin-top:12px; padding:12px 14px; border-radius:12px; font-size:13px; line-height:1.5; }
@@ -650,17 +693,19 @@
         <!-- Session counter -->
         <div class="hint" id="entrySessionHint">自动从 Open Library · Google Books 补全书目信息</div>
 
-        <!-- Review card (after scan/lookup) -->
+        <!-- Preview area (after scan/lookup) -->
         <div id="formFields">
-        <div class="review-card" id="reviewCard">
+        <div id="scanPreviewArea"></div>
+
+        <div class="review-card" id="reviewCard" style="display:none">
           <div class="muted">扫码或输入 ISBN，系统自动补全信息</div>
         </div>
         <div style="display:flex;justify-content:flex-end;margin-bottom:4px">
           <button class="btn ghost" id="clearFieldsBtn" style="font-size:12px;padding:4px 10px;display:none">🗑 清空预填</button>
         </div>
 
-        <!-- Expandable detail fields -->
-        <div id="entryDetailFields">
+        <!-- Detail fields (collapsed by default, expand on "编辑详情") -->
+        <div id="entryDetailFields" style="display:none">
           <div class="field">
             <label>书名</label>
             <input id="title" placeholder="例如：计算机程序的构造和解释" />
@@ -1434,11 +1479,44 @@
         : '自动从 Open Library · Google Books 补全书目信息';
       // Save button text: "导入库中" for new, "保存修改" for edit
       if (!editingBookId) els.saveBtn.textContent = '导入库中';
-      els.reviewCard.innerHTML = (lookupCompleted || currentDraftTitle || currentDraftAuthor)
-        ? `<div style="font-weight:600;font-family:var(--serif)">${escapeHtml(currentDraftTitle || '待补充书名')}</div>
-           <div class="muted" style="margin-top:6px">${escapeHtml(currentDraftAuthor || '待补充作者')} · ${escapeHtml(currentDraftCategory || '待补充分类')} ${currentDraftYear ? `· ${escapeHtml(currentDraftYear)}` : ''}</div>
-           <div class="muted" style="margin-top:6px">${currentDraftLocation ? `📍 ${escapeHtml(currentDraftLocation)}` : '补齐书名和作者即可导入'}</div>`
-        : '<div class="muted">先输入或扫描 ISBN，系统会自动补全信息。</div>';
+      // Scan preview card (replaces old review card)
+      const previewArea = document.getElementById('scanPreviewArea');
+      const detailFields = document.getElementById('entryDetailFields');
+      if (lookupCompleted && (currentDraftTitle || currentDraftAuthor)) {
+        const cu = els.manualCard.dataset.pendingCoverUrl || '';
+        const cc = catColor(currentDraftCategory);
+        const sources = els.manualCard.dataset.bookSources || '';
+        previewArea.innerHTML = `<div class="scan-preview">
+          ${cu
+            ? `<img class="scan-preview-cover" src="${escapeHtml(cu)}" alt="" style="background:${cc}" onerror="this.style.background='${cc}';this.removeAttribute('src')" />`
+            : `<div class="scan-preview-cover" style="background:${cc};display:flex;align-items:flex-end;justify-content:center;padding:6px"><span style="font-size:9px;color:rgba(255,255,255,.7);font-weight:600;text-align:center;line-height:1.2">${escapeHtml((currentDraftTitle||'').slice(0,8))}</span></div>`
+          }
+          <div class="scan-preview-info">
+            <div class="scan-preview-title">${escapeHtml(currentDraftTitle || '待补充书名')}</div>
+            <div class="scan-preview-meta">${escapeHtml(currentDraftAuthor || '待补充作者')}${currentDraftYear ? ` · ${escapeHtml(currentDraftYear)}` : ''}</div>
+            ${sources ? `<div class="scan-preview-source">来源：${escapeHtml(sources)}</div>` : ''}
+            <div class="scan-preview-fields">
+              ${currentDraftCategory ? `<span class="scan-preview-chip">${escapeHtml(currentDraftCategory)}</span>` : '<span class="scan-preview-chip" style="color:var(--muted)">未分类</span>'}
+              ${currentDraftLocation ? `<span class="scan-preview-chip">📍 ${escapeHtml(currentDraftLocation)}</span>` : ''}
+            </div>
+            <div style="margin-top:8px">
+              <button class="btn ghost" id="toggleDetailFieldsBtn" style="font-size:11px;padding:4px 10px">编辑详情 ▾</button>
+            </div>
+          </div>
+        </div>`;
+        els.reviewCard.style.display = 'none';
+      } else if (!lookupCompleted && !currentDraftTitle && !currentDraftAuthor) {
+        previewArea.innerHTML = '';
+        els.reviewCard.style.display = '';
+        els.reviewCard.innerHTML = '<div class="muted">扫码或输入 ISBN，系统自动补全信息</div>';
+        if (detailFields) detailFields.style.display = 'none';
+      } else {
+        previewArea.innerHTML = '';
+        els.reviewCard.style.display = '';
+        els.reviewCard.innerHTML = `<div style="font-weight:600;font-family:var(--serif)">${escapeHtml(currentDraftTitle || '待补充书名')}</div>
+           <div class="muted" style="margin-top:6px">${escapeHtml(currentDraftAuthor || '待补充作者')}</div>`;
+        if (detailFields) detailFields.style.display = '';
+      }
       els.saveBtn.disabled = false;
       // Dynamic button text based on entry method
       els.finishEntryBtn.textContent = lastEntryMethod === 'scan' ? '结束扫描' : '返回总览';
@@ -2375,6 +2453,14 @@
       }
 
       // Category expand/collapse
+      if (event.target.closest('#toggleDetailFieldsBtn')) {
+        const detailFields = document.getElementById('entryDetailFields');
+        const btn = event.target.closest('#toggleDetailFieldsBtn');
+        const isShown = detailFields.style.display !== 'none';
+        detailFields.style.display = isShown ? 'none' : '';
+        btn.textContent = isShown ? '编辑详情 ▾' : '收起详情 ▴';
+        return;
+      }
       if (event.target.closest('#catExpandBtn')) {
         const btn = event.target.closest('#catExpandBtn');
         const hidden = els.categoryChips.querySelectorAll('.cat-hidden');
@@ -3011,6 +3097,9 @@
       const preferredLang = inferLang(compact);
 
       setNotice('warn', `已识别 ISBN：${isbn}，正在查询…`);
+      // Show querying state in preview area
+      const _previewArea = document.getElementById('scanPreviewArea');
+      if (_previewArea) _previewArea.innerHTML = `<div class="scan-preview-querying"><div class="spinner"></div>正在查询 ${isbn} …</div>`;
 
       try {
         const _gb = GBOOKS_PROXY;
@@ -3070,6 +3159,8 @@
         if (hasEnough) {
           // ✅ Fast path — show results immediately, enrich in background
           applyToForm(merged);
+          lookupCompleted = true;
+          render(); // show preview card
 
           // Background enrichment (fills gaps without blocking user)
           (async () => {
@@ -3141,6 +3232,8 @@
           if (!merged.coverUrl) merged.coverUrl = `https://covers.openlibrary.org/b/isbn/${compact}-M.jpg`;
           if (merged.category) merged.category = translateCategory(merged.category);
           applyToForm(merged);
+          lookupCompleted = true;
+          render(); // show preview card
         }
 
         const titleFilled = Boolean(els.title.value);
