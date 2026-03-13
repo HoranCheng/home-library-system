@@ -60,8 +60,8 @@
 ### 2.1 中文书数据源
 - ⬜ 调研付费 API（ISBNdb / ISBN.cloud / Google Books 付费配额）
 - ⬜ 评估自建爬虫可行性（豆瓣/当当网页解析 — 灰色地带，需评估风险）
-- ⬜ 用户众包方案设计 — 查不到的书手动录入后贡献到共享库
-- ⬜ D1 共享书目缓存表 — 用户A查到的书，用户B直接命中
+- ✅ 用户众包方案 — 保存时自动贡献到社区缓存（fire-and-forget）
+- ✅ D1 共享书目缓存 — /cache/:isbn 查询 + /cache/contribute 贡献 + /cache/stats
 - ⬜ 注意事项：
   - 豆瓣 API 已关闭公共访问
   - 当当/京东没有公开 ISBN API
@@ -103,7 +103,7 @@
 ### 3.1 多端 & 国际化
 - ✅ i18n 框架 — 中/英双语翻译文件就绪（src/js/i18n.js），待接入前端
 - ⬜ PWA → App Store 打包（Capacitor 或 TWA）
-- ⬜ 响应式布局扩展到 tablet/desktop
+- ✅ 响应式布局（tablet 1024px + desktop 1440px 断点）
 - ✅ 语言切换（设置页中英文切换，i18n 框架就绪）
 
 ### 3.2 数据 & 同步升级

@@ -32,7 +32,21 @@
       background:var(--bg);
     }
     .app { max-width:480px; margin:0 auto; min-height:100vh; position:relative; }
-    @media (min-width:768px) { .app { max-width:600px; } }
+    @media (min-width:768px) {
+      .app { max-width:600px; }
+    }
+    @media (min-width:1024px) {
+      .app { max-width:720px; }
+      .book-grid { grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); gap: 16px; }
+      .book-list .book-row { padding: 14px 16px; }
+      .card { padding: 20px; }
+      .topbar { padding: 14px 20px; }
+      .ghost-nav { max-width: 400px; }
+    }
+    @media (min-width:1440px) {
+      .app { max-width: 880px; }
+      .book-grid { grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 20px; }
+    }
 
     /* ── Top bar ── */
     .topbar {
@@ -2471,6 +2485,15 @@
         entrySessionCount += 1;
         hapticSaved();
 
+        // Contribute to community book cache (non-blocking)
+        if (isbn && title) {
+          fetchWithTimeout(`${GBOOKS_PROXY}/cache/contribute`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ isbn, title, author, category, publishedYear, bookLang, coverUrl, description, metadataSources }),
+          }, 5000).catch(() => {}); // fire-and-forget
+        }
+
         // Stop scanner during modal
         if (scannerActive) stopScanner();
 
@@ -3706,6 +3729,30 @@ ${list.map(b => `<tr>
       const preferredLang = inferLang(compact);
 
       setNotice('warn', `已识别 ISBN：${isbn}，正在查询…`);
+
+      // ── Community cache check (fastest path) ──
+      try {
+        const cacheRes = await fetchWithTimeout(`${GBOOKS_PROXY}/cache/${encodeURIComponent(compact)}`, {}, 3000);
+        if (cacheRes.ok) {
+          const cacheData = await cacheRes.json();
+          if (cacheData.found && cacheData.book?.title) {
+            const b = cacheData.book;
+            if (b.title) els.title.value = b.title;
+            if (b.author) els.author.value = b.author;
+            if (b.category && !els.category.value) els.category.value = b.category;
+            if (b.publishedYear && !els.publishedYear.value) els.publishedYear.value = b.publishedYear;
+            if (b.description && els.description && !els.description.value) els.description.value = b.description;
+            markAutoFilled('title', 'author', 'category', 'publishedYear');
+            if (b.coverUrl) els.manualCard.dataset.pendingCoverUrl = b.coverUrl;
+            if (b.bookLang) els.manualCard.dataset.bookLang = b.bookLang;
+            if (b.metadataSources?.length) els.manualCard.dataset.bookSources = b.metadataSources.join(' / ') + ' / community-cache';
+            else els.manualCard.dataset.bookSources = 'community-cache';
+            setNotice('ok', `${sourceLabel}：<b>${escapeHtml(b.title)}</b>（社区缓存命中 ⚡）`);
+            render();
+            return; // Skip external API calls
+          }
+        }
+      } catch { /* cache miss or timeout — proceed to external APIs */ }
       // Show querying state in preview area
       const _previewArea = document.getElementById('scanPreviewArea');
       if (_previewArea) _previewArea.innerHTML = `<div style="padding:12px">

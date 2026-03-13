@@ -18,6 +18,7 @@
 import { handleAuth } from './auth.js';
 import { handleSync } from './sync.js';
 import { handleShare } from './share.js';
+import { handleBookCache } from './book-cache.js';
 import { checkRateLimit } from './middleware.js';
 
 /** Exact-match CORS origin allowlist (no prefix matching) */
@@ -101,6 +102,12 @@ export default {
       // ── Share routes: /share/* ──
       if (path.startsWith('/share/')) {
         response = await handleShare(request, env, path, cors);
+        return withCors(response, cors);
+      }
+
+      // ── Book cache routes: /cache/* ──
+      if (path.startsWith('/cache/')) {
+        response = await handleBookCache(request, env, path, cors);
         return withCors(response, cors);
       }
     } catch (err) {
