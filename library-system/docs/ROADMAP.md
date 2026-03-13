@@ -10,12 +10,12 @@
 
 > 这些是审计双方一致认为必须先做的，不做会伤用户信任
 
-- ⬜ **备份提醒条** — `saveBooks()` 计数，10本新增或7天未导出时首页非侵入提示
-- ⬜ **记录上次导出时间** — localStorage 存 `lib:export:last:v1`，设置页显示
-- ⬜ **API 失败区分** — "未找到此书" vs "网络错误请重试" vs "查询超时" 三种不同提示
-- ⬜ **fetch 超时控制** — AbortController，建议 8s/请求
-- ⬜ **连续录入保留分类** — `clearDraftFields` 加 `keepCategory` 选项
-- ⬜ **修复 sw.js / manifest.json 404** — PWA 有声明但实际不工作
+- ✅ **备份提醒条** — `saveBooks()` 计数，10本新增或7天未导出时首页非侵入提示
+- ✅ **记录上次导出时间** — localStorage 存 `lib:export:last:v1`，设置页显示
+- ✅ **API 失败区分** — "未找到此书" vs "网络错误请重试" vs "查询超时" 三种不同提示
+- ✅ **fetch 超时控制** — AbortController，建议 8s/请求
+- ✅ **连续录入保留分类** — `clearDraftFields` 加 `keepCategory` 选项
+- ✅ **修复 sw.js / manifest.json 404** — PWA 有声明但实际不工作
 
 ---
 
@@ -35,11 +35,11 @@
   - 预算：2-3周，是整个路线图最大的工程投入
 
 ### 1.2 云同步前端集成
-- ⬜ 设置页登录/注册表单 UI
+- ✅ 设置页登录/注册表单 UI
 - ⬜ Google Sign-In 集成（`gsi` 库）
-- ⬜ SyncManager 激活 — debounced auto-push、启动时 pull
-- ⬜ 同步状态指示器（已同步/同步中/同步失败）
-- ⬜ 首次登录数据合并流程
+- ✅ SyncManager 激活 — debounced auto-push、启动时 pull
+- ✅ 同步状态指示器（已同步/同步中/同步失败）
+- ✅ 首次登录数据合并流程
 - ⬜ 离线队列 — 断网时缓存操作，联网后重放
 - ⬜ 注意事项：
   - Horan 需要先设置 `GOOGLE_CLIENT_ID`（`wrangler secret put`）
@@ -47,9 +47,9 @@
   - 冲突策略暂用 Last Write Wins（Phase 3 升级）
 
 ### 1.3 备份体验产品化
-- ⬜ 导入支持**合并模式**（基于 ISBN 去重，newer wins）
-- ⬜ 导出前显示摘要（X本书、最近修改时间）
-- ⬜ 导入后显示 diff（新增N本、更新N本、跳过N本）
+- ✅ 导入支持**合并模式**（基于 ISBN 去重，newer wins）
+- ✅ 导出前显示摘要（X本书、最近修改时间）
+- ✅ 导入后显示 diff（新增N本、更新N本、跳过N本）
 
 ---
 

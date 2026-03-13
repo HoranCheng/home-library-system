@@ -923,6 +923,14 @@
             <label>导入 JSON 备份</label>
             <textarea id="importText" placeholder="粘贴之前导出的 JSON 数据…" style="min-height:80px"></textarea>
           </div>
+          <div class="field" style="margin-top:10px">
+            <label>导入方式</label>
+            <select id="importMode">
+              <option value="replace">覆盖本地（原样替换）</option>
+              <option value="merge">合并导入（按 ISBN 去重，较新记录优先）</option>
+            </select>
+          </div>
+          <div id="importPreview" class="muted" style="font-size:12px;margin-top:8px"></div>
           <div class="actions">
             <button class="btn secondary" id="validateBtn">校验</button>
             <button class="btn primary" id="importBtn">导入</button>
@@ -1397,6 +1405,8 @@
       navOrganize: document.getElementById('navOrganize'),
       navSettings: document.getElementById('navSettings'),
       importText: document.getElementById('importText'),
+      importMode: document.getElementById('importMode'),
+      importPreview: document.getElementById('importPreview'),
       validateBtn: document.getElementById('validateBtn'),
       importBtn: document.getElementById('importBtn'),
       settingsNotice: document.getElementById('settingsNotice'),
@@ -2722,9 +2732,18 @@
     els.exportJsonBtn_handler = () => {
       const payload = { books: loadActiveBooks(), meta: loadMeta() };
       const date = new Date().toISOString().slice(0, 10);
+      const lastUpdated = payload.books.reduce((latest, b) => {
+        const ts = String(b.updatedAt || b.createdAt || '');
+        return ts > latest ? ts : latest;
+      }, '');
+      const summary = `本次将导出 ${payload.books.length} 本书${lastUpdated ? `，最近修改 ${new Date(lastUpdated).toLocaleString('zh-CN', { month:'numeric', day:'numeric', hour:'2-digit', minute:'2-digit' })}` : ''}`;
+      if (!confirm(`${summary}。确认下载备份吗？`)) {
+        els.settingsNotice.innerHTML = makeNotice('warn', '已取消导出。');
+        return;
+      }
       downloadFile(JSON.stringify(payload, null, 2), `藏书备份_${date}.json`, 'application/json');
       recordExport(payload.books.length);
-      els.settingsNotice.innerHTML = makeNotice('ok', `已下载备份文件 📥 共 ${payload.books.length} 本书`);
+      els.settingsNotice.innerHTML = makeNotice('ok', `已下载备份文件 📥 ${summary}`);
     };
 
     els.exportCsvBtn_handler = () => {
@@ -2802,13 +2821,93 @@
       return { books: sanitized, meta: { schemaVersion: raw.meta.schemaVersion || 1, updatedAt: new Date().toISOString() }, warnings };
     }
 
+    function normalizedIsbnKey(book) {
+      const isbn = String(book?.isbn || '').replace(/[^0-9Xx]/g, '').toUpperCase();
+      return isbn || null;
+    }
+
+    function newerBook(a, b) {
+      return String(a?.updatedAt || a?.createdAt || '') >= String(b?.updatedAt || b?.createdAt || '') ? a : b;
+    }
+
+    function mergeImportedBooks(localBooks, importedBooks) {
+      const byKey = new Map();
+      const noIsbn = [];
+      let added = 0, updated = 0, skipped = 0;
+
+      for (const book of localBooks) {
+        const key = normalizedIsbnKey(book);
+        if (key) byKey.set(key, book);
+        else noIsbn.push(book);
+      }
+
+      for (const incoming of importedBooks) {
+        const key = normalizedIsbnKey(incoming);
+        if (!key) {
+          noIsbn.push(incoming);
+          added += 1;
+          continue;
+        }
+        const existing = byKey.get(key);
+        if (!existing) {
+          byKey.set(key, incoming);
+          added += 1;
+          continue;
+        }
+        const winner = newerBook(existing, incoming);
+        if (winner === incoming) {
+          byKey.set(key, incoming);
+          updated += 1;
+        } else {
+          skipped += 1;
+        }
+      }
+
+      return {
+        books: [...byKey.values(), ...noIsbn],
+        diff: { added, updated, skipped }
+      };
+    }
+
+    function summarizeImportResult(result, mode) {
+      const bits = [`共 ${result.books.length} 本图书`];
+      if (result.warnings > 0) bits.push(`${result.warnings} 条记录被跳过`);
+      if (mode === 'merge' && result.diff) {
+        bits.push(`新增 ${result.diff.added} 本`);
+        bits.push(`更新 ${result.diff.updated} 本`);
+        bits.push(`跳过 ${result.diff.skipped} 本`);
+      }
+      return bits.join(' · ');
+    }
+
+    function previewImport() {
+      if (!els.importPreview) return;
+      try {
+        const parsed = JSON.parse(els.importText.value || '{}');
+        const result = validateAndSanitizeImport(parsed);
+        const mode = els.importMode?.value || 'replace';
+        if (mode === 'merge') {
+          const merged = mergeImportedBooks(loadBooks(), result.books);
+          els.importPreview.textContent = `预览：${summarizeImportResult({ ...result, books: merged.books, diff: merged.diff }, 'merge')}`;
+        } else {
+          els.importPreview.textContent = `预览：${summarizeImportResult(result, 'replace')}`;
+        }
+      } catch {
+        els.importPreview.textContent = '';
+      }
+    }
+
     els.validateBtn.onclick = () => {
       try {
         const parsed = JSON.parse(els.importText.value || '{}');
         const result = validateAndSanitizeImport(parsed);
-        let msg = `校验通过：共 ${result.books.length} 本图书。`;
-        if (result.warnings > 0) msg += ` （${result.warnings} 条记录被跳过）`;
-        els.settingsNotice.innerHTML = makeNotice('ok', msg);
+        const mode = els.importMode?.value || 'replace';
+        if (mode === 'merge') {
+          const merged = mergeImportedBooks(loadBooks(), result.books);
+          els.settingsNotice.innerHTML = makeNotice('ok', `校验通过：${summarizeImportResult({ ...result, books: merged.books, diff: merged.diff }, 'merge')}`);
+        } else {
+          els.settingsNotice.innerHTML = makeNotice('ok', `校验通过：${summarizeImportResult(result, 'replace')}`);
+        }
       } catch (e) {
         els.settingsNotice.innerHTML = makeNotice('err', `校验失败：${e.message}`);
       }
@@ -2818,20 +2917,34 @@
       try {
         const parsed = JSON.parse(els.importText.value || '{}');
         const result = validateAndSanitizeImport(parsed);
-        if (!confirm(`即将用导入数据覆盖当前本地数据（共 ${result.books.length} 本）。确定继续吗？`)) {
-          els.settingsNotice.innerHTML = makeNotice('warn', '已取消导入。');
-          return;
+        const mode = els.importMode?.value || 'replace';
+        if (mode === 'merge') {
+          const merged = mergeImportedBooks(loadBooks(), result.books);
+          if (!confirm(`即将合并导入（按 ISBN 去重，较新记录优先）。${summarizeImportResult({ ...result, books: merged.books, diff: merged.diff }, 'merge')}。确定继续吗？`)) {
+            els.settingsNotice.innerHTML = makeNotice('warn', '已取消导入。');
+            return;
+          }
+          localStorage.setItem(BOOKS_KEY, JSON.stringify(merged.books));
+          localStorage.setItem(META_KEY, JSON.stringify({ schemaVersion: 1, updatedAt: new Date().toISOString() }));
+          els.settingsNotice.innerHTML = makeNotice('ok', `合并导入成功：新增 ${merged.diff.added} 本，更新 ${merged.diff.updated} 本，跳过 ${merged.diff.skipped} 本。`);
+        } else {
+          if (!confirm(`即将用导入数据覆盖当前本地数据。${summarizeImportResult(result, 'replace')}。确定继续吗？`)) {
+            els.settingsNotice.innerHTML = makeNotice('warn', '已取消导入。');
+            return;
+          }
+          localStorage.setItem(BOOKS_KEY, JSON.stringify(result.books));
+          localStorage.setItem(META_KEY, JSON.stringify(result.meta));
+          let msg = `导入成功：${summarizeImportResult(result, 'replace')}。`;
+          els.settingsNotice.innerHTML = makeNotice('ok', msg);
         }
-        localStorage.setItem(BOOKS_KEY, JSON.stringify(result.books));
-        localStorage.setItem(META_KEY, JSON.stringify(result.meta));
-        let msg = `导入成功：共 ${result.books.length} 本图书。`;
-        if (result.warnings > 0) msg += ` （${result.warnings} 条记录被跳过）`;
-        els.settingsNotice.innerHTML = makeNotice('ok', msg);
         render();
       } catch (e) {
         els.settingsNotice.innerHTML = makeNotice('err', `导入失败：${e.message}`);
       }
     };
+
+    els.importText.addEventListener('input', previewImport);
+    if (els.importMode) els.importMode.addEventListener('change', previewImport);
 
     // ── Auth form handlers ────────────────────────────────────────────────
     let authIsRegisterMode = false;
