@@ -3756,10 +3756,12 @@
         // Show indicator bubble
         indicator.textContent = letter;
         indicator.classList.add('show');
-        // Scroll to letter header
+        // Scroll to letter header (account for sticky topbar height)
         const target = els.bookList.querySelector(`.shelf-letter-head[data-letter="${letter}"]`);
         if (target) {
-          const top = target.getBoundingClientRect().top + window.scrollY - 12;
+          const topbar = document.getElementById('topbarEl');
+          const offset = topbar ? topbar.offsetHeight + 8 : 80;
+          const top = target.getBoundingClientRect().top + window.scrollY - offset;
           window.scrollTo({ top: Math.max(0, top) });
         }
       }
