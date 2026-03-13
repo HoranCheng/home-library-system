@@ -3783,6 +3783,7 @@
       return _wanderPoolCache;
     }
 
+    let _wanderFirstRender = true;
     function renderWander() {
       const pool = buildWanderPool(loadActiveBooks());
       if (!pool.length) return;
@@ -3792,8 +3793,11 @@
       const cu = coverUrl(b);
       const cls = normalizeReadingStatus(b.readingStatus) === '读过' ? 'done' : 'unread';
 
-      cover.classList.add('out');
-      setTimeout(() => {
+      const skipAnim = _wanderFirstRender;
+      _wanderFirstRender = false;
+
+      if (!skipAnim) cover.classList.add('out');
+      const applyContent = () => {
         if (cu) {
           cover.src = cu;
           cover.style.background = catColor(b.category);
@@ -3851,7 +3855,9 @@
         wishBtn.dataset.id  = b.id;
 
         cover.classList.remove('out');
-      }, 380);
+      };
+      if (skipAnim) applyContent();
+      else setTimeout(applyContent, 380);
     }
 
     function nextWander() {
@@ -3955,6 +3961,22 @@
         _wanderSyncHash = wanderBookHash(b);
       }
     };
+
+    // ── Preload critical covers (wander + favorites gallery) ──
+    (function preloadCovers() {
+      const books = loadActiveBooks();
+      const pool = buildWanderPool(books);
+      const favBooks = books.filter(b => b.favorite);
+      // Preload first 5 wander covers + all favorite covers
+      const urls = new Set();
+      pool.slice(0, 5).forEach(b => { const u = coverUrl(b); if (u) urls.add(u); });
+      favBooks.forEach(b => { const u = coverUrl(b); if (u) urls.add(u); });
+      urls.forEach(u => {
+        const link = document.createElement('link');
+        link.rel = 'preload'; link.as = 'image'; link.href = u;
+        document.head.appendChild(link);
+      });
+    })();
 
     // Initialize wander
     renderWander();
