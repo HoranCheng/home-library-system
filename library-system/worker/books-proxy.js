@@ -101,6 +101,88 @@ export default {
       });
     }
 
+    // ── Cover image proxy: GET /cover/:isbn ──
+    if (request.method === 'GET' && path.startsWith('/cover/')) {
+      const isbn = path.split('/cover/')[1]?.replace(/[^0-9Xx]/g, '') || '';
+      if (!isbn || (isbn.length !== 10 && isbn.length !== 13)) {
+        return new Response(JSON.stringify({ error: 'Invalid ISBN' }), {
+          status: 400, headers: { ...cors, 'Content-Type': 'application/json' },
+        });
+      }
+
+      // Rate limit covers
+      const { checkRateLimit } = await import('./middleware.js');
+      const coverLimited = await checkRateLimit(request, env, { key: 'cover-proxy', limit: 60, windowSec: 60 });
+      if (coverLimited) return withCors(coverLimited, cors);
+
+      // Check Cloudflare Cache API first
+      const cacheKey = new Request(`${url.origin}/cover/${isbn}`, request);
+      const cache = caches.default;
+      let cached = await cache.match(cacheKey);
+      if (cached) return withCors(cached, cors);
+
+      // Try sources in order: Open Library → Google Books → Bookcover API
+      const sources = [
+        `https://covers.openlibrary.org/b/isbn/${isbn}-M.jpg`,
+        `https://bookcover.longitood.com/bookcover/${isbn}`,
+      ];
+
+      let imageResponse = null;
+      for (const src of sources) {
+        try {
+          const srcResp = await fetch(src, { headers: { 'User-Agent': 'MaomaoLibrary/1.0' } });
+
+          // Bookcover API returns JSON with URL
+          if (src.includes('bookcover.longitood.com')) {
+            if (srcResp.ok) {
+              const data = await srcResp.json();
+              const coverUrl = data?.url;
+              if (coverUrl && coverUrl.startsWith('http')) {
+                const imgResp = await fetch(coverUrl, { headers: { 'User-Agent': 'MaomaoLibrary/1.0' } });
+                if (imgResp.ok && imgResp.headers.get('content-type')?.startsWith('image/')) {
+                  imageResponse = imgResp;
+                  break;
+                }
+              }
+            }
+            continue;
+          }
+
+          // Open Library: returns 1x1 pixel for missing covers
+          if (srcResp.ok) {
+            const contentLen = parseInt(srcResp.headers.get('content-length') || '0', 10);
+            const contentType = srcResp.headers.get('content-type') || '';
+            if (contentType.startsWith('image/') && contentLen > 1000) {
+              imageResponse = srcResp;
+              break;
+            }
+          }
+        } catch { continue; }
+      }
+
+      if (!imageResponse) {
+        return new Response(JSON.stringify({ error: 'Cover not found' }), {
+          status: 404, headers: { ...cors, 'Content-Type': 'application/json' },
+        });
+      }
+
+      // Build cached response (7 days)
+      const coverResponse = new Response(imageResponse.body, {
+        status: 200,
+        headers: {
+          ...cors,
+          'Content-Type': imageResponse.headers.get('content-type') || 'image/jpeg',
+          'Cache-Control': 'public, max-age=604800',
+        },
+      });
+
+      // Store in CF cache (non-blocking)
+      const event = { waitUntil: (p) => p };
+      try { cache.put(cacheKey, coverResponse.clone()); } catch {}
+
+      return coverResponse;
+    }
+
     // ── Google Books proxy: GET / ──
     if (request.method !== 'GET') {
       return new Response(JSON.stringify({ error: 'Method not allowed' }), {
