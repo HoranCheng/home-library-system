@@ -1454,9 +1454,17 @@
       return (upper >= 'A' && upper <= 'Z') ? upper : '#';
     }
     function sortByTitle(arr) {
-      return arr.slice().sort((a, b) =>
-        String(a.title || '').localeCompare(String(b.title || ''), 'zh-CN-u-co-pinyin')
-      );
+      return arr.slice().sort((a, b) => {
+        const ka = getSortKey(a.title), kb = getSortKey(b.title);
+        // Sort by letter group first (A-Z, then #)
+        if (ka !== kb) {
+          if (ka === '#') return 1;
+          if (kb === '#') return -1;
+          return ka < kb ? -1 : 1;
+        }
+        // Within same letter group, sort by title
+        return String(a.title || '').localeCompare(String(b.title || ''), 'zh-CN-u-co-pinyin');
+      });
     }
 
     function updateBook(id, updater) {
@@ -3754,22 +3762,28 @@
     // ── Alphabet Scrubber ──
     let _alphaScrubberEnabled = false;
     // Show scrubber only when shelf section is in viewport
-    // IntersectionObserver: track which shelf elements are visible (fix: use Set, not entries.some)
+    // Scroll-based scrubber visibility: show only when shelf area is near top of screen
     {
-      const _visibleShelfEls = new Set();
-      const observer = new IntersectionObserver((entries) => {
+      let _scrubberVisible = false;
+      function checkScrubberVisibility() {
         const scrubber = document.getElementById('alphaScrubber');
-        if (!scrubber || !_alphaScrubberEnabled) return;
-        entries.forEach(e => {
-          if (e.isIntersecting) _visibleShelfEls.add(e.target);
-          else _visibleShelfEls.delete(e.target);
-        });
-        scrubber.classList.toggle('hidden', _visibleShelfEls.size === 0);
-      }, { threshold: 0 });
-      const shelfHeader = document.getElementById('shelfHeader');
-      const bookList = document.getElementById('bookList');
-      if (shelfHeader) observer.observe(shelfHeader);
-      if (bookList) observer.observe(bookList);
+        if (!scrubber || !_alphaScrubberEnabled) {
+          if (scrubber) scrubber.classList.add('hidden');
+          return;
+        }
+        const header = document.getElementById('shelfHeader');
+        if (!header) return;
+        const topbar = document.getElementById('topbarEl');
+        const topbarH = topbar ? topbar.offsetHeight : 80;
+        const headerRect = header.getBoundingClientRect();
+        // Show scrubber when shelfHeader top is within topbar+120px of viewport top
+        const shouldShow = headerRect.top <= topbarH + 120;
+        if (shouldShow !== _scrubberVisible) {
+          _scrubberVisible = shouldShow;
+          scrubber.classList.toggle('hidden', !shouldShow);
+        }
+      }
+      window.addEventListener('scroll', checkScrubberVisibility, { passive: true });
     }
 
     // Scrubber event listeners — attached once, not per-render (fix: memory leak)
