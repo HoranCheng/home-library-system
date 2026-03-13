@@ -1585,7 +1585,9 @@
 
       // Sort toggle label
       const toggleEl = document.getElementById('shelfSortToggle');
-      if (toggleEl) toggleEl.textContent = bookSortMode === 'alpha' ? '按字母 ↕时间' : '按时间 ↕字母';
+      if (toggleEl) toggleEl.innerHTML = bookSortMode === 'alpha'
+        ? '按字母 <svg width="12" height="12" viewBox="0 0 12 12" style="vertical-align:-1px;opacity:.45"><path d="M6 1.5v9M3 7.5L6 10.5 9 7.5" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg> 时间'
+        : '按时间 <svg width="12" height="12" viewBox="0 0 12 12" style="vertical-align:-1px;opacity:.45"><path d="M6 10.5v-9M3 4.5L6 1.5 9 4.5" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg> 字母';
 
       // Bookshelf
       if (!books.length) {
