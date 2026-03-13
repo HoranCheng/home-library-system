@@ -1652,8 +1652,15 @@
         els.bookList.innerHTML = html;
       }
 
-      // ── Alphabet Scrubber ──
-      updateAlphaScrubber(page === 'home' && mode === 'dashboard' && bookSortMode === 'alpha');
+      // ── Alphabet Scrubber (visibility controlled by scroll observer) ──
+      _alphaScrubberEnabled = (page === 'home' && mode === 'dashboard' && bookSortMode === 'alpha');
+      if (!_alphaScrubberEnabled) {
+        const s = document.getElementById('alphaScrubber');
+        if (s) s.classList.add('hidden');
+      } else {
+        updateAlphaScrubber(true);
+        // Let observer handle show/hide based on scroll
+      }
 
       // Category presets (entry form)
       const defaultCats = ['小说','文学','科幻','历史','哲学','心理学','经济','计算机','编程','科普','传记','儿童','艺术','旅行'];
@@ -3700,6 +3707,21 @@
     // ── Wander carousel · 重构版 ────────────────────────────────────────────
     const WANDER_DECOS = ['书','阅','读','思','知','梦','文','墨','章','韵','诗','卷'];
     // ── Alphabet Scrubber ──
+    let _alphaScrubberEnabled = false;
+    // Show scrubber only when shelf section is in viewport
+    {
+      const observer = new IntersectionObserver((entries) => {
+        const scrubber = document.getElementById('alphaScrubber');
+        if (!scrubber || !_alphaScrubberEnabled) return;
+        const visible = entries.some(e => e.isIntersecting);
+        scrubber.classList.toggle('hidden', !visible);
+      }, { threshold: 0 });
+      const shelfHeader = document.getElementById('shelfHeader');
+      const bookList = document.getElementById('bookList');
+      if (shelfHeader) observer.observe(shelfHeader);
+      if (bookList) observer.observe(bookList);
+    }
+
     function updateAlphaScrubber(show) {
       const scrubber = document.getElementById('alphaScrubber');
       const indicator = document.getElementById('alphaScrubberIndicator');
