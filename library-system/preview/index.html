@@ -787,7 +787,7 @@
         <div class="subsection-title">分类分布</div>
         <div class="card" id="categoryChips"></div>
 
-        <div class="subsection-title" style="display:flex;align-items:center;justify-content:space-between">
+        <div class="subsection-title" id="shelfHeader" style="display:flex;align-items:center;justify-content:space-between">
           我的书架 <span class="section-label" style="flex:1"></span>
           <span id="shelfSortToggle" style="font-size:12px;color:var(--muted);cursor:pointer;user-select:none;font-weight:600"></span>
         </div>
@@ -2445,9 +2445,9 @@
       }
       if (event.target.closest('.summary-headline')) {
         // "书架上整理了 N 本书" → scroll down to book list on dashboard
-        const shelf = document.getElementById('bookList');
-        if (shelf) {
-          const y = shelf.getBoundingClientRect().top + window.scrollY - 12;
+        const header = document.getElementById('shelfHeader');
+        if (header) {
+          const y = header.getBoundingClientRect().top + window.scrollY - 8;
           window.scrollTo({ top: Math.max(0, y), behavior: 'smooth' });
         }
         return;
