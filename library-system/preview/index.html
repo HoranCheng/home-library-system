@@ -3669,13 +3669,29 @@
     // ── Wander carousel · 重构版 ────────────────────────────────────────────
     const WANDER_DECOS = ['书','阅','读','思','知','梦','文','墨','章','韵','诗','卷'];
     let wanderIdx = 0, wanderTimer = null;
+    let _wanderPoolCache = null, _wanderPoolBookCount = -1;
 
     const WANDER_SUMMARY_MAX = 70;
 
-    // 展示池：优先有封面的书；不足3本时纳入全部
+    // Fisher-Yates shuffle
+    function shuffleArray(arr) {
+      for (let i = arr.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [arr[i], arr[j]] = [arr[j], arr[i]];
+      }
+      return arr;
+    }
+
+    // 展示池：优先有封面的书；不足3本时纳入全部；缓存洗牌结果直到书架变化
     function buildWanderPool(books) {
+      // Re-shuffle only when book count changes (add/delete) or first call
+      if (_wanderPoolCache && books.length === _wanderPoolBookCount) return _wanderPoolCache;
       const withCover = books.filter(b => b.coverUrl && b.coverUrl.trim());
-      return withCover.length >= 3 ? withCover : books;
+      const arr = (withCover.length >= 3 ? withCover : books).slice();
+      _wanderPoolCache = shuffleArray(arr);
+      _wanderPoolBookCount = books.length;
+      wanderIdx = 0;
+      return _wanderPoolCache;
     }
 
     function renderWander() {
