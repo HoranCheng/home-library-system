@@ -2446,7 +2446,10 @@
       if (event.target.closest('.summary-headline')) {
         // "书架上整理了 N 本书" → scroll down to book list on dashboard
         const shelf = document.getElementById('bookList');
-        if (shelf) shelf.scrollIntoView({ behavior: 'smooth' });
+        if (shelf) {
+          const y = shelf.getBoundingClientRect().top + window.scrollY - 12;
+          window.scrollTo({ top: Math.max(0, y), behavior: 'smooth' });
+        }
         return;
       }
 
