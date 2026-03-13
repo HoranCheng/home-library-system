@@ -3776,7 +3776,8 @@
       // Re-shuffle only when book count changes (add/delete) or first call
       if (_wanderPoolCache && books.length === _wanderPoolBookCount) return _wanderPoolCache;
       const withCover = books.filter(b => b.coverUrl && b.coverUrl.trim());
-      const arr = (withCover.length >= 3 ? withCover : books).slice();
+      // Strict: only books with covers; fall back to all only if NONE have covers
+      const arr = (withCover.length > 0 ? withCover : books).slice();
       _wanderPoolCache = shuffleArray(arr);
       _wanderPoolBookCount = books.length;
       wanderIdx = 0;
