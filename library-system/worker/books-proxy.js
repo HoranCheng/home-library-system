@@ -17,6 +17,8 @@
 
 import { handleAuth } from './auth.js';
 import { handleSync } from './sync.js';
+import { handleShare } from './share.js';
+import { checkRateLimit } from './middleware.js';
 
 /** Exact-match CORS origin allowlist (no prefix matching) */
 const ALLOWED_ORIGINS = new Set([
@@ -46,6 +48,7 @@ export function makeCorsHeaders(origin) {
     'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
     'Access-Control-Allow-Headers': 'Content-Type, Authorization',
     'Access-Control-Max-Age': '86400',
+    'Vary': 'Origin',
   };
 }
 
@@ -68,7 +71,7 @@ const GBOOKS_MAX_RESULTS_CAP = 10;
 const GBOOKS_MAX_Q_LENGTH = 200;
 
 export default {
-  async fetch(request, env) {
+  async fetch(request, env, ctx) {
     const origin = request.headers.get('Origin') || '';
     const cors = makeCorsHeaders(origin);
 
@@ -94,6 +97,12 @@ export default {
         response = await handleSync(request, env, path, cors);
         return withCors(response, cors);
       }
+
+      // ── Share routes: /share/* ──
+      if (path.startsWith('/share/')) {
+        response = await handleShare(request, env, path, cors);
+        return withCors(response, cors);
+      }
     } catch (err) {
       return new Response(JSON.stringify({ error: 'INTERNAL_ERROR', message: 'Internal server error' }), {
         status: 500,
@@ -111,7 +120,6 @@ export default {
       }
 
       // Rate limit covers
-      const { checkRateLimit } = await import('./middleware.js');
       const coverLimited = await checkRateLimit(request, env, { key: 'cover-proxy', limit: 60, windowSec: 60 });
       if (coverLimited) return withCors(coverLimited, cors);
 
@@ -176,9 +184,12 @@ export default {
         },
       });
 
-      // Store in CF cache (non-blocking)
-      const event = { waitUntil: (p) => p };
-      try { cache.put(cacheKey, coverResponse.clone()); } catch {}
+      // Store in CF cache (non-blocking via ctx.waitUntil)
+      if (ctx && ctx.waitUntil) {
+        ctx.waitUntil(cache.put(cacheKey, coverResponse.clone()));
+      } else {
+        cache.put(cacheKey, coverResponse.clone()).catch(() => {});
+      }
 
       return coverResponse;
     }
@@ -192,7 +203,6 @@ export default {
     }
 
     // Rate limit the proxy
-    const { checkRateLimit } = await import('./middleware.js');
     const proxyLimited = await checkRateLimit(request, env, { key: 'books-proxy', limit: 30, windowSec: 60 });
     if (proxyLimited) return withCors(proxyLimited, cors);
 

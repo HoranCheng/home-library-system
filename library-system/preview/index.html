@@ -1175,13 +1175,21 @@
         }
       },
 
-      _scheduleRetry(delayMs = 30000) {
+      _retryDelay: 30000,
+      _scheduleRetry() {
         clearTimeout(this._retryTimer);
+        const delay = this._retryDelay;
         this._retryTimer = setTimeout(() => {
           if (navigator.onLine && auth.isLoggedIn() && this.hasPendingChanges()) {
-            this.push(true).catch(() => {});
+            this.push(true).then(() => {
+              this._retryDelay = 30000; // reset on success
+            }).catch(() => {
+              // Exponential backoff: 30s → 60s → 120s → 240s → cap 5min
+              this._retryDelay = Math.min(this._retryDelay * 2, 300000);
+              this._scheduleRetry();
+            });
           }
-        }, delayMs);
+        }, delay);
       },
 
       /** Internal pull without syncing guard (for use after push conflicts) */
@@ -1744,7 +1752,7 @@
           const bs = getBackupStatus();
           let msg;
           if (!bs.lastExport) msg = `你已经有 ${bs.currentCount} 本书了，建议导出备份一下`;
-          else if (bs.newSinceExport >= 10) msg = `新增了 ${bs.newSinceExport} 本书，建议更新备份`;
+          else if (bs.newSinceExport >= 10) msg = `新增了 ${Math.max(0, bs.newSinceExport)} 本书，建议更新备份`;
           else msg = `距上次备份已经 ${bs.daysSinceExport} 天了，建议导出一下`;
           backupBanner.innerHTML = `<span>💾 ${escapeHtml(msg)}</span><button class="backup-remind-btn" onclick="setPage('settings');this.closest('.backup-reminder').style.display='none'">去备份</button><button class="backup-remind-dismiss" onclick="this.closest('.backup-reminder').style.display='none'">✕</button>`;
           backupBanner.style.display = '';
@@ -1815,9 +1823,11 @@
         // Grid view: covers in grid, sorted by time (newest first)
         // Paginated rendering for large libraries (>100 books)
         const byTime = books.slice().sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || '')));
+        // Disconnect previous observer if any
+        if (_gridObserver) { _gridObserver.disconnect(); _gridObserver = null; }
         const PAGE_SIZE = 60;
         const firstPage = byTime.slice(0, PAGE_SIZE);
-        const gridId = `grid-${Date.now()}`;
+        const gridId = `grid-${++_gridIdCounter}`;
         els.bookList.innerHTML = `<div class="book-grid" id="${gridId}">${firstPage.map(b => {
           const cu = coverUrl(b);
           return `<div class="book-grid-item book-detail-btn" data-id="${escapeHtml(b.id)}">
@@ -1833,8 +1843,9 @@
           const sentinel = els.bookList.querySelector('.load-more-sentinel');
           const gridEl = document.getElementById(gridId);
           if (sentinel && gridEl) {
-            const io = new IntersectionObserver((entries) => {
-              if (!entries[0].isIntersecting || loaded >= byTime.length) { io.disconnect(); sentinel.remove(); return; }
+            _gridObserver = new IntersectionObserver((entries) => {
+              const io = _gridObserver;
+              if (!entries[0].isIntersecting || loaded >= byTime.length) { if (io) io.disconnect(); sentinel.remove(); return; }
               const nextBatch = byTime.slice(loaded, loaded + PAGE_SIZE);
               const frag = document.createDocumentFragment();
               const tmp = document.createElement('div');
@@ -1849,9 +1860,9 @@
               while (tmp.firstChild) frag.appendChild(tmp.firstChild);
               gridEl.appendChild(frag);
               loaded += nextBatch.length;
-              if (loaded >= byTime.length) { io.disconnect(); sentinel.remove(); }
+              if (loaded >= byTime.length) { if (io) io.disconnect(); sentinel.remove(); }
             }, { rootMargin: '200px' });
-            io.observe(sentinel);
+            _gridObserver.observe(sentinel);
           }
         }
       } else {
@@ -2125,6 +2136,7 @@
         </div>` + [
         { icon: '💾', label: '备份数据', sub: '导出完整的藏书记录', action: 'exportJson' },
         { icon: '📊', label: '导出表格', sub: '导出为 CSV，可用 Excel 打开', action: 'exportCsv' },
+        ...(auth.isLoggedIn() ? [{ icon: '🔗', label: '分享书单', sub: '生成只读链接，让朋友看看你的藏书', action: 'shareBookshelf' }] : []),
       ].map(item => `<div class="setting-row setting-action" data-action="${item.action}">
         <span class="setting-icon">${item.icon}</span>
         <div class="setting-info"><div class="setting-label">${item.label}</div><div class="setting-sub">${item.sub}</div></div>
@@ -2739,6 +2751,7 @@
         const action = settingAction.dataset.action;
         if (action === 'exportJson') els.exportJsonBtn_handler();
         if (action === 'exportCsv') els.exportCsvBtn_handler();
+        if (action === 'shareBookshelf') handleShareBookshelf();
         if (action === 'validate') els.validateBtn.click();
         if (action === 'importJson') { els.importText.focus(); }
         return;
@@ -2858,7 +2871,7 @@
 
     els.exportCsvBtn_handler = () => {
       const books = loadActiveBooks();
-      const rows = ['书名,作者,分类,ISBN,阅读状态,存放位置,入库状态,添加日期'];
+      const rows = ['书名,作者,分类,ISBN,阅读状态,收藏,存放位置,入库状态,添加日期'];
       for (const b of books) {
         rows.push([
           b.title || '',
@@ -2940,22 +2953,46 @@
       return String(a?.updatedAt || a?.createdAt || '') >= String(b?.updatedAt || b?.createdAt || '') ? a : b;
     }
 
+    function titleAuthorKey(book) {
+      const t = String(book?.title || '').trim().toLowerCase();
+      const a = String(book?.author || '').trim().toLowerCase();
+      return (t && a) ? `${t}|||${a}` : null;
+    }
+
     function mergeImportedBooks(localBooks, importedBooks) {
       const byKey = new Map();
-      const noIsbn = [];
+      const byTitleAuthor = new Map();
       let added = 0, updated = 0, skipped = 0;
 
       for (const book of localBooks) {
         const key = normalizedIsbnKey(book);
-        if (key) byKey.set(key, book);
-        else noIsbn.push(book);
+        if (key) { byKey.set(key, book); }
+        else {
+          const taKey = titleAuthorKey(book);
+          if (taKey) byTitleAuthor.set(taKey, book);
+          else byKey.set(`_noid_${book.id || Math.random()}`, book);
+        }
       }
 
       for (const incoming of importedBooks) {
         const key = normalizedIsbnKey(incoming);
         if (!key) {
-          noIsbn.push(incoming);
-          added += 1;
+          // Fallback: dedupe by title+author
+          const taKey = titleAuthorKey(incoming);
+          if (taKey) {
+            const existing = byTitleAuthor.get(taKey);
+            if (!existing) {
+              byTitleAuthor.set(taKey, incoming);
+              added += 1;
+            } else {
+              const winner = newerBook(existing, incoming);
+              if (winner === incoming) { byTitleAuthor.set(taKey, incoming); updated += 1; }
+              else skipped += 1;
+            }
+          } else {
+            byKey.set(`_noid_${incoming.id || Math.random()}`, incoming);
+            added += 1;
+          }
           continue;
         }
         const existing = byKey.get(key);
@@ -2974,7 +3011,7 @@
       }
 
       return {
-        books: [...byKey.values(), ...noIsbn],
+        books: [...byKey.values(), ...byTitleAuthor.values()],
         diff: { added, updated, skipped }
       };
     }
@@ -3140,6 +3177,8 @@
     let editReturnMode = 'dashboard';
     let editReturnScrollY = 0;
     let shelfViewMode = localStorage.getItem('lib:shelf-view:v1') || 'grid'; // 'grid' | 'list'
+    let _gridObserver = null;
+    let _gridIdCounter = 0;
 
     function stopScanner() {
       scannerActive = false;
@@ -4484,6 +4523,22 @@
       if (changed) { saveBooks(books); render(); }
       localStorage.setItem(COVER_MIG_KEY, Date.now().toString());
     })();
+
+    // ── Error monitoring (client-side) ──
+    // Collects errors in sessionStorage for debugging; can be wired to Sentry/Analytics later
+    const ERROR_LOG_KEY = 'lib:errors:v1';
+    function logClientError(type, message, source, line) {
+      try {
+        const log = JSON.parse(sessionStorage.getItem(ERROR_LOG_KEY) || '[]');
+        log.push({ type, message: String(message).slice(0, 200), source, line, ts: Date.now() });
+        // Keep last 20 errors
+        sessionStorage.setItem(ERROR_LOG_KEY, JSON.stringify(log.slice(-20)));
+      } catch {}
+    }
+    window.onerror = (msg, src, line) => { logClientError('error', msg, src, line); };
+    window.addEventListener('unhandledrejection', (e) => {
+      logClientError('promise', e.reason?.message || String(e.reason), '', 0);
+    });
 
     // Register Service Worker
     if ('serviceWorker' in navigator) {

@@ -3,6 +3,9 @@ import { resolve } from 'path';
 
 export default defineConfig({
   base: './',
+  test: {
+    exclude: ['**/node_modules/**', '**/e2e/**', '**/dist/**'],
+  },
   build: {
     outDir: 'dist',
     emptyOutDir: true,
