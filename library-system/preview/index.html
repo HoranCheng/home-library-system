@@ -2431,15 +2431,22 @@
         return;
       }
 
-      // Summary card interactions (easter eggs)
+      // Summary card interactions
       if (event.target.closest('.summary-sub')) {
+        // "还有一些书可以补充信息" → go to organize todo panel
         setPage('organize');
         window.scrollTo({ top: 0 });
+        // Auto-switch to todo tab
+        requestAnimationFrame(() => {
+          const todoTab = document.querySelector('.org-tab[data-panel="todo"]');
+          if (todoTab) todoTab.click();
+        });
         return;
       }
       if (event.target.closest('.summary-headline')) {
-        setPage('organize');
-        window.scrollTo({ top: 0 });
+        // "书架上整理了 N 本书" → scroll down to book list on dashboard
+        const shelf = document.getElementById('bookList');
+        if (shelf) shelf.scrollIntoView({ behavior: 'smooth' });
         return;
       }
 
