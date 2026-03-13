@@ -2425,20 +2425,21 @@
       if (quickActionBtn) {
         const action = quickActionBtn.dataset.action;
         if (action === 'entry') { entrySessionCount = 0; setPage('home', { mode: 'entry' }); window.scrollTo({ top: 0, behavior: 'smooth' }); }
-        if (action === 'search') setPage('search');
-        if (action === 'organize') setPage('organize');
-        if (action === 'settings') setPage('settings');
+        if (action === 'search') { setPage('search'); window.scrollTo({ top: 0 }); }
+        if (action === 'organize') { setPage('organize'); window.scrollTo({ top: 0 }); }
+        if (action === 'settings') { setPage('settings'); window.scrollTo({ top: 0 }); }
         return;
       }
 
       // Summary card interactions (easter eggs)
       if (event.target.closest('.summary-sub')) {
         setPage('organize');
+        window.scrollTo({ top: 0 });
         return;
       }
       if (event.target.closest('.summary-headline')) {
-        const shelf = document.getElementById('bookList');
-        if (shelf) shelf.scrollIntoView({ behavior: 'smooth' });
+        setPage('organize');
+        window.scrollTo({ top: 0 });
         return;
       }
 
