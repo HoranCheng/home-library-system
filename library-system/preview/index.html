@@ -1028,6 +1028,11 @@
     const LOCATION_PRESETS_KEY = 'lib:location-presets:v1';
     // ── Google Books API 代理 ─────────────────────────────
     // API Key 安全存在 Cloudflare Worker 里，前端不暴露任何 key
+    // ── i18n ──
+    const LANG_KEY = 'lib:lang:v1';
+    function currentLang() { return localStorage.getItem(LANG_KEY) || 'zh-CN'; }
+    function setLang(lang) { localStorage.setItem(LANG_KEY, lang); }
+
     const GBOOKS_PROXY = 'https://maomao-books-proxy.henrycdev26.workers.dev';
     // ────────────────────────────────────────────────────────
 
@@ -2136,8 +2141,11 @@
         </div>` + [
         { icon: '💾', label: '备份数据', sub: '导出完整的藏书记录', action: 'exportJson' },
         { icon: '📊', label: '导出表格', sub: '导出为 CSV，可用 Excel 打开', action: 'exportCsv' },
+        { icon: '📄', label: '导出书单', sub: '生成可打印的 HTML 书单页面', action: 'exportPrintable' },
         ...(auth.isLoggedIn() ? [{ icon: '🔗', label: '分享书单', sub: '生成只读链接，让朋友看看你的藏书', action: 'shareBookshelf' }] : []),
         { icon: '💬', label: '反馈建议', sub: '告诉我们你的想法，帮助毛毛书房变得更好', action: 'feedback' },
+        { icon: '🌐', label: currentLang() === 'en' ? '切换到中文' : 'Switch to English', sub: currentLang() === 'en' ? 'Change language to Chinese' : '切换界面语言', action: 'toggleLang' },
+        ...(auth.isLoggedIn() ? [{ icon: '🗑️', label: '删除账号', sub: '永久删除账号和所有云端数据', action: 'deleteAccount' }] : []),
       ].map(item => `<div class="setting-row setting-action" data-action="${item.action}">
         <span class="setting-icon">${item.icon}</span>
         <div class="setting-info"><div class="setting-label">${item.label}</div><div class="setting-sub">${item.sub}</div></div>
@@ -2512,9 +2520,15 @@
       }
     };
 
-    els.searchInput.addEventListener('input', render);
+    // Debounced render for input fields — avoids full page rebuild on every keystroke
+    let _renderTimer = null;
+    function debouncedRender() {
+      clearTimeout(_renderTimer);
+      _renderTimer = setTimeout(render, 120);
+    }
+    els.searchInput.addEventListener('input', debouncedRender);
     ['title', 'author', 'category', 'publishedYear', 'location'].forEach((key) => {
-      els[key]?.addEventListener('input', render);
+      els[key]?.addEventListener('input', debouncedRender);
     });
     els.markAllSortedBtn.onclick = () => {
       const activeCount = loadActiveBooks().length;
@@ -2752,8 +2766,11 @@
         const action = settingAction.dataset.action;
         if (action === 'exportJson') els.exportJsonBtn_handler();
         if (action === 'exportCsv') els.exportCsvBtn_handler();
+        if (action === 'exportPrintable') exportPrintableBooklist();
         if (action === 'shareBookshelf') handleShareBookshelf();
         if (action === 'feedback') handleFeedback();
+        if (action === 'deleteAccount') handleDeleteAccount();
+        if (action === 'toggleLang') { setLang(currentLang() === 'en' ? 'zh-CN' : 'en'); render(); }
         if (action === 'validate') els.validateBtn.click();
         if (action === 'importJson') { els.importText.focus(); }
         return;
@@ -2892,6 +2909,68 @@
       els.settingsNotice.innerHTML = makeNotice('ok', `已下载表格 📊 共 ${books.length} 本书`);
     };
 
+    // ── Printable book list export ──
+    function exportPrintableBooklist() {
+      const books = loadActiveBooks();
+      if (!books.length) {
+        els.settingsNotice.innerHTML = makeNotice('warn', '书架上还没有书，先添加几本吧');
+        return;
+      }
+
+      // Group by category
+      const byCategory = {};
+      for (const b of books) {
+        const cat = b.category || '未分类';
+        (byCategory[cat] = byCategory[cat] || []).push(b);
+      }
+
+      const date = new Date().toLocaleDateString('zh-CN');
+      const html = `<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>我的藏书 — ${date}</title>
+<style>
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif; max-width: 800px; margin: 0 auto; padding: 40px 20px; color: #333; }
+  h1 { font-size: 24px; text-align: center; margin-bottom: 4px; }
+  .subtitle { text-align: center; color: #999; font-size: 13px; margin-bottom: 32px; }
+  h2 { font-size: 16px; color: #666; border-bottom: 1px solid #eee; padding-bottom: 6px; margin-top: 28px; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; margin-bottom: 16px; }
+  th { text-align: left; padding: 6px 8px; background: #f8f8f8; font-weight: 600; border-bottom: 2px solid #ddd; }
+  td { padding: 6px 8px; border-bottom: 1px solid #eee; }
+  tr:hover { background: #fafafa; }
+  .fav { color: #e74c3c; }
+  @media print { body { padding: 0; } h1 { font-size: 20px; } }
+</style>
+</head>
+<body>
+<h1>📚 我的藏书</h1>
+<p class="subtitle">${escapeHtml(date)} · 共 ${books.length} 本</p>
+${Object.entries(byCategory).sort((a,b) => b[1].length - a[1].length).map(([cat, list]) => `
+<h2>${escapeHtml(cat)} (${list.length})</h2>
+<table>
+<tr><th>书名</th><th>作者</th><th>ISBN</th><th>状态</th></tr>
+${list.map(b => `<tr>
+  <td>${b.favorite ? '<span class="fav">❤</span> ' : ''}${escapeHtml(b.title || '未命名')}</td>
+  <td>${escapeHtml(b.author || '-')}</td>
+  <td>${escapeHtml(b.isbn || '-')}</td>
+  <td>${escapeHtml(normalizeReadingStatus(b.readingStatus) || '未读')}</td>
+</tr>`).join('')}
+</table>`).join('')}
+<p style="text-align:center;color:#ccc;font-size:11px;margin-top:40px">由毛毛书房生成</p>
+</body>
+</html>`;
+
+      const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `我的藏书_${new Date().toISOString().slice(0, 10)}.html`;
+      a.click();
+      URL.revokeObjectURL(url);
+      els.settingsNotice.innerHTML = makeNotice('ok', `已导出可打印书单 📄 共 ${books.length} 本`);
+    }
+
     // ── Share bookshelf ──
     async function handleShareBookshelf() {
       if (!auth.isLoggedIn()) {
@@ -2957,6 +3036,25 @@
         window.open(`${issueUrl}?body=${body}`, '_blank');
         document.getElementById('feedbackPanel')?.remove();
         els.settingsNotice.innerHTML = makeNotice('ok', '已跳转到 GitHub Issues 页面，感谢反馈！');
+      }
+    }
+
+    // ── Delete account (GDPR) ──
+    async function handleDeleteAccount() {
+      const step1 = confirm('⚠️ 确定要删除账号吗？\n\n这将永久删除你的账号和所有云端数据。\n本地数据会保留在此浏览器中。');
+      if (!step1) return;
+      const step2 = prompt('请输入"删除我的账号"以确认：');
+      if (step2?.trim() !== '删除我的账号') {
+        els.settingsNotice.innerHTML = makeNotice('warn', '已取消删除');
+        return;
+      }
+      try {
+        await apiFetch('/auth/account', { method: 'DELETE' });
+        auth.logout();
+        els.settingsNotice.innerHTML = makeNotice('ok', '账号已删除。本地数据仍保留在此浏览器中。');
+        setTimeout(() => render(), 1000);
+      } catch (e) {
+        els.settingsNotice.innerHTML = makeNotice('err', `删除失败：${escapeHtml(e.message || '网络错误')}`);
       }
     }
 

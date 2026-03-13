@@ -202,5 +202,25 @@ export async function handleAuth(request, env, path, corsHeaders) {
     return respond({ user: sanitizeUser(user) });
   }
 
+  // ── DELETE /auth/account — 删除账号及所有数据 (GDPR) ──
+  if (path === '/auth/account' && request.method === 'DELETE') {
+    const authResult = await requireAuth(request, env);
+    if (authResult instanceof Response) return authResult;
+    const userId = authResult.sub;
+
+    // Verify user exists
+    const user = await env.DB.prepare('SELECT id FROM users WHERE id = ? AND is_active = 1').bind(userId).first();
+    if (!user) return respond({ error: 'USER_NOT_FOUND' }, 404);
+
+    // Delete all user data in order: books → shares → user
+    await env.DB.batch([
+      env.DB.prepare('DELETE FROM books WHERE user_id = ?').bind(userId),
+      env.DB.prepare('DELETE FROM shares WHERE user_id = ?').bind(userId),
+      env.DB.prepare('DELETE FROM users WHERE id = ?').bind(userId),
+    ]);
+
+    return respond({ ok: true, message: '账号已删除，所有云端数据已清除' });
+  }
+
   return respond({ error: 'NOT_FOUND', message: '未知的认证端点' }, 404);
 }

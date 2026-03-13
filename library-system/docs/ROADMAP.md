@@ -80,13 +80,13 @@
 - ✅ IntersectionObserver 分页渲染（60本/页，滚动自动加载）
 - ✅ 图片懒加载（`loading="lazy"` 全覆盖）
 - ⬜ 基准测试：500 / 1000 / 5000 本书的渲染性能
-- ⬜ render() 输入事件去抖（GPT审计建议，减少打字时整页重绘）
+- ✅ render() 输入事件去抖（120ms debounce，减少打字时整页重绘）
 
 ### 2.4 合规 & 信任
 - ⬜ 隐私政策页面
 - ⬜ 用户协议
 - ⬜ 数据存储说明（本地+云端，用户可选）
-- ⬜ 账号删除功能（GDPR 要求）
+- ✅ 账号删除功能（GDPR — 二次确认 + Worker DELETE /auth/account）
 
 ### 2.5 体验打磨
 - ✅ Skeleton shimmer loading（ISBN 查询时显示骨架屏）
@@ -104,11 +104,13 @@
 - ✅ i18n 框架 — 中/英双语翻译文件就绪（src/js/i18n.js），待接入前端
 - ⬜ PWA → App Store 打包（Capacitor 或 TWA）
 - ⬜ 响应式布局扩展到 tablet/desktop
+- ✅ 语言切换（设置页中英文切换，i18n 框架就绪）
 
 ### 3.2 数据 & 同步升级
 - ⬜ 字段级冲突合并（替代 Last Write Wins）
 - ⬜ 同步历史 / 版本回滚
-- ⬜ 数据导出为更多格式（PDF 书单、Notion 导入）
+- ✅ 可打印 HTML 书单导出（按分类分组，支持打印/PDF）
+- ⬜ Notion 导入格式
 
 ### 3.3 基础设施
 - ⬜ 自定义域名 + CDN 优化

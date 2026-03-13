@@ -1,0 +1,648 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+  <title>毛毛书房 · 改版预览</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg:#F6F3ED; --bg2:#EDE8E0; --card:#FFFDF8; --line:rgba(44,38,31,.07);
+      --text:#2C261F; --muted:#7A6F62; --accent:#3D5E4C; --accent-light:#E8EFE9;
+      --accent2:#8B6F4E; --brown-light:#F5EDE2;
+      --ok:#4A7C59; --ok-light:#EAF3EC; --warn:#B8863A; --warn-light:#FFF7E6; --danger:#A84E4E;
+      --surface:#F3EFE8; --surface-2:#EBE6DC;
+      --shadow:0 2px 12px rgba(44,38,31,.06);
+      --shadow-md:0 4px 20px rgba(44,38,31,.10);
+      --safe-bottom:env(safe-area-inset-bottom, 12px);
+      --serif:"Noto Serif SC","Songti SC","STSong","Georgia",serif;
+      --fav:#E25D5D;
+    }
+    * { box-sizing:border-box; margin:0; }
+    html { -webkit-text-size-adjust:100%; }
+    body { margin:0; color:var(--text); font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","PingFang SC","Noto Sans SC",sans-serif; background:var(--bg); }
+    .app { max-width:480px; margin:0 auto; min-height:100vh; position:relative; }
+    @media (min-width:768px) { .app { max-width:600px; } }
+
+    /* ── Top bar ── */
+    .topbar {
+      position:sticky; top:0; z-index:20; padding:50px 20px 14px;
+      background:rgba(246,243,237,.92); backdrop-filter:blur(12px);
+    }
+    .topbar-title { font-size:22px; font-family:var(--serif); font-weight:700; color:var(--text); line-height:1.2; }
+
+    /* ── Content ── */
+    .content { padding:0 20px calc(var(--safe-bottom) + 72px); }
+    .hidden { display:none !important; }
+
+    /* ── Section title ── */
+    .subsection-title { margin:20px 0 10px; font-size:12px; color:var(--muted); font-weight:600; letter-spacing:.04em; }
+    .section-label { font-size:9px; font-weight:400; letter-spacing:.2em; text-transform:uppercase; color:rgba(44,38,31,.22); }
+
+    /* ── Cards ── */
+    .card { background:var(--card); border-radius:16px; padding:16px; box-shadow:var(--shadow); border:1px solid rgba(255,255,255,.6); }
+
+    /* ── Summary card ── */
+    .summary-card {
+      background:var(--card); border-radius:16px; padding:20px;
+      box-shadow:var(--shadow); border:1px solid rgba(255,255,255,.6);
+      margin-bottom:4px;
+    }
+    .summary-headline { font-size:20px; font-family:var(--serif); font-weight:700; line-height:1.4; margin-bottom:4px; }
+    .summary-headline .num { color:var(--accent); font-weight:900; }
+    .summary-sub { font-size:13px; color:var(--muted); line-height:1.5; margin-bottom:12px; }
+    /* Progress bar (from handoff: read/unread two-segment) */
+    .summary-bar-wrap { margin-bottom:14px; }
+    .summary-bar { height:10px; border-radius:5px; background:var(--surface-2); overflow:hidden; display:flex; }
+    .summary-bar .seg { height:100%; transition:width .8s ease; }
+    .summary-bar-legend { display:flex; gap:14px; margin-top:8px; flex-wrap:wrap; }
+    .legend-item { display:flex; align-items:center; gap:5px; font-size:11px; color:var(--muted); }
+    .legend-dot { width:8px; height:8px; border-radius:50%; flex-shrink:0; }
+    /* CTA button */
+    .summary-cta {
+      display:inline-flex; align-items:center; gap:4px;
+      padding:8px 16px; border-radius:10px; border:none;
+      background:var(--accent-light); color:var(--accent);
+      font-size:13px; font-weight:600; cursor:pointer;
+      transition:background .15s;
+    }
+    .summary-cta:active { background:#D5E5D9; }
+    .summary-cta.done { background:var(--ok-light); color:var(--ok); cursor:default; }
+
+    /* ── Wander card ── */
+    .wander-section { margin-bottom:12px; overflow:hidden; border-radius:16px; }
+    .wander-card {
+      display:flex; min-height:170px; background:var(--card);
+      border-radius:16px; box-shadow:var(--shadow); overflow:hidden; position:relative;
+    }
+    .wander-cover-area {
+      width:130px; flex-shrink:0; position:relative; overflow:hidden;
+      background:linear-gradient(135deg, rgba(139,111,78,.12), rgba(61,94,76,.08));
+    }
+    .wander-cover {
+      width:86px; height:122px; object-fit:cover; border-radius:6px;
+      position:absolute; top:50%; left:50%; transform:translate(-50%,-50%);
+      box-shadow:3px 3px 12px rgba(0,0,0,.15);
+      background:var(--surface-2);
+    }
+    .wander-deco {
+      position:absolute; font-size:68px; opacity:.05;
+      font-family:var(--serif); color:var(--accent2);
+      pointer-events:none; right:-4px; bottom:-8px; line-height:1;
+    }
+    .wander-info { flex:1; min-width:0; padding:16px 14px 14px 12px; display:flex; flex-direction:column; justify-content:space-between; }
+    .wander-cat { display:inline-block; font-size:10px; font-weight:600; padding:2px 8px; border-radius:20px; background:var(--accent-light); color:var(--accent); margin-bottom:6px; width:fit-content; }
+    .wander-title { font-size:15px; font-family:var(--serif); font-weight:700; line-height:1.35; margin-bottom:4px; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
+    .wander-meta { font-size:11px; color:var(--muted); margin-bottom:7px; }
+    .wander-bottom { display:flex; align-items:center; justify-content:space-between; }
+    .wander-status { display:inline-flex; align-items:center; gap:4px; font-size:10px; font-weight:600; padding:2px 8px; border-radius:20px; }
+    .wander-status .sdot { width:4px; height:4px; border-radius:50%; flex-shrink:0; }
+    .wander-status.done { background:var(--ok-light); color:#2D6A3A; }
+    .wander-status.done .sdot { background:var(--ok); }
+    .wander-status.unread { background:#F3EFE8; color:#7A6F62; }
+    .wander-status.unread .sdot { background:#B0A99E; }
+    /* ♥ collect button (from handoff) */
+    .wander-fav-btn {
+      width:28px; height:28px; border:none; background:transparent; cursor:pointer;
+      display:flex; align-items:center; justify-content:center;
+      font-size:16px; border-radius:50%; padding:0;
+      transition:transform .18s;
+      -webkit-tap-highlight-color:transparent;
+    }
+    .wander-fav-btn:active { transform:scale(1.2); }
+    .wander-fav-btn.faved { color:var(--fav); }
+    .wander-fav-btn:not(.faved) { color:#CCBFB0; }
+
+    /* ── Favorites gallery ── */
+    .fav-gallery { position:relative; margin-bottom:24px; }
+    .fav-gallery-scroll { display:flex; gap:12px; overflow-x:auto; padding:12px 0 14px; -webkit-overflow-scrolling:touch; scrollbar-width:none; }
+    .fav-gallery-scroll::-webkit-scrollbar { display:none; }
+    .fav-gallery-item { flex-shrink:0; width:92px; cursor:pointer; transition:transform .12s; }
+    .fav-gallery-item:active { transform:scale(.95); }
+    .fav-gallery-cover { width:92px; height:132px; border-radius:6px; object-fit:cover; background:var(--surface-2); box-shadow:0 4px 16px rgba(44,38,31,.12); }
+    .fav-gallery-baseline { position:absolute; bottom:14px; left:0; right:0; height:1px; background:rgba(44,38,31,.08); pointer-events:none; }
+
+    /* ── Category bar chart ── */
+    .cat-bar-row { display:flex; align-items:center; gap:10px; margin-bottom:10px; }
+    .cat-bar-label { font-size:12px; color:var(--text); width:48px; flex-shrink:0; text-align:right; }
+    .cat-bar-track { flex:1; height:8px; background:var(--surface-2); border-radius:4px; overflow:hidden; }
+    .cat-bar-fill { height:100%; border-radius:4px; }
+    .cat-bar-count { font-size:12px; color:var(--muted); width:24px; text-align:right; }
+
+    /* ── Shelf view toggle ── */
+    .shelf-view-toggle { display:flex; background:var(--surface-2); border-radius:8px; padding:3px; gap:0; }
+    .shelf-view-btn {
+      padding:5px 8px; border:none; border-radius:6px; background:transparent;
+      color:var(--muted); cursor:pointer; display:flex; align-items:center; justify-content:center;
+      transition:all .2s;
+    }
+    .shelf-view-btn.active { background:var(--card); color:var(--text); box-shadow:0 1px 4px rgba(44,38,31,.1); }
+
+    /* ── Book grid ── */
+    .book-grid { display:grid; grid-template-columns:repeat(3, 1fr); gap:14px; margin-top:8px; }
+    .book-grid-item { cursor:pointer; transition:transform .12s; }
+    .book-grid-item:active { transform:scale(.95); }
+    .book-grid-cover { width:100%; aspect-ratio:3/4.2; border-radius:8px; object-fit:cover; background:var(--surface-2); box-shadow:0 4px 16px rgba(44,38,31,.12); }
+    .book-grid-title { font-size:11px; font-weight:600; margin-top:6px; line-height:1.3; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
+    .cover-placeholder {
+      width:100%; aspect-ratio:3/4.2; border-radius:8px; display:flex; align-items:flex-end; justify-content:center;
+      padding:10px 6px; font-size:12px; color:rgba(255,255,255,.75); font-weight:600; text-align:center; line-height:1.3;
+    }
+    /* Alpha section header */
+    .alpha-header { font-size:12px; font-weight:700; color:var(--accent); padding:12px 0 6px; font-family:var(--serif); }
+
+    /* ── Ghost Nav ── */
+    .ghost-nav {
+      position:fixed; bottom:calc(18px + var(--safe-bottom));
+      left:50%; transform:translateX(-50%) translateY(0);
+      display:flex; align-items:center; gap:0;
+      background:rgba(44,38,31,.75); backdrop-filter:blur(20px); -webkit-backdrop-filter:blur(20px);
+      border-radius:22px; padding:0 6px;
+      z-index:40;
+      transition:opacity .5s cubic-bezier(.4,0,.2,1), transform .5s cubic-bezier(.4,0,.2,1);
+      box-shadow:0 4px 24px rgba(44,38,31,.18);
+    }
+    .ghost-nav.hidden { opacity:0; transform:translateX(-50%) translateY(20px); pointer-events:none; }
+    .ghost-nav button {
+      border:none; background:transparent; cursor:pointer;
+      padding:14px 16px; position:relative;
+      display:flex; align-items:center; justify-content:center;
+      -webkit-tap-highlight-color:transparent;
+    }
+    .ghost-nav button svg {
+      width:20px; height:20px; stroke:rgba(255,253,248,.28); stroke-width:1.8;
+      fill:none; stroke-linecap:round; stroke-linejoin:round;
+      transition:stroke .3s ease;
+    }
+    .ghost-nav button.active svg { stroke:#FFFDF8; }
+    .ghost-nav button .ghost-dot {
+      position:absolute; bottom:6px; left:50%; transform:translateX(-50%);
+      width:3px; height:3px; border-radius:50%; background:#FFFDF8;
+      opacity:0; transition:opacity .3s ease;
+    }
+    .ghost-nav button.active .ghost-dot { opacity:1; }
+    .ghost-nav .ghost-fab { padding:12px 10px; }
+    .ghost-nav .ghost-fab svg { width:22px; height:22px; stroke:rgba(255,253,248,.45); stroke-width:1.6; }
+
+    /* ── Detail bottom sheet (NEW from handoff) ── */
+    @keyframes sheetSlideUp { from { transform:translateY(100%); } to { transform:translateY(0); } }
+    @keyframes sheetFadeIn { from { opacity:0; } to { opacity:1; } }
+    @keyframes detailContentIn { from { opacity:0; transform:translateY(16px); } to { opacity:1; transform:translateY(0); } }
+    @keyframes favBounce { 0%{transform:scale(1)} 30%{transform:scale(.85)} 60%{transform:scale(1.1)} 100%{transform:scale(1)} }
+
+    .sheet-backdrop {
+      position:fixed; inset:0; background:rgba(44,38,31,.45); backdrop-filter:blur(8px);
+      z-index:50; animation:sheetFadeIn .25s ease;
+    }
+    .sheet-panel {
+      position:fixed; bottom:0; left:0; right:0;
+      max-width:480px; margin:0 auto;
+      background:var(--bg); border-radius:20px 20px 0 0;
+      max-height:85vh; overflow-y:auto;
+      box-shadow:0 -8px 48px rgba(44,38,31,.2);
+      animation:sheetSlideUp .35s cubic-bezier(.32,.72,.32,1);
+      z-index:51;
+    }
+    .sheet-handle { display:flex; justify-content:center; padding:10px 0 4px; }
+    .sheet-handle-bar { width:36px; height:4px; border-radius:2px; background:rgba(44,38,31,.15); }
+    .sheet-header {
+      display:flex; gap:16px; padding:8px 24px 20px;
+      border-bottom:1px solid var(--line);
+    }
+    .sheet-cover {
+      width:88px; height:126px; border-radius:8px; flex-shrink:0;
+      box-shadow:3px 3px 12px rgba(0,0,0,.15); object-fit:cover;
+      background:var(--accent2);
+    }
+    .sheet-title { font-size:19px; font-family:var(--serif); line-height:1.3; }
+    .sheet-meta { color:var(--muted); font-size:13px; margin-top:4px; }
+    .sheet-badges { display:flex; gap:6px; flex-wrap:wrap; margin-top:8px; }
+    .status-badge {
+      display:inline-flex; align-items:center; gap:4px;
+      font-size:10px; font-weight:600; padding:3px 10px; border-radius:20px;
+    }
+    .status-badge .dot { width:5px; height:5px; border-radius:50%; flex-shrink:0; }
+    .status-badge.done { background:var(--ok-light); color:#2D6A3A; }
+    .status-badge.done .dot { background:var(--ok); }
+    .status-badge.unread { background:#F3EFE8; color:#7A6F62; }
+    .status-badge.unread .dot { background:#B0A99E; }
+    .status-badge.fav { background:#FDF0F0; color:var(--fav); }
+    .status-badge.fav .dot { background:var(--fav); }
+    /* Fav button in sheet */
+    .sheet-fav-btn {
+      width:36px; height:36px; border:none; cursor:pointer;
+      display:flex; align-items:center; justify-content:center;
+      font-size:20px; border-radius:50%; padding:0;
+      background:transparent; transition:transform .18s;
+    }
+    .sheet-fav-btn.faved { color:var(--fav); }
+    .sheet-fav-btn:not(.faved) { color:#CCBFB0; }
+    .sheet-fav-btn:active { transform:scale(.85); }
+
+    .sheet-body { padding:20px 24px 32px; }
+    .detail-anim { opacity:0; animation:detailContentIn .35s ease forwards; }
+    /* Reading status pills */
+    .option-row { display:flex; gap:8px; margin-top:10px; }
+    .option-pill {
+      flex:1; padding:10px 0; border:2px solid var(--surface-2); border-radius:12px;
+      background:transparent; color:var(--muted); font-size:13px; font-weight:600;
+      cursor:pointer; text-align:center; transition:all .15s;
+    }
+    .option-pill.active { border-color:var(--accent); background:var(--accent-light); color:var(--accent); }
+    /* Meta table */
+    .meta-row { display:flex; padding:13px 16px; }
+    .meta-row + .meta-row { border-top:1px solid var(--line); }
+    .meta-label { font-size:13px; color:var(--muted); width:72px; flex-shrink:0; }
+    .meta-value { font-size:13px; color:var(--text); }
+    /* Note */
+    .modal-note { background:var(--warn-light); border:1px solid #F0E8C8; border-radius:14px; padding:14px 16px; margin-bottom:16px; }
+    .modal-note-label { font-size:11px; font-weight:600; color:#9B8540; margin-bottom:6px; }
+    .modal-note-text { font-size:13px; color:var(--text); line-height:1.6; }
+    /* Buttons */
+    .btn { padding:12px 20px; border:none; border-radius:12px; font-size:14px; font-weight:700; cursor:pointer; transition:all .2s; }
+    .btn.primary { background:var(--accent); color:#fff; }
+    .btn.secondary { background:var(--surface); color:var(--text); border:1px solid var(--line); }
+    .btn.ghost { background:transparent; color:var(--muted); }
+    .actions { display:flex; gap:8px; }
+
+    /* ── Organize page ── */
+    .org-tabs { display:flex; gap:0; background:var(--surface-2); border-radius:12px; padding:3px; margin-bottom:16px; }
+    .org-tab {
+      flex:1; padding:9px 0; border:none; border-radius:10px; background:transparent;
+      color:var(--muted); font-size:13px; font-weight:600; cursor:pointer;
+      transition:all .2s; text-align:center; position:relative;
+    }
+    .org-tab.active { background:var(--card); color:var(--text); box-shadow:var(--shadow); }
+    .organize-card {
+      background:var(--card); border-radius:16px; padding:16px; box-shadow:var(--shadow);
+      border-left:4px solid var(--warn); margin-bottom:10px; cursor:pointer;
+    }
+    .organize-card-head { display:flex; gap:12px; align-items:flex-start; }
+    .organize-card-cover { width:38px; height:52px; border-radius:4px; flex-shrink:0; }
+    .organize-card-info { flex:1; }
+    .organize-card-title { font-size:15px; font-weight:600; font-family:var(--serif); }
+    .organize-card-author { font-size:12px; color:var(--muted); margin-top:3px; }
+    .missing-tag { font-size:10px; padding:2px 8px; border-radius:20px; background:#FFF3E0; color:#E65100; font-weight:600; display:inline-block; margin-right:4px; margin-top:6px; }
+
+    /* ── Page transitions ── */
+    .page { display:none; }
+    .page.active { display:block; animation:fadeIn .25s ease; }
+    @keyframes fadeIn { from { opacity:0; } to { opacity:1; } }
+
+    /* ── Demo label ── */
+    .demo-badge {
+      position:fixed; top:12px; right:12px; z-index:99;
+      background:var(--fav); color:#fff; font-size:10px; font-weight:700;
+      padding:4px 10px; border-radius:20px; letter-spacing:.04em;
+    }
+  </style>
+</head>
+<body>
+<div class="demo-badge">PREVIEW DEMO</div>
+<div class="app">
+  <!-- Top bar -->
+  <div class="topbar">
+    <div class="topbar-title">毛毛的书房</div>
+  </div>
+
+  <div class="content">
+    <!-- ===== HOME PAGE ===== -->
+    <div class="page active" id="pageHome">
+
+      <!-- Summary Card (warm copy + progress bar from handoff + CTA button) -->
+      <div class="summary-card" id="summaryCard">
+        <div class="summary-headline">
+          书架上整理了 <span class="num">67</span> 本书
+        </div>
+        <div class="summary-sub">还有一些书可以补充更多信息</div>
+        <div class="summary-bar-wrap">
+          <div class="summary-bar">
+            <div class="seg" style="width:22%;background:var(--ok)"></div>
+            <div class="seg" style="width:78%;background:#CCBFB0"></div>
+          </div>
+          <div class="summary-bar-legend">
+            <div class="legend-item"><span class="legend-dot" style="background:var(--ok)"></span>读过</div>
+            <div class="legend-item"><span class="legend-dot" style="background:#CCBFB0"></span>未读</div>
+          </div>
+        </div>
+        <button class="summary-cta" onclick="switchPage('organize')">去看看 →</button>
+      </div>
+
+      <!-- 随手一本 -->
+      <div class="subsection-title">随手一本</div>
+      <div class="wander-section">
+        <div class="wander-card" id="wanderCard">
+          <div class="wander-cover-area">
+            <img class="wander-cover" src="https://covers.openlibrary.org/b/isbn/9787020024759-M.jpg" alt="" style="background:#3D5E4C" />
+            <div class="wander-deco">书</div>
+          </div>
+          <div class="wander-info">
+            <div>
+              <div class="wander-cat">文学</div>
+              <div class="wander-title">百年孤独</div>
+              <div class="wander-meta">加西亚·马尔克斯 · 1967</div>
+            </div>
+            <div class="wander-bottom">
+              <div class="wander-status done"><span class="sdot"></span>读过</div>
+              <button class="wander-fav-btn faved" onclick="this.classList.toggle('faved');this.textContent=this.classList.contains('faved')?'♥':'♡'">♥</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 我的收藏 (renamed from handoff: "我的收藏 {数量}") -->
+      <div class="subsection-title">我的收藏 <span class="section-label" style="margin-left:6px">5</span></div>
+      <div class="fav-gallery">
+        <div class="fav-gallery-scroll" id="favScroll"></div>
+        <div class="fav-gallery-baseline"></div>
+      </div>
+
+      <!-- 分类分布 -->
+      <div class="subsection-title">分类分布</div>
+      <div class="card" id="catChart">
+        <div class="cat-bar-row"><span class="cat-bar-label">文学</span><div class="cat-bar-track"><div class="cat-bar-fill" style="width:85%;background:#3D5E4C"></div></div><span class="cat-bar-count">18</span></div>
+        <div class="cat-bar-row"><span class="cat-bar-label">历史</span><div class="cat-bar-track"><div class="cat-bar-fill" style="width:60%;background:#5E6B4E"></div></div><span class="cat-bar-count">12</span></div>
+        <div class="cat-bar-row"><span class="cat-bar-label">科幻</span><div class="cat-bar-track"><div class="cat-bar-fill" style="width:45%;background:#4A6B7B"></div></div><span class="cat-bar-count">9</span></div>
+        <div class="cat-bar-row"><span class="cat-bar-label">哲学</span><div class="cat-bar-track"><div class="cat-bar-fill" style="width:35%;background:#6B5B7B"></div></div><span class="cat-bar-count">7</span></div>
+        <div class="cat-bar-row"><span class="cat-bar-label">计算机</span><div class="cat-bar-track"><div class="cat-bar-fill" style="width:25%;background:#4A6B7B"></div></div><span class="cat-bar-count">5</span></div>
+      </div>
+
+      <!-- 我的书架 (grid/list toggle) -->
+      <div class="subsection-title" style="display:flex;align-items:center;justify-content:space-between">
+        我的书架 <span class="section-label" style="flex:1"></span>
+        <div class="shelf-view-toggle">
+          <button class="shelf-view-btn active" data-view="grid" title="网格视图">
+            <svg width="16" height="16" viewBox="0 0 16 16"><rect x="1" y="1" width="6" height="6" rx="1.2" fill="currentColor"/><rect x="9" y="1" width="6" height="6" rx="1.2" fill="currentColor"/><rect x="1" y="9" width="6" height="6" rx="1.2" fill="currentColor"/><rect x="9" y="9" width="6" height="6" rx="1.2" fill="currentColor"/></svg>
+          </button>
+          <button class="shelf-view-btn" data-view="list" title="列表视图">
+            <svg width="16" height="16" viewBox="0 0 16 16"><rect x="1" y="2" width="14" height="2.4" rx="1" fill="currentColor"/><rect x="1" y="6.8" width="14" height="2.4" rx="1" fill="currentColor"/><rect x="1" y="11.6" width="14" height="2.4" rx="1" fill="currentColor"/></svg>
+          </button>
+        </div>
+      </div>
+      <div class="book-grid" id="bookGrid"></div>
+
+    </div>
+
+    <!-- ===== ORGANIZE PAGE ===== -->
+    <div class="page" id="pageOrganize">
+      <div class="org-tabs">
+        <button class="org-tab active">可以更完整</button>
+        <button class="org-tab">阅读统计</button>
+        <button class="org-tab">书架分布</button>
+      </div>
+
+      <!-- Softer language from handoff -->
+      <div style="font-size:14px;color:var(--muted);margin-bottom:16px;line-height:1.6">
+        还有一些书可以慢慢补充信息
+      </div>
+
+      <!-- Grouped by missing type (from handoff) -->
+      <div class="subsection-title">缺少分类</div>
+      <div class="organize-card" onclick="showSheet('detail2')">
+        <div class="organize-card-head">
+          <div class="organize-card-cover" style="background:#8B6F4E;border-radius:4px;display:flex;align-items:flex-end;justify-content:center;padding:4px"><span style="font-size:8px;color:rgba(255,255,255,.7);font-weight:600">乡</span></div>
+          <div class="organize-card-info">
+            <div class="organize-card-title">乡土中国</div>
+            <div class="organize-card-author">费孝通 · 1948</div>
+            <span class="missing-tag">缺分类</span>
+          </div>
+        </div>
+      </div>
+      <div class="organize-card">
+        <div class="organize-card-head">
+          <div class="organize-card-cover" style="background:#4A6B7B;border-radius:4px;display:flex;align-items:flex-end;justify-content:center;padding:4px"><span style="font-size:8px;color:rgba(255,255,255,.7);font-weight:600">三</span></div>
+          <div class="organize-card-info">
+            <div class="organize-card-title">三体</div>
+            <div class="organize-card-author">刘慈欣 · 2008</div>
+            <span class="missing-tag">缺分类</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="subsection-title">缺少位置</div>
+      <div class="organize-card">
+        <div class="organize-card-head">
+          <div class="organize-card-cover" style="background:#6B5B7B;border-radius:4px;display:flex;align-items:flex-end;justify-content:center;padding:4px"><span style="font-size:8px;color:rgba(255,255,255,.7);font-weight:600">西</span></div>
+          <div class="organize-card-info">
+            <div class="organize-card-title">西方哲学史</div>
+            <div class="organize-card-author">罗素 · 1945</div>
+            <span class="missing-tag">缺位置</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== SETTINGS PAGE ===== -->
+    <div class="page" id="pageSettings">
+      <div style="background:var(--card);border-radius:14px;padding:14px 16px;margin-bottom:10px;box-shadow:var(--shadow);display:flex;align-items:center;gap:14px;cursor:pointer">
+        <span style="font-size:20px">👤</span>
+        <div style="flex:1"><div style="font-size:14px;font-weight:600">账户信息</div><div style="font-size:12px;color:var(--muted);margin-top:2px">毛毛 · 已登录</div></div>
+        <span style="color:var(--muted);font-size:16px">›</span>
+      </div>
+      <div style="background:var(--card);border-radius:14px;padding:14px 16px;margin-bottom:10px;box-shadow:var(--shadow);display:flex;align-items:center;gap:14px;cursor:pointer">
+        <span style="font-size:20px">🔄</span>
+        <div style="flex:1"><div style="font-size:14px;font-weight:600">同步状态</div><div style="font-size:12px;color:var(--muted);margin-top:2px">已同步 · 刚刚</div></div>
+        <span style="color:var(--muted);font-size:16px">›</span>
+      </div>
+      <div style="background:var(--card);border-radius:14px;padding:14px 16px;margin-bottom:10px;box-shadow:var(--shadow);display:flex;align-items:center;gap:14px;cursor:pointer">
+        <span style="font-size:20px">📤</span>
+        <div style="flex:1"><div style="font-size:14px;font-weight:600">导入导出</div><div style="font-size:12px;color:var(--muted);margin-top:2px">JSON / CSV</div></div>
+        <span style="color:var(--muted);font-size:16px">›</span>
+      </div>
+      <div style="background:var(--card);border-radius:14px;padding:14px 16px;margin-bottom:10px;box-shadow:var(--shadow);display:flex;align-items:center;gap:14px;cursor:pointer">
+        <span style="font-size:20px">ℹ️</span>
+        <div style="flex:1"><div style="font-size:14px;font-weight:600">关于</div><div style="font-size:12px;color:var(--muted);margin-top:2px">毛毛书房 v2.0</div></div>
+        <span style="color:var(--muted);font-size:16px">›</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Ghost Nav (icon-only, our confirmed decision) -->
+  <nav class="ghost-nav" id="ghostNav">
+    <button id="navHome" class="active" onclick="switchPage('home')">
+      <svg viewBox="0 0 24 24"><path d="M12 5c-2.5-2-6-2-8 0v14c2.5-1.2 5.5-1.2 8 .5"/><path d="M12 5c2.5-2 6-2 8 0v14c-2.5-1.2-5.5-1.2-8 .5"/></svg>
+      <span class="ghost-dot"></span>
+    </button>
+    <button id="navSearch" onclick="switchPage('home')">
+      <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+      <span class="ghost-dot"></span>
+    </button>
+    <button class="ghost-fab" id="navFab">
+      <svg viewBox="0 0 24 24"><path d="M4 8V6a2 2 0 0 1 2-2h2"/><path d="M4 16v2a2 2 0 0 0 2 2h2"/><path d="M16 4h2a2 2 0 0 1 2 2v2"/><path d="M16 20h2a2 2 0 0 0 2-2v-2"/><path d="M12 8v8"/><path d="M8 12h8"/></svg>
+    </button>
+    <button id="navOrganize" onclick="switchPage('organize')">
+      <svg viewBox="0 0 24 24"><path d="M4 4h7.586a1 1 0 0 1 .707.293l7.414 7.414a1 1 0 0 1 0 1.414l-5.586 5.586a1 1 0 0 1-1.414 0L5.293 11.293A1 1 0 0 1 5 10.586V5a1 1 0 0 1 1-1z"/><circle cx="8.5" cy="8.5" r="1" fill="#FFFDF8" stroke="none"/><path d="M16 20l2-2m0 0l1.5-1.5a.5.5 0 0 0 0-.7l-.3-.3a.5.5 0 0 0-.7 0L17 17m1 1l-1.5.5.5-1.5"/></svg>
+      <span class="ghost-dot"></span>
+    </button>
+    <button id="navSettings" onclick="switchPage('settings')">
+      <svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M5 20a7 7 0 0 1 14 0"/></svg>
+      <span class="ghost-dot"></span>
+    </button>
+  </nav>
+
+  <!-- Detail sheet container -->
+  <div id="sheetRoot"></div>
+</div>
+
+<script>
+  // ── Fake book data ──
+  const BOOKS = [
+    { id:1, title:'百年孤独', author:'加西亚·马尔克斯', year:'1967', cat:'文学', read:true, fav:true, cover:'https://covers.openlibrary.org/b/isbn/9787020024759-M.jpg', color:'#3D5E4C', isbn:'9787544253994', location:'书房左柜', notes:'魔幻现实主义的开山之作', description:'马孔多小镇的百年兴衰史' },
+    { id:2, title:'活着', author:'余华', year:'1993', cat:'文学', read:true, fav:true, cover:'', color:'#3D5E4C', isbn:'9787506365437', location:'客厅书架' },
+    { id:3, title:'人类简史', author:'尤瓦尔·赫拉利', year:'2011', cat:'历史', read:true, fav:false, cover:'https://covers.openlibrary.org/b/isbn/9787508647357-M.jpg', color:'#5E6B4E', isbn:'9787508647357', location:'书房右柜' },
+    { id:4, title:'三体', author:'刘慈欣', year:'2008', cat:'科幻', read:false, fav:true, cover:'https://covers.openlibrary.org/b/isbn/9787536692930-M.jpg', color:'#4A6B7B', isbn:'9787536692930', location:'床头' },
+    { id:5, title:'小王子', author:'圣-埃克苏佩里', year:'1943', cat:'文学', read:true, fav:true, cover:'https://covers.openlibrary.org/b/isbn/9787020042494-M.jpg', color:'#3D5E4C', isbn:'9787020042494', location:'客厅书架' },
+    { id:6, title:'西方哲学史', author:'罗素', year:'1945', cat:'哲学', read:false, fav:false, cover:'', color:'#6B5B7B', isbn:'9787100003148', location:'' },
+    { id:7, title:'乡土中国', author:'费孝通', year:'1948', cat:'', read:false, fav:false, cover:'', color:'#8B6F4E', isbn:'9787301087183', location:'书房' },
+    { id:8, title:'红楼梦', author:'曹雪芹', year:'1791', cat:'文学', read:false, fav:true, cover:'', color:'#3D5E4C', isbn:'9787020002207', location:'书房左柜' },
+    { id:9, title:'深度学习', author:'Ian Goodfellow', year:'2016', cat:'计算机', read:false, fav:false, cover:'https://covers.openlibrary.org/b/isbn/9780262035613-M.jpg', color:'#4A6B7B', isbn:'9780262035613', location:'书房右柜' },
+    { id:10, title:'论语', author:'孔子', year:'-500', cat:'哲学', read:true, fav:false, cover:'', color:'#6B5B7B', isbn:'', location:'客厅书架' },
+    { id:11, title:'设计心理学', author:'Don Norman', year:'1988', cat:'设计', read:false, fav:false, cover:'', color:'#6B6B8B', isbn:'9787508648330', location:'床头' },
+    { id:12, title:'围城', author:'钱锺书', year:'1947', cat:'文学', read:true, fav:false, cover:'', color:'#3D5E4C', isbn:'9787020024766', location:'客厅书架' },
+  ];
+
+  // ── Render favorites gallery ──
+  const favBooks = BOOKS.filter(b => b.fav);
+  document.getElementById('favScroll').innerHTML = favBooks.map(b => {
+    const coverHtml = b.cover
+      ? `<img class="fav-gallery-cover" src="${b.cover}" alt="" loading="lazy" style="background:${b.color}" onerror="this.style.background='${b.color}';this.removeAttribute('src')" />`
+      : `<div class="fav-gallery-cover" style="background:${b.color};display:flex;align-items:flex-end;justify-content:center;padding:8px"><span style="font-size:10px;color:rgba(255,255,255,.7);font-weight:600;text-align:center;line-height:1.3">${b.title.slice(0,4)}</span></div>`;
+    return `<div class="fav-gallery-item" onclick="showSheet('${b.id}')">${coverHtml}</div>`;
+  }).join('');
+
+  // ── Render book grid (alpha sorted) ──
+  const sortedBooks = [...BOOKS].sort((a, b) => a.title.localeCompare(b.title, 'zh-CN'));
+  document.getElementById('bookGrid').innerHTML = sortedBooks.map(b => {
+    const coverHtml = b.cover
+      ? `<img class="book-grid-cover" src="${b.cover}" alt="${b.title}" loading="lazy" style="background:${b.color}" onerror="this.style.background='${b.color}';this.alt='${b.title.slice(0,4)}'" />`
+      : `<div class="cover-placeholder" style="background:${b.color}">${b.title.slice(0,4)}</div>`;
+    return `<div class="book-grid-item" onclick="showSheet('${b.id}')">${coverHtml}<div class="book-grid-title">${b.title}</div></div>`;
+  }).join('');
+
+  // ── Page switching ──
+  function switchPage(page) {
+    document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+    document.querySelectorAll('.ghost-nav button').forEach(b => b.classList.remove('active'));
+
+    if (page === 'home') {
+      document.getElementById('pageHome').classList.add('active');
+      document.getElementById('navHome').classList.add('active');
+    } else if (page === 'organize') {
+      document.getElementById('pageOrganize').classList.add('active');
+      document.getElementById('navOrganize').classList.add('active');
+    } else if (page === 'settings') {
+      document.getElementById('pageSettings').classList.add('active');
+      document.getElementById('navSettings').classList.add('active');
+    }
+    window.scrollTo({ top:0, behavior:'smooth' });
+  }
+
+  // ── Detail bottom sheet (NEW from handoff) ──
+  function showSheet(bookId) {
+    const book = BOOKS.find(b => String(b.id) === String(bookId));
+    if (!book) return;
+
+    const coverHtml = book.cover
+      ? `<img class="sheet-cover" src="${book.cover}" alt="" style="background:${book.color}" onerror="this.style.background='${book.color}';this.removeAttribute('src')" />`
+      : `<div class="sheet-cover" style="background:${book.color};display:flex;align-items:flex-end;padding:8px"><span style="font-size:10px;color:rgba(255,255,255,.7);font-weight:600">${book.title.slice(0,4)}</span></div>`;
+
+    const statusClass = book.read ? 'done' : 'unread';
+    const statusText = book.read ? '读过' : '未读';
+
+    document.getElementById('sheetRoot').innerHTML = `
+      <div class="sheet-backdrop" id="sheetBackdrop">
+      </div>
+      <div class="sheet-panel" id="sheetPanel">
+        <div class="sheet-handle"><div class="sheet-handle-bar"></div></div>
+        <div class="sheet-header detail-anim" style="animation-delay:.05s">
+          ${coverHtml}
+          <div style="flex:1;min-width:0;display:flex;flex-direction:column;justify-content:space-between">
+            <div>
+              <div class="sheet-title">${book.title}</div>
+              <div class="sheet-meta">${book.author} · ${book.year}</div>
+              <div class="sheet-badges">
+                <span class="status-badge ${statusClass}"><span class="dot"></span>${statusText}</span>
+                ${book.fav ? '<span class="status-badge fav"><span class="dot"></span>收藏</span>' : ''}
+              </div>
+            </div>
+            <div style="align-self:flex-end">
+              <button class="sheet-fav-btn ${book.fav ? 'faved' : ''}" onclick="this.classList.toggle('faved');this.textContent=this.classList.contains('faved')?'♥':'♡'">${book.fav ? '♥' : '♡'}</button>
+            </div>
+          </div>
+        </div>
+        <div class="sheet-body">
+          <div class="detail-anim" style="margin-bottom:20px;animation-delay:.1s">
+            <div style="font-size:12px;font-weight:600;color:var(--muted);margin-bottom:10px">阅读状态</div>
+            <div class="option-row">
+              <button class="option-pill ${!book.read ? 'active' : ''}">未读</button>
+              <button class="option-pill ${book.read ? 'active' : ''}">读过</button>
+            </div>
+          </div>
+          <div class="detail-anim" style="background:var(--card);border-radius:14px;overflow:hidden;margin-bottom:16px;animation-delay:.15s">
+            <div class="meta-row"><span class="meta-label">分类</span><span class="meta-value">${book.cat || '未分类'}</span></div>
+            <div class="meta-row"><span class="meta-label">存放位置</span><span class="meta-value">${book.location || '未填写'}</span></div>
+            <div class="meta-row"><span class="meta-label">ISBN</span><span class="meta-value">${book.isbn || '未填写'}</span></div>
+          </div>
+          ${book.notes ? `<div class="detail-anim modal-note" style="animation-delay:.2s"><div class="modal-note-label">我的笔记</div><div class="modal-note-text">${book.notes}</div></div>` : ''}
+          ${book.description ? `<div class="detail-anim" style="margin-bottom:16px;animation-delay:.25s"><div style="font-size:12px;font-weight:600;color:var(--muted);margin-bottom:6px">内容简介</div><div class="muted" style="font-size:13px;color:var(--muted)">${book.description}</div></div>` : ''}
+          <div class="detail-anim actions" style="animation-delay:.3s">
+            <button class="btn secondary" style="flex:1">编辑</button>
+            <button class="btn ghost" style="flex:1" onclick="closeSheet()">关闭</button>
+          </div>
+          <div class="detail-anim" style="margin-top:16px;padding-top:16px;border-top:1px solid var(--line);text-align:center;animation-delay:.35s">
+            <button class="btn ghost" style="color:#d44;font-size:13px">删除此书</button>
+          </div>
+        </div>
+      </div>`;
+
+    document.getElementById('sheetBackdrop').addEventListener('click', closeSheet);
+  }
+
+  function closeSheet() {
+    const panel = document.getElementById('sheetPanel');
+    const backdrop = document.getElementById('sheetBackdrop');
+    if (panel) {
+      panel.style.animation = 'none';
+      panel.style.transform = 'translateY(100%)';
+      panel.style.transition = 'transform .3s cubic-bezier(.4,0,1,1)';
+    }
+    if (backdrop) {
+      backdrop.style.transition = 'opacity .25s';
+      backdrop.style.opacity = '0';
+    }
+    setTimeout(() => {
+      document.getElementById('sheetRoot').innerHTML = '';
+    }, 300);
+  }
+
+  // ── Ghost Nav idle-fade ──
+  {
+    const ghostNav = document.getElementById('ghostNav');
+    let idleTimer = null;
+    function showNav() {
+      ghostNav.classList.remove('hidden');
+      clearTimeout(idleTimer);
+      idleTimer = setTimeout(() => {
+        if (window.scrollY > 50) ghostNav.classList.add('hidden');
+      }, 3000);
+    }
+    idleTimer = setTimeout(() => {
+      if (window.scrollY > 50) ghostNav.classList.add('hidden');
+    }, 3000);
+    ['scroll','touchstart','touchmove','click','mousemove'].forEach(evt =>
+      window.addEventListener(evt, showNav, { passive: true })
+    );
+  }
+
+  // ── Shelf view toggle ──
+  document.querySelectorAll('.shelf-view-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.shelf-view-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+    });
+  });
+</script>
+</body>
+</html>
