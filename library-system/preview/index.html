@@ -198,6 +198,15 @@
       display:flex; gap:8px; margin-top:12px;
     }
     .scan-preview-actions .btn { flex:1; font-size:13px; padding:10px 0; }
+    .enrich-overlay { position:fixed; inset:0; background:rgba(0,0,0,.5); z-index:9999; display:flex; align-items:flex-end; }
+    .enrich-modal { background:var(--card); border-radius:20px 20px 0 0; padding:24px; width:100%; box-shadow:0 -8px 40px rgba(0,0,0,.2); animation:previewSlideUp .3s ease; }
+    .enrich-title { font-size:18px; font-weight:700; margin-bottom:6px; }
+    .enrich-sub { font-size:13px; color:var(--muted); line-height:1.5; }
+    .enrich-info { background:var(--surface); border-radius:10px; padding:10px 12px; margin-top:8px; line-height:1.6; }
+    .enrich-bar-bg { background:var(--surface); border-radius:8px; height:8px; overflow:hidden; }
+    .enrich-bar { background:var(--accent); height:100%; border-radius:8px; transition:width .4s ease; }
+    .enrich-actions { display:flex; gap:10px; margin-top:16px; }
+    .enrich-actions .btn { flex:1; }
     .scan-preview-querying {
       display:flex; align-items:center; gap:8px; padding:16px;
       color:var(--muted); font-size:13px;
@@ -2181,6 +2190,7 @@
         { icon: '📊', label: '导出表格', sub: '导出为 CSV，可用 Excel 打开', action: 'exportCsv' },
         { icon: '📄', label: '导出书单', sub: '生成可打印的 HTML 书单页面', action: 'exportPrintable' },
         ...(auth.isLoggedIn() ? [{ icon: '🔗', label: '分享书单', sub: '生成只读链接，让朋友看看你的藏书', action: 'shareBookshelf' }] : []),
+        { icon: '🔍', label: '补全缺失信息', sub: `自动检查并补全封面、简介、作者等缺失字段（共 ${loadActiveBooks().filter(b => b.isbn && (!b.coverUrl || !b.description || !b.author)).length} 本需要完善）`, action: 'enrichBooks' },
         { icon: '💬', label: '反馈建议', sub: '告诉我们你的想法，帮助毛毛书房变得更好', action: 'feedback' },
         { icon: '🌐', label: currentLang() === 'en' ? '切换到中文' : 'Switch to English', sub: currentLang() === 'en' ? 'Change language to Chinese' : '切换界面语言', action: 'toggleLang' },
         ...(auth.isLoggedIn() ? [{ icon: '🗑️', label: '删除账号', sub: '永久删除账号和所有云端数据', action: 'deleteAccount' }] : []),
@@ -2828,6 +2838,7 @@
         if (action === 'toggleLang') { setLang(currentLang() === 'en' ? 'zh-CN' : 'en'); render(); }
         if (action === 'validate') els.validateBtn.click();
         if (action === 'importJson') { els.importText.focus(); }
+        if (action === 'enrichBooks') runBatchEnrichment();
         return;
       }
 
@@ -3027,6 +3038,224 @@ ${list.map(b => `<tr>
     }
 
     // ── Share bookshelf ──
+    // ── Batch Enrichment ───────────────────────────────────────────────────
+    async function runBatchEnrichment() {
+      const books = loadActiveBooks();
+      const needsEnrich = books.filter(b => {
+        if (!b.isbn) return false;
+        const c = b.isbn.replace(/[^0-9Xx]/g, '');
+        if (c.length !== 10 && c.length !== 13) return false;
+        return !b.coverUrl || !b.description || !b.author || !b.category || !b.publishedYear;
+      });
+
+      if (!needsEnrich.length) {
+        const toast = document.createElement('div');
+        toast.className = 'scan-toast';
+        toast.textContent = '✓ 所有书的信息都已完整，无需补全';
+        document.body.appendChild(toast);
+        setTimeout(() => toast.remove(), 2500);
+        return;
+      }
+
+      // Build modal
+      const overlay = document.createElement('div');
+      overlay.className = 'enrich-overlay';
+      overlay.innerHTML = `
+        <div class="enrich-modal">
+          <div class="enrich-title">🔍 自动补全书目信息</div>
+          <div class="enrich-sub">将为以下 ${needsEnrich.length} 本缺少信息的书自动补全：<br>封面图 / 简介 / 作者 / 分类 / 出版年份</div>
+          <div class="enrich-info" style="font-size:11px;color:var(--muted);margin-top:4px">
+            查询顺序：豆瓣读书 → Google Books → Open Library<br>
+            <b>只有新数据更完整时才会覆盖，不会乱盖已有内容。</b>
+          </div>
+          <div id="enrichProgress" style="margin-top:14px;display:none">
+            <div class="enrich-bar-bg"><div id="enrichBar" class="enrich-bar" style="width:0%"></div></div>
+            <div id="enrichStatus" style="font-size:12px;color:var(--muted);margin-top:6px;text-align:center">准备中…</div>
+            <div id="enrichLog" style="font-size:11px;color:var(--muted);margin-top:8px;max-height:120px;overflow:auto;line-height:1.7"></div>
+          </div>
+          <div id="enrichResult" style="margin-top:10px;display:none;font-size:13px;color:var(--ok);font-weight:600;text-align:center"></div>
+          <div class="enrich-actions" id="enrichActions">
+            <button class="btn ghost" id="enrichCancelBtn">取消</button>
+            <button class="btn primary" id="enrichStartBtn">开始补全 (${needsEnrich.length} 本)</button>
+          </div>
+          <button class="btn ghost" id="enrichCloseBtn" style="display:none;margin-top:8px;width:100%">关闭</button>
+        </div>`;
+      document.body.appendChild(overlay);
+      overlay.querySelector('#enrichCancelBtn').onclick = () => overlay.remove();
+      overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
+
+      const startBtn = overlay.querySelector('#enrichStartBtn');
+      const progress = overlay.querySelector('#enrichProgress');
+      const bar = overlay.querySelector('#enrichBar');
+      const statusEl = overlay.querySelector('#enrichStatus');
+      const logEl = overlay.querySelector('#enrichLog');
+      const resultEl = overlay.querySelector('#enrichResult');
+      const actionsEl = overlay.querySelector('#enrichActions');
+      const closeBtn = overlay.querySelector('#enrichCloseBtn');
+
+      let cancelled = false;
+      overlay.querySelector('#enrichCancelBtn').onclick = () => { cancelled = true; overlay.remove(); };
+
+      startBtn.onclick = async () => {
+        actionsEl.style.display = 'none';
+        progress.style.display = '';
+        let enriched = 0, skipped = 0, failed = 0;
+
+        const addLog = (msg) => {
+          const line = document.createElement('div');
+          line.textContent = msg;
+          logEl.appendChild(line);
+          logEl.scrollTop = logEl.scrollHeight;
+        };
+
+        // Quality check: is new value actually useful?
+        function qualityOk(val) {
+          if (!val) return false;
+          const s = String(val).trim();
+          if (s.length < 2) return false;
+          if (/^https?:\/\//.test(s) && s.length < 15) return false; // too-short URL
+          return true;
+        }
+
+        for (let i = 0; i < needsEnrich.length; i++) {
+          if (cancelled) break;
+          const book = needsEnrich[i];
+          const compact = book.isbn.replace(/[^0-9Xx]/g, '');
+          const isZh = /^9787|^97895[67]/.test(compact);
+
+          bar.style.width = `${Math.round(((i + 1) / needsEnrich.length) * 100)}%`;
+          statusEl.textContent = `(${i + 1}/${needsEnrich.length}) 正在查：${book.title || book.isbn}`;
+
+          try {
+            // Gather results from all sources; rate-limit 1.5s between books
+            const urls = [
+              isZh ? `${GBOOKS_PROXY}/douban/${encodeURIComponent(compact)}` : null,
+              `${GBOOKS_PROXY}/?q=isbn:${encodeURIComponent(compact)}&maxResults=3`,
+              `https://openlibrary.org/search.json?isbn=${encodeURIComponent(compact)}&fields=title,author_name,subject,first_publish_year,cover_i,language&limit=2`,
+            ].filter(Boolean);
+
+            const results = await Promise.allSettled(
+              urls.map(u => fetch(u, { signal: AbortSignal.timeout(8000) }).then(r => r.ok ? r.json() : null).catch(() => null))
+            );
+
+            let si = 0;
+            const doubanRaw = isZh ? (results[si++]?.value) : null;
+            const gbRaw = results[si++]?.value;
+            const olRaw = results[si++]?.value;
+
+            // Parse candidates
+            const candidates = {};
+            if (doubanRaw?.title) {
+              if (!book.coverUrl && qualityOk(doubanRaw.coverUrl)) candidates.coverUrl = doubanRaw.coverUrl;
+              if (!book.description && qualityOk(doubanRaw.description)) candidates.description = doubanRaw.description;
+              if (!book.author && qualityOk(doubanRaw.author)) candidates.author = doubanRaw.author;
+              if (!book.publishedYear && qualityOk(doubanRaw.publishedYear)) candidates.publishedYear = doubanRaw.publishedYear;
+            }
+            if (gbRaw?.items?.[0]) {
+              const vi = gbRaw.items[0].volumeInfo || {};
+              if (!candidates.coverUrl && !book.coverUrl && qualityOk(vi.imageLinks?.thumbnail)) {
+                candidates.coverUrl = (vi.imageLinks.thumbnail || '').replace(/^http:/, 'https:');
+              }
+              if (!candidates.description && !book.description && qualityOk(vi.description)) {
+                candidates.description = vi.description.slice(0, 600);
+              }
+              if (!candidates.author && !book.author && vi.authors?.length) {
+                candidates.author = vi.authors.join(', ');
+              }
+              if (!candidates.publishedYear && !book.publishedYear && vi.publishedDate) {
+                const y = String(vi.publishedDate).slice(0, 4);
+                if (/^\d{4}$/.test(y)) candidates.publishedYear = y;
+              }
+              if (!candidates.category && !book.category && vi.categories?.length) {
+                const cat = translateCategory(vi.categories[0]);
+                if (cat) candidates.category = cat;
+              }
+            }
+            if (olRaw?.docs?.[0]) {
+              const d = olRaw.docs[0];
+              if (!candidates.author && !book.author && d.author_name?.length) {
+                candidates.author = d.author_name.slice(0, 3).join(', ');
+              }
+              if (!candidates.publishedYear && !book.publishedYear && d.first_publish_year) {
+                candidates.publishedYear = String(d.first_publish_year);
+              }
+              if (!candidates.coverUrl && !book.coverUrl && d.cover_i) {
+                candidates.coverUrl = `https://covers.openlibrary.org/b/id/${d.cover_i}-M.jpg`;
+              }
+              if (!candidates.category && !book.category && d.subject?.length) {
+                const cat = translateCategory(d.subject[0]);
+                if (cat) candidates.category = cat;
+              }
+            }
+
+            if (Object.keys(candidates).length === 0) {
+              skipped++;
+              addLog(`— ${book.title || book.isbn}：已是最优，跳过`);
+            } else {
+              // Merge into book
+              const allBooks = loadActiveBooks();
+              const idx = allBooks.findIndex(ab => ab.id === book.id);
+              if (idx >= 0) {
+                const updated = { ...allBooks[idx], ...candidates, updatedAt: new Date().toISOString() };
+                if (!updated.metadataSources) updated.metadataSources = [];
+                if (isZh && doubanRaw?.title) {
+                  if (!updated.metadataSources.includes('豆瓣读书')) updated.metadataSources.push('豆瓣读书');
+                }
+                if (candidates.coverUrl || candidates.description) {
+                  const src = isZh ? '豆瓣读书' : 'Google Books';
+                  if (!updated.metadataSources.includes(src)) updated.metadataSources.push(src);
+                }
+                allBooks[idx] = updated;
+                saveBooks(allBooks);
+
+                // Contribute improved data back to community cache
+                const fieldsAdded = Object.keys(candidates).join(', ');
+                addLog(`✓ ${book.title || book.isbn}：补全了 ${fieldsAdded}`);
+                enriched++;
+
+                try {
+                  await fetch(`${GBOOKS_PROXY}/cache/contribute`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                      isbn: compact,
+                      title: updated.title,
+                      author: updated.author || '',
+                      category: updated.category || '',
+                      publishedYear: updated.publishedYear || '',
+                      bookLang: updated.bookLang || (isZh ? 'zh-CN' : ''),
+                      coverUrl: updated.coverUrl || '',
+                      description: (updated.description || '').slice(0, 1200),
+                      metadataSources: updated.metadataSources,
+                      sourcePriority: isZh ? 110 : 80,
+                    }),
+                  });
+                } catch { /* contribute is best-effort */ }
+              }
+            }
+          } catch (err) {
+            failed++;
+            addLog(`✗ ${book.title || book.isbn}：查询失败`);
+          }
+
+          // Polite rate limit: wait 1.5s between books
+          if (i < needsEnrich.length - 1 && !cancelled) {
+            await new Promise(r => setTimeout(r, 1500));
+          }
+        }
+
+        statusEl.textContent = '完成！';
+        bar.style.width = '100%';
+        resultEl.textContent = `完成 ${enriched} 本，跳过 ${skipped} 本，失败 ${failed} 本`;
+        resultEl.style.display = '';
+        closeBtn.style.display = '';
+        closeBtn.onclick = () => { overlay.remove(); render(); };
+        // Refresh render to show updated covers etc.
+        render();
+      };
+    }
+    // ── End Batch Enrichment ───────────────────────────────────────────────
+
     async function handleShareBookshelf() {
       if (!auth.isLoggedIn()) {
         els.settingsNotice.innerHTML = makeNotice('warn', '需要先登录才能分享书单');
