@@ -3189,7 +3189,10 @@ ${list.map(b => `<tr>
               saveBooks(allBooks);
             } else {
               const updated = { ...allBooks[idx], ...candidates, enrichedAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
-              if (!updated.metadataSources) updated.metadataSources = [];
+              // Ensure metadataSources is always an array (old data may be a string or undefined)
+              if (!Array.isArray(updated.metadataSources)) {
+                updated.metadataSources = updated.metadataSources ? String(updated.metadataSources).split(/\s*\/\s*/).filter(Boolean) : [];
+              }
               if (isZh && doubanRaw?.title && !updated.metadataSources.includes('豆瓣读书')) updated.metadataSources.push('豆瓣读书');
               if (candidates.coverUrl && bestCoverSrc && !updated.metadataSources.includes(bestCoverSrc)) updated.metadataSources.push(bestCoverSrc);
               allBooks[idx] = updated;
