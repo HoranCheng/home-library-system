@@ -1535,19 +1535,22 @@
 
     function coverUrl(book) {
       if (!book) return '';
+      const stored = String(book.coverUrl || '').trim();
+      if (stored && !isGBPlaceholderUrl(stored)) return stored;
       const isbn = String(book.isbn || '').replace(/[^0-9Xx]/g, '');
       if (isbn && (isbn.length === 10 || isbn.length === 13)) {
         return `${GBOOKS_PROXY}/cover/${isbn}`;
       }
-      return book.coverUrl || '';
+      return stored;
     }
     function coverFallbackUrl(book) {
       if (!book) return '';
-      const primary = coverUrl(book);
       const stored = String(book.coverUrl || '').trim();
-      return stored && stored !== primary ? stored : '';
+      if (!stored || isGBPlaceholderUrl(stored)) return '';
+      const primary = coverUrl(book);
+      return stored !== primary ? stored : '';
     }
-    function handleCoverError(img) {
+    function swapToFallbackOrPlaceholder(img) {
       const fallback = String(img?.dataset?.fallbackSrc || '').trim();
       if (fallback && img.src !== fallback && !img.dataset.fallbackTried) {
         img.dataset.fallbackTried = '1';
@@ -1556,17 +1559,21 @@
       }
       showCoverPlaceholder(img);
     }
-    // Detect 1x1 placeholder images from OpenLibrary and hide them
+    function handleCoverError(img) {
+      swapToFallbackOrPlaceholder(img);
+    }
+    // Detect placeholder / unusable covers and prefer fallback before hiding
     function onCoverLoad(img) {
       const w = img.naturalWidth, h = img.naturalHeight;
-      // 1x1 GIF from Open Library
-      if (w <= 2 && h <= 2) { showCoverPlaceholder(img); return; }
-      // Google Books "image not available" placeholder is exactly 128x196
-      // Catch any small cover from books.google.com (real covers are 300+px wide)
       const src = img.src || '';
-      if (src.includes('books.google.com') && w <= 200) { showCoverPlaceholder(img); return; }
-      // Generic small placeholder detection
-      if (w <= 80 && h <= 120) { showCoverPlaceholder(img); return; }
+      // 1x1 GIF from Open Library
+      if (w <= 2 && h <= 2) { swapToFallbackOrPlaceholder(img); return; }
+      // Google Books placeholder often appears as 128x196 even when it loads 200 OK
+      if (w === 128 && h === 196) { swapToFallbackOrPlaceholder(img); return; }
+      // Catch small Google-hosted thumbnails / placeholders
+      if (src.includes('books.google.com') && w <= 220) { swapToFallbackOrPlaceholder(img); return; }
+      // Generic tiny cover detection
+      if (w <= 80 && h <= 120) { swapToFallbackOrPlaceholder(img); return; }
     }
     function coverHtml(cu, title, fallbackSrc = '') {
       if (cu) return `<div class="cover-wrap"><img src="${escapeHtml(cu)}" alt="${escapeHtml(title || '')}" loading="lazy" ${fallbackSrc ? `data-fallback-src="${escapeHtml(fallbackSrc)}"` : ''} onload="onCoverLoad(this)" onerror="handleCoverError(this)" /></div>`;
@@ -4103,12 +4110,16 @@ ${list.map(b => `<tr>
         return { title, authors, category, description, year, lang, coverUrl };
       }
 
-      // Check if a Google Books volume likely has no real cover
+      // Check if a Google Books cover URL is likely a placeholder / unusable thumbnail
       function isGBPlaceholderUrl(url) {
         if (!url) return true;
-        // Volume IDs ending with ACAAJ typically have no real cover image
-        const m = url.match(/[?&]id=([^&]+)/);
-        return m && m[1].endsWith('ACAAJ');
+        const s = String(url).trim();
+        if (!s) return true;
+        const m = s.match(/[?&]id=([^&]+)/);
+        if (m && m[1].endsWith('ACAAJ')) return true;
+        // Common Google Books thumbnail hosts/paths that often surface placeholders
+        if (/books\.google(?:usercontent)?\./i.test(s) && /[?&]zoom=1\b/i.test(s)) return true;
+        return false;
       }
 
       // Extract cover from ANY Google Books item (not just best-language match)
