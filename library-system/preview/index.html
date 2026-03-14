@@ -4571,15 +4571,19 @@ ${list.map(b => `<tr>
       const applyContent = () => {
         if (cu) {
           cover.src = cu;
+          cover.style.display = '';
           const fallbackCu = coverFallbackUrl(b);
           if (fallbackCu) cover.dataset.fallbackSrc = fallbackCu;
           else delete cover.dataset.fallbackSrc;
           delete cover.dataset.fallbackTried;
           cover.style.background = catColor(b.category);
           cover.onload = function() { onCoverLoad(this); };
-          cover.onerror = function() { handleCoverError(this); };
+          // Wander cover: on error, just hide img — don't call showCoverPlaceholder
+          // which would replace the DOM element and break subsequent renders via getElementById
+          cover.onerror = function() { this.style.display = 'none'; };
         } else {
           cover.removeAttribute('src');
+          cover.style.display = 'none';
           cover.style.background = catColor(b.category);
         }
 
