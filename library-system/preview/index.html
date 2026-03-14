@@ -3177,7 +3177,7 @@ ${list.map(b => `<tr>
             const d = olRaw.docs[0];
             if (!candidates.author && !book.author && d.author_name?.length) candidates.author = d.author_name.slice(0, 3).join(', ');
             if (!candidates.publishedYear && !book.publishedYear && d.first_publish_year) candidates.publishedYear = String(d.first_publish_year);
-            if (d.cover_i) trySetCover(`https://covers.openlibrary.org/b/id/${d.cover_i}-M.jpg`, 'Open Library');
+            if (d.cover_i && !book.coverUrl) trySetCover(`https://covers.openlibrary.org/b/id/${d.cover_i}-M.jpg`, 'Open Library');
             if (!candidates.category && !book.category && d.subject?.length) {
               const cat = translateCategory(d.subject[0]);
               if (cat) candidates.category = cat;
