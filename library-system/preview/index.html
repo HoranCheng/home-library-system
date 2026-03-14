@@ -1564,13 +1564,15 @@
       const w = img.naturalWidth, h = img.naturalHeight;
       // 1x1 GIF from Open Library
       if (w <= 2 && h <= 2) { swapToCoverFallbackOrPlaceholder(img); return; }
-      // Google Books grey "image not available" placeholder commonly loads as 128x196,
-      // including when proxied, so catch by dimensions instead of hostname only.
-      if (w === 128 && h === 196) { swapToCoverFallbackOrPlaceholder(img); return; }
-      // Catch any small cover from books.google.com (real covers are usually larger)
-      const src = img.src || '';
-      if (src.includes('books.google.com') && w <= 200) { swapToCoverFallbackOrPlaceholder(img); return; }
-      // Generic small placeholder detection
+      const src = String(img.src || '');
+      const fallback = String(img?.dataset?.fallbackSrc || '');
+      const looksGoogle = /books\.google(?:usercontent)?\./i.test(src) || /books\.google(?:usercontent)?\./i.test(fallback);
+      // Google Books grey "image not available" placeholder commonly loads as 128x196.
+      // Tighten the rule: only treat it as bad when it also looks like a Google image.
+      if (w === 128 && h === 196 && looksGoogle) { swapToCoverFallbackOrPlaceholder(img); return; }
+      // Catch any small Google-hosted cover (real covers are usually larger)
+      if (looksGoogle && w <= 200) { swapToCoverFallbackOrPlaceholder(img); return; }
+      // Generic tiny placeholder detection
       if (w <= 80 && h <= 120) { swapToCoverFallbackOrPlaceholder(img); return; }
     }
     function coverHtml(cu, title, fallbackSrc = '') {
