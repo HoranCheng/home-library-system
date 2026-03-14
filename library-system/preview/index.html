@@ -1572,8 +1572,9 @@
       if (w === 128 && h === 196 && looksGoogle) { swapToCoverFallbackOrPlaceholder(img); return; }
       // Catch any small Google-hosted cover (real covers are usually larger)
       if (looksGoogle && w <= 200) { swapToCoverFallbackOrPlaceholder(img); return; }
-      // Generic tiny placeholder detection
-      if (w <= 80 && h <= 120) { swapToCoverFallbackOrPlaceholder(img); return; }
+      // Generic tiny placeholder detection — keep this conservative so we don't hide
+      // legitimate low-res covers from non-Google sources.
+      if (w <= 60 && h <= 90) { swapToCoverFallbackOrPlaceholder(img); return; }
     }
     function coverHtml(cu, title, fallbackSrc = '') {
       if (cu) return `<div class="cover-wrap"><img src="${escapeHtml(cu)}" alt="${escapeHtml(title || '')}" loading="lazy" ${fallbackSrc ? `data-fallback-src="${escapeHtml(fallbackSrc)}"` : ''} onload="onCoverLoad(this)" onerror="handleCoverError(this)" /></div>`;
