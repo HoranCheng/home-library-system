@@ -5333,11 +5333,17 @@ ${list.map(b => `<tr>
     // One-time migration: fetch missing/placeholder covers from Bookcover API
     (async function migrateCovers() {
       if (new URLSearchParams(window.location.search).get('share')) return;
-      const COVER_MIG_KEY = 'lib:cover-migration:v2';
+      const COVER_MIG_KEY = 'lib:cover-migration:v3';
       if (localStorage.getItem(COVER_MIG_KEY)) return;
       const books = loadBooks();
-      // Need cover: no coverUrl, OR Google Books placeholder URL (often fake "image not available")
-      const isGBPlaceholder = (url) => url && url.includes('books.google.com') && url.includes('ACAAJ');
+      // Need cover: no coverUrl, OR obviously bad Google Books placeholder/low-confidence thumbnail
+      const isGBPlaceholder = (url) => {
+        const s = String(url || '').trim();
+        if (!s) return true;
+        if (s.includes('books.google.com') && s.includes('ACAAJ')) return true;
+        if (/books\.google(?:usercontent)?\./i.test(s) && /[?&]zoom=1\b/i.test(s)) return true;
+        return false;
+      };
       const needCover = books.filter(b => b.isbn && (!b.coverUrl || isGBPlaceholder(b.coverUrl)));
       if (!needCover.length) { localStorage.setItem(COVER_MIG_KEY, Date.now().toString()); return; }
       let changed = false;
