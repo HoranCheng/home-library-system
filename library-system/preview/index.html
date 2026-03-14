@@ -3058,7 +3058,7 @@ ${list.map(b => `<tr>
       if (sourceName === 'Open Library') return 60;
       return 50;
     }
-    const COVER_REPLACE_THRESHOLD = 50; // replace existing if current score ≤ this
+    const COVER_REPLACE_THRESHOLD = 75; // replace covers scoring below this (catches OL=60, unknown=35)
 
     async function runBatchEnrichment() {
       const books = loadActiveBooks();
@@ -3090,7 +3090,7 @@ ${list.map(b => `<tr>
           <div class="enrich-info" style="font-size:11px;color:var(--muted);margin-top:4px">
             查询顺序：豆瓣读书 → Google Books → Open Library<br>
             缺失字段 → 直接补上；封面 → 按来源可信度打分，更可靠的才会替换<br>
-            <b>来源：豆瓣(95) &gt; Google Books(80) &gt; Open Library(60) &gt; 来源不明(35)</b>
+            <b>封面替换条件：现有来源分 &lt; 75（Open Library=60 / 来源不明=35 会被替换，Google Books=80 / 豆瓣=95 不会）</b>
           </div>
           <div id="enrichProgress" style="margin-top:14px;display:none">
             <div class="enrich-bar-bg"><div id="enrichBar" class="enrich-bar" style="width:0%"></div></div>
@@ -4270,14 +4270,12 @@ ${list.map(b => `<tr>
 
         } else {
           // ── Slow path: Google Books insufficient — query all sources ──
-          setNotice('warn', `正在查询更多数据源…`);
-          // For Chinese ISBNs, also show a hint that we're trying 豆瓣
-          if (/^9787|^97895[67]/.test(compact)) {
+          if (isChineseIsbn) {
             setNotice('warn', `正在查询豆瓣读书及更多数据源…`);
+          } else {
+            setNotice('warn', `正在查询更多数据源…`);
           }
-
-          // Chinese ISBN: mainland starts with 9787, Taiwan 9789570/9789571
-          const isChineseIsbn = /^9787|^97895[67]/.test(compact);
+          // isChineseIsbn already declared in Phase 1 above
 
           const slowUrls = [
             `https://openlibrary.org/api/books?bibkeys=ISBN:${encodeURIComponent(compact)}&format=json&jscmd=data`,
