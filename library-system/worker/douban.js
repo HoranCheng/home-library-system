@@ -82,12 +82,15 @@ function parseDoubanHtml(html) {
 
   // ── Published year ──
   let publishedYear = '';
+  let isbnNote = '';
   const yearM = infoBlock.match(/出版年[:：][^<]*<\/span>\s*([\d]{4})/);
   if (yearM) publishedYear = yearM[1];
   if (!publishedYear) {
     const yearM2 = html.match(/(\d{4})-\d{1,2}(?:-\d{1,2})?\s*(?:出版|第\d+版)/);
     if (yearM2) publishedYear = yearM2[1];
   }
+  const isbnM = infoBlock.match(/ISBN[:：][^<]*<\/span>\s*([0-9\-Xx]{10,20})/);
+  if (isbnM) isbnNote = isbnM[1].trim();
 
   // ── Cover URL ──
   let coverUrl = '';
@@ -103,13 +106,17 @@ function parseDoubanHtml(html) {
 
   // ── Description ──
   let description = '';
+  let subjectUrl = '';
+  const canonicalM = html.match(/<link rel="canonical" href="([^"]+)"/);
+  if (canonicalM) subjectUrl = canonicalM[1].trim();
   // 内容简介 section
   const introStart = html.indexOf('内容简介');
   if (introStart !== -1) {
-    const introBlock = html.slice(introStart, introStart + 3000);
-    const introM = introBlock.match(/<div[^>]+class="[^"]*intro[^"]*"[^>]*>([\s\S]{0,2000}?)<\/div>/);
-    if (introM) {
-      description = stripTags(introM[1]).slice(0, 600);
+    const introBlock = html.slice(introStart, introStart + 5000);
+    const intros = [...introBlock.matchAll(/<div[^>]+class="[^"]*intro[^"]*"[^>]*>([\s\S]{0,2400}?)<\/div>/g)];
+    if (intros.length) {
+      const pick = intros.sort((a, b) => b[1].length - a[1].length)[0];
+      description = stripTags(pick[1]).slice(0, 1200);
     }
   }
   // Fallback: Open Graph description
@@ -125,7 +132,7 @@ function parseDoubanHtml(html) {
     .test(publisher + title + author)
   ) ? 'zh-CN' : 'zh';
 
-  return { title, author, publisher, publishedYear, coverUrl, description, bookLang };
+  return { title, author, publisher, publishedYear, coverUrl, description, bookLang, isbnNote, subjectUrl };
 }
 
 export async function handleDouban(request, env, isbn, corsHeaders) {
@@ -155,6 +162,10 @@ export async function handleDouban(request, env, isbn, corsHeaders) {
         publishedYear: cached.published_year || '',
         coverUrl: cached.cover_url || '',
         description: cached.description || '',
+        publisher: cached.publisher || '',
+        isbnNote: cached.isbn_note || '',
+        subjectUrl: cached.subject_url || '',
+        sourcePriority: Number(cached.source_priority || 120),
         bookLang: cached.book_lang || 'zh-CN',
       });
     }
@@ -217,18 +228,22 @@ export async function handleDouban(request, env, isbn, corsHeaders) {
     await env.DB.prepare(`
       INSERT OR REPLACE INTO book_cache
         (isbn, title, author, category, published_year, book_lang, cover_url, description,
-         metadata_sources, contributed_by, hit_count, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
+         publisher, isbn_note, subject_url, metadata_sources, source_priority, contributed_by, hit_count, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
     `).bind(
       isbn,
       parsed.title,
       parsed.author,
-      '',          // category: Douban doesn't expose this directly
+      '',
       parsed.publishedYear,
       parsed.bookLang,
       parsed.coverUrl,
       parsed.description,
-      'douban',
+      parsed.publisher,
+      parsed.isbnNote,
+      parsed.subjectUrl,
+      JSON.stringify(['豆瓣读书']),
+      120,
       'system:douban-scraper',
       now,
       now,
@@ -244,6 +259,9 @@ export async function handleDouban(request, env, isbn, corsHeaders) {
     title: parsed.title,
     author: parsed.author,
     publisher: parsed.publisher,
+    isbnNote: parsed.isbnNote,
+    subjectUrl: parsed.subjectUrl,
+    sourcePriority: 120,
     publishedYear: parsed.publishedYear,
     coverUrl: parsed.coverUrl,
     description: parsed.description,

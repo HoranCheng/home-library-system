@@ -3775,24 +3775,36 @@ ${list.map(b => `<tr>
       function mergeResults(results, preferredLang) {
         // results is array of {source, data} where data may be null
         const valid = results.filter(r => r.data && r.data.title);
+        const weightOf = (r) => {
+          const explicit = Number(r?.data?.sourcePriority || 0);
+          if (explicit) return explicit;
+          const s = String(r?.source || '').toLowerCase();
+          if (preferredLang === 'zh' && /豆瓣/.test(s)) return 120;
+          if (/community-cache/.test(s)) return 110;
+          if (/google books/.test(s)) return preferredLang === 'zh' ? 70 : 90;
+          if (/open library/.test(s)) return 60;
+          if (/crossref/.test(s)) return 40;
+          return 50;
+        };
+        const ranked = [...valid].sort((a, b) => weightOf(b) - weightOf(a));
 
         // Pick best item per field
         const pick = (getter, preferCJK = false) => {
-          // For CJK-preferred ISBNs: prefer results with actual CJK characters
+          // For CJK-preferred ISBNs: prefer results with actual CJK characters + source ranking
           if (preferCJK && preferredLang === 'zh') {
-            const cjkMatch = valid.find(r => {
+            const cjkMatch = ranked.find(r => {
               const v = getter(r.data);
               return v && (typeof v === 'string' ? hasCJK(v) : Array.isArray(v) && v.some(hasCJK));
             });
             if (cjkMatch) { const v = getter(cjkMatch.data); if (v) return { value: v, source: cjkMatch.source, lang: cjkMatch.data.lang }; }
           }
-          // Then try language-preferred sources
+          // Then try language-preferred sources ordered by ranking
           if (preferredLang) {
-            const langMatch = valid.find(r => r.data.lang && String(r.data.lang).startsWith(preferredLang));
+            const langMatch = ranked.find(r => r.data.lang && String(r.data.lang).startsWith(preferredLang));
             if (langMatch) { const v = getter(langMatch.data); if (v) return { value: v, source: langMatch.source, lang: langMatch.data.lang }; }
           }
-          // Then any source with a value
-          for (const r of valid) {
+          // Then any source with a value, by ranking
+          for (const r of ranked) {
             const v = getter(r.data); if (v) return { value: v, source: r.source, lang: r.data.lang };
           }
           return null;
@@ -4007,6 +4019,10 @@ ${list.map(b => `<tr>
             category: '',
             coverUrl: doubanRes.coverUrl || '',
             description: doubanRes.description || '',
+            publisher: doubanRes.publisher || '',
+            isbnNote: doubanRes.isbnNote || '',
+            subjectUrl: doubanRes.subjectUrl || '',
+            sourcePriority: Number(doubanRes.sourcePriority || 120),
             lang: doubanRes.bookLang || 'zh-CN',
             sources: ['豆瓣读书'],
           } : null;

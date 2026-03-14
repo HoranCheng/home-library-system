@@ -22,6 +22,26 @@
  *   );
  */
 
+function safeJsonArray(value) {
+  try {
+    const parsed = JSON.parse(value || '[]');
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function sourcePriority(metadataSources = [], bookLang = '') {
+  const joined = metadataSources.join(' / ').toLowerCase();
+  const isZh = String(bookLang || '').startsWith('zh');
+  if (isZh && /豆瓣/.test(joined)) return 120;
+  if (/community-cache|community/.test(joined)) return 100;
+  if (/google books/.test(joined)) return isZh ? 70 : 90;
+  if (/open library/.test(joined)) return 60;
+  if (/crossref/.test(joined)) return 40;
+  return isZh ? 50 : 80;
+}
+
 export async function handleBookCache(request, env, path, corsHeaders) {
   const respond = (data, status = 200) => new Response(
     JSON.stringify(data),
@@ -55,7 +75,11 @@ export async function handleBookCache(request, env, path, corsHeaders) {
         bookLang: cached.book_lang,
         coverUrl: cached.cover_url,
         description: cached.description,
-        metadataSources: JSON.parse(cached.metadata_sources || '[]'),
+        publisher: cached.publisher || '',
+        isbnNote: cached.isbn_note || '',
+        subjectUrl: cached.subject_url || '',
+        sourcePriority: Number(cached.source_priority || 0),
+        metadataSources: safeJsonArray(cached.metadata_sources),
       }
     });
   }
@@ -75,23 +99,25 @@ export async function handleBookCache(request, env, path, corsHeaders) {
       }
 
       const now = new Date().toISOString();
+      const metadataSources = (body.metadataSources || []).slice(0, 10);
+      const incomingPriority = Number(body.sourcePriority || sourcePriority(metadataSources, body.bookLang || ''));
       
-      // Upsert: only update if the new data has more fields filled
+      // Upsert: update when new data is richer OR has better source priority
       const existing = await env.DB.prepare('SELECT * FROM book_cache WHERE isbn = ?').bind(isbn).first();
       
       if (existing) {
-        // Count filled fields to decide if update is worthwhile
-        const existingScore = [existing.title, existing.author, existing.category, existing.published_year, existing.book_lang, existing.cover_url, existing.description]
-          .filter(v => v && v.trim()).length;
-        const newScore = [body.title, body.author, body.category, body.publishedYear, body.bookLang, body.coverUrl, body.description]
+        const existingScore = [existing.title, existing.author, existing.category, existing.published_year, existing.book_lang, existing.cover_url, existing.description, existing.publisher, existing.isbn_note, existing.subject_url]
           .filter(v => v && String(v).trim()).length;
+        const newScore = [body.title, body.author, body.category, body.publishedYear, body.bookLang, body.coverUrl, body.description, body.publisher, body.isbnNote, body.subjectUrl]
+          .filter(v => v && String(v).trim()).length;
+        const existingPriority = Number(existing.source_priority || sourcePriority(safeJsonArray(existing.metadata_sources), existing.book_lang || ''));
         
-        if (newScore <= existingScore) {
-          return respond({ ok: true, action: 'skip', message: 'Existing entry has equal or better data' });
+        if (newScore < existingScore || (newScore === existingScore && incomingPriority <= existingPriority)) {
+          return respond({ ok: true, action: 'skip', message: 'Existing entry has equal or better data/source priority' });
         }
 
         await env.DB.prepare(
-          `UPDATE book_cache SET title=?, author=?, category=?, published_year=?, book_lang=?, cover_url=?, description=?, metadata_sources=?, updated_at=? WHERE isbn=?`
+          `UPDATE book_cache SET title=?, author=?, category=?, published_year=?, book_lang=?, cover_url=?, description=?, publisher=?, isbn_note=?, subject_url=?, metadata_sources=?, source_priority=?, updated_at=? WHERE isbn=?`
         ).bind(
           body.title.trim().slice(0, 500),
           (body.author || '').trim().slice(0, 300),
@@ -100,7 +126,11 @@ export async function handleBookCache(request, env, path, corsHeaders) {
           (body.bookLang || '').trim().slice(0, 10),
           (body.coverUrl || '').trim().slice(0, 1000),
           (body.description || '').trim().slice(0, 2000),
-          JSON.stringify((body.metadataSources || []).slice(0, 10)),
+          (body.publisher || '').trim().slice(0, 200),
+          (body.isbnNote || '').trim().slice(0, 200),
+          (body.subjectUrl || '').trim().slice(0, 1000),
+          JSON.stringify(metadataSources),
+          incomingPriority,
           now,
           isbn
         ).run();
@@ -110,8 +140,8 @@ export async function handleBookCache(request, env, path, corsHeaders) {
 
       // Insert new
       await env.DB.prepare(
-        `INSERT INTO book_cache (isbn, title, author, category, published_year, book_lang, cover_url, description, metadata_sources, contributed_by, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+        `INSERT INTO book_cache (isbn, title, author, category, published_year, book_lang, cover_url, description, publisher, isbn_note, subject_url, metadata_sources, source_priority, contributed_by, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
       ).bind(
         isbn,
         body.title.trim().slice(0, 500),
@@ -121,7 +151,11 @@ export async function handleBookCache(request, env, path, corsHeaders) {
         (body.bookLang || '').trim().slice(0, 10),
         (body.coverUrl || '').trim().slice(0, 1000),
         (body.description || '').trim().slice(0, 2000),
-        JSON.stringify((body.metadataSources || []).slice(0, 10)),
+        (body.publisher || '').trim().slice(0, 200),
+        (body.isbnNote || '').trim().slice(0, 200),
+        (body.subjectUrl || '').trim().slice(0, 1000),
+        JSON.stringify(metadataSources),
+        incomingPriority,
         'community',
         now, now
       ).run();
@@ -135,7 +169,16 @@ export async function handleBookCache(request, env, path, corsHeaders) {
   // ── GET /cache/stats — public stats ──
   if (path === '/cache/stats' && request.method === 'GET') {
     const count = await env.DB.prepare('SELECT COUNT(*) as count FROM book_cache').first();
-    return respond({ totalBooks: count?.count || 0 });
+    const topHits = await env.DB.prepare('SELECT isbn, title, hit_count, metadata_sources FROM book_cache ORDER BY hit_count DESC, updated_at DESC LIMIT 5').all();
+    return respond({
+      totalBooks: count?.count || 0,
+      topHits: (topHits?.results || []).map(r => ({
+        isbn: r.isbn,
+        title: r.title,
+        hitCount: r.hit_count,
+        metadataSources: safeJsonArray(r.metadata_sources),
+      }))
+    });
   }
 
   return respond({ error: 'NOT_FOUND' }, 404);
