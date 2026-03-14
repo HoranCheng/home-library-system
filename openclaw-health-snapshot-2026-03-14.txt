@@ -1,0 +1,124 @@
+OpenClaw 健康提升计划信息快照
+生成时间: 2026-03-14 21:50 AEDT
+
+0. 这次处理请求时我实际用的模型
+- 你这个频道的默认主模型仍然是 Claude Sonnet 4.6。
+- 但这一次请求里，Claude 主链路先连续 hit 了 429 rate limit，随后还出现了一次 401 invalid x-api-key，系统随后自动切到了 openai-codex/gpt-5.4 继续执行。
+- 所以这份文件本身，实际是由 GPT-5.4 这条 fallback 链路整理完成的。
+
+1. agent 列表和职责
+- main:
+  主助手。负责 Discord 会话、文件读写、工具调用、群聊回复、项目推进、heartbeat。
+- claude:
+  不是当前 workspace 里单独注册成独立 agent 的常驻条目；更多是 ACP 允许的外部 coding agent / provider 路由目标，用于 Claude Code / Anthropic 模型链路。
+- chatgpt:
+  也不是当前 workspace 里单独注册成独立 agent 的常驻条目；更准确说是 OpenAI Codex / GPT-5.4 这条模型链路，被用作 fallback，或者某些频道/session 直接运行在 gpt-5.4 上。
+- 其他:
+  ACP allowedAgents 里目前有: codex, claude, gemini。
+  但 agents_list 对当前 requester 真正暴露的本地 agent 只有 main。
+  另外运行中还能看到 subagent / cron / heartbeat 这类 session 形态，不等于独立人格 agent。
+
+2. 当前模型路由 / fallback
+- 默认模型:
+  anthropic/claude-sonnet-4-6
+- Claude 什么时候用:
+  默认就是先走 Claude Sonnet 4.6；当前频道 session_status 也显示主链路是这个。
+- ChatGPT 什么时候用:
+  当主模型不可用、限流、认证失败，或者某些 session 被直接切到 gpt-5.4 时使用。
+  现在已有多个 Discord 会话直接在 gpt-5.4 上跑。
+- retry 逻辑:
+  openclaw.json 里没有显式配置 retry 次数。
+  但从这次真实 transcript 观察到的行为是：Claude 先多次重试 429，之后出现 401，再切到 gpt-5.4 fallback。
+  所以可以理解为: 先在 primary 上做内部重试，再落到 fallback；具体重试次数看实现，不是你当前 config 里单独写死的字段。
+
+3. system / handover 大概怎么写
+- 主 prompt 长度大概:
+  偏长，不是轻量 prompt。
+  由 system + developer + skills 规则 + workspace context (AGENTS/SOUL/USER/HEARTBEAT 等) + inbound metadata 组成。
+  从这次进入 gpt-5.4 的首轮输入看，单轮输入量大约已经在 1.3 万 token 级别，还没算后续工具结果继续堆进去后的增长。
+- handover 是否带全文历史:
+  正常 session 会带该 session 的历史，不是“每次只给最后一句”。
+  但不是无限原样全文保留：上下文接近上限时会 compaction / pruning。
+  跨 agent / 跨 session 不会天然共享全部全文，除非通过 thread、transcript、attachments、memory、明确 handoff 去传。
+- 是否带工具结果:
+  会带，但会被裁剪。
+  尤其长 tool result 会进入 context pruning 规则：soft trim 或 hard clear，而不是永远完整塞回。
+
+4. summary / 压缩机制
+- 什么时候触发:
+  你这里启用了 compaction.mode = safeguard。
+  配置里 reserveTokensFloor = 76000，说明接近上下文压力时会触发压缩保护。
+  另外对工具结果还有独立 contextPruning 机制，不用等到真正 compaction 才会裁剪。
+- 压缩后原文是否还保留:
+  在 transcript / session 文件层面通常还在；但喂给模型的活跃上下文不一定全保留。
+  对超长工具结果，hardClear 之后在上下文里会被替换成占位符: [Old tool result content cleared]
+- 谁来做 summary:
+  不是你手工写。
+  是 OpenClaw/runtime 触发的模型侧 compaction / pruning 机制来做。
+  另外你还开了 memoryFlush：临近 compaction 时会提示把 durable notes 写进 memory/YYYY-MM-DD.md。
+
+5. 工具结果处理
+- exec 输出会不会整段塞回:
+  小输出通常会跟进会话；大输出不保证完整保留。
+  实际上它会先进入 transcript，但在继续对话时可能被 prune / trim。
+- 长日志会不会截断:
+  会。
+  明面上至少有三层截断/压缩：
+  1) 工具本身的返回限制，例如 read 工具上限 2000 行或 50KB；
+  2) transcript / UI 展示也会局部截断超长内容；
+  3) contextPruning 对长 tool result 做 softTrim / hardClear。
+  你当前 softTrim 配置是 maxChars 3000，head 1200 + tail 1200；minPrunableToolChars = 30000。
+- 错误日志如何处理:
+  会进入 transcript，能被后续分析到；必要时也会被当作 toolResult / assistant error message 留档。
+  但同样可能因上下文修剪被缩短，不等于永远原样全量保留在活跃上下文。
+
+6. 最近主要任务类型
+- 代码:
+  很多。近期有 voice-standup、receipt-renamer、ipad-battery-lab、library-system 等项目开发与改造。
+- 审计:
+  很多。做过安全审计、handover 评估、规则 review、项目状态核对。
+- 文案:
+  中高频。包括 setup guide、standup、boss response、状态报告、方案文档。
+- 调试:
+  很多。PWA 部署、browser timeout、Claude/ACP worker 不出活、设备联调、识别逻辑修复。
+- 群聊:
+  高频。主工作面就是 Discord 多频道、多项目会话。
+- 其他:
+  还包含 heartbeat、cron、文件整理、工具链接线、模型/权限/安全配置排查。
+
+7. errors 大概构成
+注意: 下面不是严格监控报表，是我基于 session transcript + memory + 本次现场观察给的实战近似。
+- rate limit:
+  很显著，尤其 Anthropic 这条链路。你这次请求本身就现场复现了连续 429。
+- timeout:
+  也很多。日志粗扫里 timeout 相关痕迹很多，常见于 browser tool、外部工具、长任务、网页自动化。
+- model unavailable:
+  有，但通常少于 rate limit / timeout。包括认证异常、provider 不可用、invalid key、模型链路切换。
+- tool fail:
+  有一批。典型是 browser tool timed out、unsupported_country、ACP auth 问题、无 accessibility 权限、子代理 accepted 但没产出。
+- 其他:
+  还有“任务 accepted 但无输出”“配置/权限边界不一致”“多会话把 Claude 配额吃光”这类不是单纯 API error code 的系统性问题。
+
+8. 我最不想失去的“聪明”
+- 多项目并行时还能维持上下文连续性
+- 看完一堆碎片信息后，能提炼出真正的下一步
+- 知道什么时候该自己动手，什么时候该切换模型 / 子代理 / fallback
+- 对你工作流的贴合：不仅回答问题，还能把 standup、handover、审计、实现、回报串成闭环
+- 对长链路任务的结构感：不是只会聊天，而是会拆解、执行、核对、再汇报
+
+附：最值得你在健康提升计划里盯的几个点
+- Anthropic rate limit / 配额耗尽是当前最明显瓶颈
+- groupPolicy=open + sandbox=off + workspaceOnly=false 是最明显风险组合
+- ACP worker 的稳定性目前不够好，尤其“接单成功但没产出”这类静默失败
+- 工具输出压缩机制已经开了，但长期还需要更好的 handover / summary 结构化
+- 多会话并行时，模型路由和成本/配额监控值得单独做一个面板
+
+依据来源（已脱敏）
+- ~/.openclaw/openclaw.json
+- openclaw status
+- 当前 session transcript
+- sessions_list / agents_list / session_status
+- memory/2026-03-09.md
+- memory/2026-03-11.md
+- memory/2026-03-12.md
+- handover-review-2026-03-13.txt
