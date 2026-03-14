@@ -19,6 +19,7 @@ import { handleAuth } from './auth.js';
 import { handleSync } from './sync.js';
 import { handleShare } from './share.js';
 import { handleBookCache } from './book-cache.js';
+import { handleDouban } from './douban.js';
 import { checkRateLimit } from './middleware.js';
 
 /** Exact-match CORS origin allowlist (no prefix matching) */
@@ -106,6 +107,18 @@ export default {
         const limited = await checkRateLimit(request, env, { key: path.startsWith('/share/') && request.method === 'GET' ? 'share-read' : 'share-write', limit: request.method === 'GET' ? 120 : 20, windowSec: 60 });
         if (limited) return withCors(limited, cors);
         response = await handleShare(request, env, path, cors);
+        return withCors(response, cors);
+      }
+
+      // ── Douban route: GET /douban/:isbn ──
+      if (request.method === 'GET' && path.startsWith('/douban/')) {
+        const isbn = path.split('/douban/')[1]?.replace(/[^0-9Xx]/g, '') || '';
+        if (!isbn || (isbn.length !== 10 && isbn.length !== 13)) {
+          return new Response(JSON.stringify({ error: 'Invalid ISBN' }), { status: 400, headers: { ...cors, 'Content-Type': 'application/json' } });
+        }
+        const limited = await checkRateLimit(request, env, { key: 'douban-proxy', limit: 20, windowSec: 60 });
+        if (limited) return withCors(limited, cors);
+        response = await handleDouban(request, env, isbn, cors);
         return withCors(response, cors);
       }
 

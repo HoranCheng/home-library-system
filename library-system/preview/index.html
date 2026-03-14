@@ -3958,6 +3958,13 @@ ${list.map(b => `<tr>
         } else {
           // ── Slow path: Google Books insufficient — query all sources ──
           setNotice('warn', `正在查询更多数据源…`);
+          // For Chinese ISBNs, also show a hint that we're trying 豆瓣
+          if (/^9787|^97895[67]/.test(compact)) {
+            setNotice('warn', `正在查询豆瓣读书及更多数据源…`);
+          }
+
+          // Chinese ISBN: mainland starts with 9787, Taiwan 9789570/9789571
+          const isChineseIsbn = /^9787|^97895[67]/.test(compact);
 
           const slowUrls = [
             `https://openlibrary.org/api/books?bibkeys=ISBN:${encodeURIComponent(compact)}&format=json&jscmd=data`,
@@ -3965,7 +3972,9 @@ ${list.map(b => `<tr>
             `https://api.crossref.org/works?filter=isbn:${encodeURIComponent(compact)}&rows=3`,
             altIsbn ? `${_gb}/?q=isbn:${encodeURIComponent(altIsbn)}&maxResults=3` : null,
             altIsbn ? `https://openlibrary.org/api/books?bibkeys=ISBN:${encodeURIComponent(altIsbn)}&format=json&jscmd=data` : null,
-            preferredLang === 'zh' ? `${_gb}/?q=isbn:${encodeURIComponent(compact)}&langRestrict=zh&printType=books&maxResults=5` : null
+            preferredLang === 'zh' ? `${_gb}/?q=isbn:${encodeURIComponent(compact)}&langRestrict=zh&printType=books&maxResults=5` : null,
+            // Douban: always try for Chinese ISBNs; also try when all else fails
+            (isChineseIsbn || preferredLang === 'zh') ? `${GBOOKS_PROXY}/douban/${encodeURIComponent(compact)}` : null,
           ].filter(Boolean);
 
           const slowRes = await Promise.allSettled(slowUrls.map(u =>
@@ -3980,6 +3989,7 @@ ${list.map(b => `<tr>
           const gbAltRes = altIsbn ? val(si++) : null;
           const olAltRes = altIsbn ? val(si++) : null;
           const gbTitleRes = preferredLang === 'zh' ? val(si++) : null;
+          const doubanRes = (isChineseIsbn || preferredLang === 'zh') ? val(si++) : null;
 
           const olData = olRes ? (olRes[`ISBN:${compact}`] || null) : null;
           const olAltData = olAltRes ? (olAltRes[`ISBN:${altIsbn}`] || null) : null;
@@ -3989,12 +3999,26 @@ ${list.map(b => `<tr>
           const gbTitleParsed = parseGoogleBooks(bestGbItem(gbTitleRes));
           const crParsed = parseCrossref(crRes?.message?.items?.[0]);
 
+          // Douban result → normalize to same shape
+          const doubanParsed = doubanRes?.title ? {
+            title: doubanRes.title,
+            authors: doubanRes.author ? [doubanRes.author] : [],
+            year: doubanRes.publishedYear || '',
+            category: '',
+            coverUrl: doubanRes.coverUrl || '',
+            description: doubanRes.description || '',
+            lang: doubanRes.bookLang || 'zh-CN',
+            sources: ['豆瓣读书'],
+          } : null;
+
           const allResults = [...fastResult];
           if (olParsed) allResults.push({ source: 'Open Library', data: olParsed });
           if (olSearchParsed) allResults.push({ source: 'Open Library', data: olSearchParsed });
           if (gbAltParsed) allResults.push({ source: 'Google Books', data: gbAltParsed });
           if (gbTitleParsed) allResults.push({ source: 'Google Books', data: gbTitleParsed });
           if (crParsed) allResults.push({ source: 'Crossref', data: crParsed });
+          // Douban gets higher weight for Chinese content
+          if (doubanParsed) allResults.push({ source: '豆瓣读书', data: doubanParsed });
 
           merged = mergeResults(allResults, preferredLang);
           if (!merged.coverUrl) merged.coverUrl = bcCover || extractAnyCover(gbAltRes) || extractAnyCover(gbTitleRes) || '';
