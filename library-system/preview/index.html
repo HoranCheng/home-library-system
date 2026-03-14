@@ -3151,7 +3151,10 @@ ${list.map(b => `<tr>
           }
           if (gbRaw?.items?.[0]) {
             const vi = gbRaw.items[0].volumeInfo || {};
-            trySetCover((vi.imageLinks?.thumbnail || '').replace(/^http:/, 'https:'), 'Google Books');
+            // Apply same zoom=2 / edge=curl strip as mergeResults so the stored cover
+            // is large enough to pass the onCoverLoad ≤200px filter
+            const gbThumb = (vi.imageLinks?.thumbnail || '').replace(/^http:/, 'https:').replace('&edge=curl', '').replace('zoom=1', 'zoom=2');
+            trySetCover(gbThumb, 'Google Books');
             if (!candidates.description && !book.description && qualityOk(vi.description)) candidates.description = vi.description.slice(0, 600);
             if (!candidates.author && !book.author && vi.authors?.length) candidates.author = vi.authors.join(', ');
             if (!candidates.publishedYear && !book.publishedYear && vi.publishedDate) {
