@@ -1561,8 +1561,10 @@
       const w = img.naturalWidth, h = img.naturalHeight;
       // 1x1 GIF from Open Library
       if (w <= 2 && h <= 2) { showCoverPlaceholder(img); return; }
-      // Google Books "image not available" placeholder is exactly 128x196
-      // Catch any small cover from books.google.com (real covers are 300+px wide)
+      // Google Books grey "image not available" placeholder commonly loads as 128x196,
+      // including when proxied, so catch by dimensions instead of hostname only.
+      if (w === 128 && h === 196) { showCoverPlaceholder(img); return; }
+      // Catch any small cover from books.google.com (real covers are usually larger)
       const src = img.src || '';
       if (src.includes('books.google.com') && w <= 200) { showCoverPlaceholder(img); return; }
       // Generic small placeholder detection
