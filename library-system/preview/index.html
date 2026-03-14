@@ -2190,7 +2190,16 @@
         { icon: '📊', label: '导出表格', sub: '导出为 CSV，可用 Excel 打开', action: 'exportCsv' },
         { icon: '📄', label: '导出书单', sub: '生成可打印的 HTML 书单页面', action: 'exportPrintable' },
         ...(auth.isLoggedIn() ? [{ icon: '🔗', label: '分享书单', sub: '生成只读链接，让朋友看看你的藏书', action: 'shareBookshelf' }] : []),
-        { icon: '🔍', label: '补全缺失信息', sub: `自动检查并补全封面、简介、作者等缺失字段（共 ${loadActiveBooks().filter(b => b.isbn && (!b.coverUrl || !b.description || !b.author)).length} 本需要完善）`, action: 'enrichBooks' },
+        (() => {
+          const running = _enrichJob && !_enrichJob.done && !_enrichJob.cancelled;
+          const needCount = running ? _enrichJob.books.length - _enrichJob.i : _buildNeedsEnrich().length;
+          const sub = running
+            ? `后台运行中：${_enrichJob.i}/${_enrichJob.books.length} 本 — 点击查看进度`
+            : needCount
+              ? `${needCount} 本书有缺失信息，点击自动补全`
+              : '所有书信息完整（近 7 天已检查）';
+          return { icon: running ? '⏳' : '🔍', label: '补全缺失信息', sub, action: 'enrichBooks' };
+        })(),
         { icon: '💬', label: '反馈建议', sub: '告诉我们你的想法，帮助毛毛书房变得更好', action: 'feedback' },
         { icon: '🌐', label: currentLang() === 'en' ? '切换到中文' : 'Switch to English', sub: currentLang() === 'en' ? 'Change language to Chinese' : '切换界面语言', action: 'toggleLang' },
         ...(auth.isLoggedIn() ? [{ icon: '🗑️', label: '删除账号', sub: '永久删除账号和所有云端数据', action: 'deleteAccount' }] : []),
@@ -3040,7 +3049,6 @@ ${list.map(b => `<tr>
     // ── Share bookshelf ──
     // ── Batch Enrichment ───────────────────────────────────────────────────
     // Score an existing book's cover by how trustworthy the source is.
-    // Higher = more confident it's actually the right cover.
     function coverScore(book) {
       if (!book.coverUrl) return 0;
       const src = Array.isArray(book.metadataSources) ? book.metadataSources : [];
@@ -3048,17 +3056,350 @@ ${list.map(b => `<tr>
       if (src.includes('Google Books')) return 80;
       if (src.includes('community-cache')) return 70;
       if (src.includes('Open Library')) return 60;
-      // Cover URL exists but source is unknown (manual entry or early version)
       return 35;
     }
-    // Score a candidate cover URL by its source name
     function candidateCoverScore(sourceName) {
       if (sourceName === '豆瓣读书') return 95;
       if (sourceName === 'Google Books') return 80;
       if (sourceName === 'Open Library') return 60;
       return 50;
     }
-    const COVER_REPLACE_THRESHOLD = 75; // replace covers scoring below this (catches OL=60, unknown=35)
+    const COVER_REPLACE_THRESHOLD = 75;
+    const ENRICH_GRACE_DAYS = 7; // skip re-checking books checked within N days
+
+    // AbortSignal.timeout() requires iOS 16+; polyfill
+    function safeAbortSignal(ms) {
+      try { return AbortSignal.timeout(ms); } catch (_) { return undefined; }
+    }
+
+    // ── Persistent enrichment job (survives modal close) ──────────────────
+    let _enrichJob = null; // null = idle; object = running or done
+
+    function _buildNeedsEnrich() {
+      const graceCutoff = Date.now() - ENRICH_GRACE_DAYS * 86400 * 1000;
+      return loadActiveBooks().filter(b => {
+        if (!b.isbn) return false;
+        const c = b.isbn.replace(/[^0-9Xx]/g, '');
+        if (c.length !== 10 && c.length !== 13) return false;
+        // Skip books recently verified with complete data
+        if (b.enrichedAt && new Date(b.enrichedAt).getTime() > graceCutoff &&
+            b.description && b.author && b.category && b.publishedYear &&
+            coverScore(b) >= COVER_REPLACE_THRESHOLD) return false;
+        return !b.description || !b.author || !b.category || !b.publishedYear ||
+               coverScore(b) < COVER_REPLACE_THRESHOLD;
+      });
+    }
+
+    async function _runEnrichLoop(job) {
+      function qualityOk(val) {
+        if (!val) return false;
+        const s = String(val).trim();
+        if (s.length < 2) return false;
+        if (/^https?:\/\//.test(s) && s.length < 15) return false;
+        return true;
+      }
+
+      for (let i = job.i; i < job.books.length; i++) {
+        if (job.cancelled) break;
+        job.i = i;
+        const book = job.books[i];
+        const compact = book.isbn.replace(/[^0-9Xx]/g, '');
+        const isZh = /^9787|^97895[67]/.test(compact);
+
+        job.current = book.title || book.isbn;
+        job.ui?.updateProgress(i, job.books.length, job.enriched, job.skipped, job.failed, job.current);
+
+        try {
+          const urls = [
+            isZh ? `${GBOOKS_PROXY}/douban/${encodeURIComponent(compact)}` : null,
+            `${GBOOKS_PROXY}/?q=isbn:${encodeURIComponent(compact)}&maxResults=3`,
+            `https://openlibrary.org/search.json?isbn=${encodeURIComponent(compact)}&fields=title,author_name,subject,first_publish_year,cover_i,language&limit=2`,
+          ].filter(Boolean);
+
+          const results = await Promise.allSettled(
+            urls.map(u => {
+              const sig = safeAbortSignal(8000);
+              return fetch(u, sig ? { signal: sig } : {}).then(r => r.ok ? r.json() : null).catch(() => null);
+            })
+          );
+
+          let si = 0;
+          const doubanRaw = isZh ? results[si++]?.value : null;
+          const gbRaw = results[si++]?.value;
+          const olRaw = results[si++]?.value;
+
+          const candidates = {};
+          let bestCS = coverScore(book);
+          let bestCoverSrc = '';
+
+          function trySetCover(url, srcName) {
+            if (!qualityOk(url)) return;
+            const score = candidateCoverScore(srcName);
+            if (score > bestCS) {
+              bestCS = score;
+              bestCoverSrc = srcName;
+              candidates.coverUrl = url;
+              candidates._coverReplaced = Boolean(book.coverUrl);
+            }
+          }
+
+          if (doubanRaw?.title) {
+            trySetCover(doubanRaw.coverUrl, '豆瓣读书');
+            if (!book.description && qualityOk(doubanRaw.description)) candidates.description = doubanRaw.description;
+            if (!book.author && qualityOk(doubanRaw.author)) candidates.author = doubanRaw.author;
+            if (!book.publishedYear && qualityOk(doubanRaw.publishedYear)) candidates.publishedYear = doubanRaw.publishedYear;
+          }
+          if (gbRaw?.items?.[0]) {
+            const vi = gbRaw.items[0].volumeInfo || {};
+            trySetCover((vi.imageLinks?.thumbnail || '').replace(/^http:/, 'https:'), 'Google Books');
+            if (!candidates.description && !book.description && qualityOk(vi.description)) candidates.description = vi.description.slice(0, 600);
+            if (!candidates.author && !book.author && vi.authors?.length) candidates.author = vi.authors.join(', ');
+            if (!candidates.publishedYear && !book.publishedYear && vi.publishedDate) {
+              const y = String(vi.publishedDate).slice(0, 4);
+              if (/^\d{4}$/.test(y)) candidates.publishedYear = y;
+            }
+            if (!candidates.category && !book.category && vi.categories?.length) {
+              const cat = translateCategory(vi.categories[0]);
+              if (cat) candidates.category = cat;
+            }
+          }
+          if (olRaw?.docs?.[0]) {
+            const d = olRaw.docs[0];
+            if (!candidates.author && !book.author && d.author_name?.length) candidates.author = d.author_name.slice(0, 3).join(', ');
+            if (!candidates.publishedYear && !book.publishedYear && d.first_publish_year) candidates.publishedYear = String(d.first_publish_year);
+            if (d.cover_i) trySetCover(`https://covers.openlibrary.org/b/id/${d.cover_i}-M.jpg`, 'Open Library');
+            if (!candidates.category && !book.category && d.subject?.length) {
+              const cat = translateCategory(d.subject[0]);
+              if (cat) candidates.category = cat;
+            }
+          }
+
+          const coverReplaced = candidates._coverReplaced;
+          delete candidates._coverReplaced;
+
+          const allBooks = loadActiveBooks();
+          const idx = allBooks.findIndex(ab => ab.id === book.id);
+          if (idx >= 0) {
+            let logMsg;
+            if (Object.keys(candidates).length === 0) {
+              job.skipped++;
+              logMsg = `— ${book.title || book.isbn}：已是最优，跳过`;
+              // Mark as checked so it won't queue again for ENRICH_GRACE_DAYS
+              allBooks[idx].enrichedAt = new Date().toISOString();
+              saveBooks(allBooks);
+            } else {
+              const updated = { ...allBooks[idx], ...candidates, enrichedAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
+              if (!updated.metadataSources) updated.metadataSources = [];
+              if (isZh && doubanRaw?.title && !updated.metadataSources.includes('豆瓣读书')) updated.metadataSources.push('豆瓣读书');
+              if (candidates.coverUrl && bestCoverSrc && !updated.metadataSources.includes(bestCoverSrc)) updated.metadataSources.push(bestCoverSrc);
+              allBooks[idx] = updated;
+              saveBooks(allBooks);
+
+              const fieldLabels = [];
+              if (candidates.coverUrl) fieldLabels.push(coverReplaced ? `封面(替换→${bestCoverSrc})` : `封面(+${bestCoverSrc})`);
+              if (candidates.description) fieldLabels.push('简介');
+              if (candidates.author) fieldLabels.push('作者');
+              if (candidates.publishedYear) fieldLabels.push('年份');
+              if (candidates.category) fieldLabels.push('分类');
+              logMsg = `✓ ${book.title || book.isbn}：${fieldLabels.join(' · ')}`;
+              job.enriched++;
+
+              try {
+                await fetch(`${GBOOKS_PROXY}/cache/contribute`, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    isbn: compact, title: updated.title, author: updated.author || '',
+                    category: updated.category || '', publishedYear: updated.publishedYear || '',
+                    bookLang: updated.bookLang || (isZh ? 'zh-CN' : ''),
+                    coverUrl: updated.coverUrl || '',
+                    description: (updated.description || '').slice(0, 1200),
+                    metadataSources: updated.metadataSources,
+                    sourcePriority: isZh ? 110 : 80,
+                  }),
+                });
+              } catch { /* best-effort */ }
+            }
+            job.log.push(logMsg);
+            job.ui?.addLog(logMsg);
+          }
+        } catch (err) {
+          job.failed++;
+          const logMsg = `✗ ${book.title || book.isbn}：查询失败`;
+          job.log.push(logMsg);
+          job.ui?.addLog(logMsg);
+        }
+
+        job.ui?.updateProgress(i + 1, job.books.length, job.enriched, job.skipped, job.failed, '');
+
+        if (i < job.books.length - 1 && !job.cancelled) {
+          await new Promise(r => setTimeout(r, 1500));
+        }
+      }
+
+      job.done = true;
+      job.ui?.onDone(job.enriched, job.skipped, job.failed);
+      // Clear running indicator after completion
+      document.getElementById('enrichRunningBadge')?.remove();
+      render(); // refresh settings counter
+    }
+
+    function _showEnrichModal() {
+      const job = _enrichJob;
+      const existing = document.getElementById('enrichOverlay');
+      if (existing) { existing.remove(); }
+
+      const overlay = document.createElement('div');
+      overlay.id = 'enrichOverlay';
+      overlay.className = 'enrich-overlay';
+
+      const isRunning = job && !job.done && !job.cancelled;
+      const isDone = job?.done;
+      const total = job?.books.length ?? 0;
+      const pct = total ? Math.round(((job.i + 1) / total) * 100) : 0;
+
+      overlay.innerHTML = `
+        <div class="enrich-modal">
+          <div class="enrich-title">🔍 自动补全书目信息</div>
+          <div class="enrich-sub" id="enrichSub">${isRunning
+            ? `后台运行中 · ${job.i + 1}/${total} 本`
+            : isDone
+              ? `完成！共处理 ${total} 本`
+              : `将为 ${_buildNeedsEnrich().length} 本书补全信息`
+          }</div>
+          ${!isDone && !isRunning ? `<div class="enrich-info" style="font-size:11px;color:var(--muted);margin-top:4px">
+            查询顺序：豆瓣读书 → Google Books → Open Library<br>
+            缺失字段直接补上；封面按来源评分替换（OL/来源不明 会被豆瓣/GB 覆盖）<br>
+            已检查完整的书 <b>7 天内不会重复扫描</b>。
+          </div>` : ''}
+          <div id="enrichProgress" style="margin-top:14px;${!isRunning && !isDone ? 'display:none' : ''}">
+            <div class="enrich-bar-bg"><div id="enrichBar" class="enrich-bar" style="width:${isRunning || isDone ? pct : 0}%"></div></div>
+            <div id="enrichStatus" style="font-size:12px;color:var(--muted);margin-top:6px;text-align:center">${isRunning ? `(${job.i + 1}/${total}) 正在查：${job.current || ''}` : isDone ? '完成！' : '准备中…'}</div>
+            <div id="enrichLog" style="font-size:11px;color:var(--muted);margin-top:8px;max-height:120px;overflow:auto;line-height:1.7">${(job?.log || []).map(l => `<div>${l}</div>`).join('')}</div>
+          </div>
+          <div id="enrichResult" style="${isDone ? '' : 'display:none'};margin-top:10px;font-size:13px;color:var(--ok);font-weight:600;text-align:center">${isDone ? `完成 ${job.enriched} 本，跳过 ${job.skipped} 本，失败 ${job.failed} 本` : ''}</div>
+          <div class="enrich-actions" id="enrichActions" style="${isRunning || isDone ? 'display:none' : ''}">
+            <button class="btn ghost" id="enrichCancelBtn">取消</button>
+            <button class="btn primary" id="enrichStartBtn">开始补全</button>
+          </div>
+          ${isRunning ? `<div style="margin-top:12px;display:flex;gap:8px">
+            <button class="btn ghost" id="enrichStopBtn" style="flex:1">停止</button>
+            <button class="btn ghost" id="enrichHideBtn" style="flex:1">最小化，后台继续</button>
+          </div>` : ''}
+          <button class="btn ghost" id="enrichCloseBtn" style="${isDone ? '' : 'display:none'};margin-top:8px;width:100%">关闭</button>
+        </div>`;
+
+      document.body.appendChild(overlay);
+      overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
+
+      const bar = overlay.querySelector('#enrichBar');
+      const statusEl = overlay.querySelector('#enrichStatus');
+      const logEl = overlay.querySelector('#enrichLog');
+      const progressEl = overlay.querySelector('#enrichProgress');
+      const subEl = overlay.querySelector('#enrichSub');
+
+      logEl.scrollTop = logEl.scrollHeight;
+
+      // Wire up UI callbacks to job
+      if (job) {
+        job.ui = {
+          updateProgress(i, total, enriched, skipped, failed, current) {
+            if (!document.contains(bar)) return; // modal closed
+            const p = total ? Math.round(((i + 1) / total) * 100) : 0;
+            bar.style.width = `${p}%`;
+            statusEl.textContent = current ? `(${i + 1}/${total}) 正在查：${current}` : `(${i}/${total}) 已完成`;
+            subEl.textContent = `后台运行中 · ${i}/${total} 本`;
+            // Update running badge
+            const badge = document.getElementById('enrichRunningBadge');
+            if (badge) badge.textContent = `🔍 ${i}/${total}`;
+          },
+          addLog(msg) {
+            if (!document.contains(logEl)) return;
+            const line = document.createElement('div');
+            line.textContent = msg;
+            logEl.appendChild(line);
+            logEl.scrollTop = logEl.scrollHeight;
+          },
+          onDone(enriched, skipped, failed) {
+            if (!document.contains(overlay)) return;
+            statusEl.textContent = '完成！';
+            bar.style.width = '100%';
+            const resultEl = overlay.querySelector('#enrichResult');
+            if (resultEl) { resultEl.textContent = `完成 ${enriched} 本，跳过 ${skipped} 本，失败 ${failed} 本`; resultEl.style.display = ''; }
+            subEl.textContent = `全部处理完成，共 ${_enrichJob?.books.length ?? 0} 本`;
+            overlay.querySelector('#enrichStopBtn')?.remove();
+            overlay.querySelector('#enrichHideBtn')?.remove();
+            const closeBtn = overlay.querySelector('#enrichCloseBtn');
+            if (closeBtn) { closeBtn.style.display = ''; closeBtn.onclick = () => { overlay.remove(); _enrichJob = null; render(); }; }
+          },
+        };
+      }
+
+      overlay.querySelector('#enrichCancelBtn')?.addEventListener('click', () => overlay.remove());
+      overlay.querySelector('#enrichCloseBtn')?.addEventListener('click', () => {
+        overlay.remove(); _enrichJob = null; render();
+      });
+      overlay.querySelector('#enrichStopBtn')?.addEventListener('click', () => {
+        if (_enrichJob) { _enrichJob.cancelled = true; _enrichJob.ui = null; }
+        document.getElementById('enrichRunningBadge')?.remove();
+        overlay.remove(); _enrichJob = null; render();
+      });
+      overlay.querySelector('#enrichHideBtn')?.addEventListener('click', () => {
+        if (job) job.ui = null; // detach UI, loop keeps going
+        overlay.remove();
+        // show persistent badge
+        if (!document.getElementById('enrichRunningBadge')) {
+          const badge = document.createElement('div');
+          badge.id = 'enrichRunningBadge';
+          badge.style.cssText = 'position:fixed;bottom:80px;right:16px;background:var(--accent);color:#fff;border-radius:20px;padding:6px 14px;font-size:12px;font-weight:600;z-index:8000;cursor:pointer;box-shadow:0 4px 16px rgba(0,0,0,.2)';
+          badge.textContent = `🔍 ${job.i}/${job.books.length}`;
+          badge.onclick = () => { badge.remove(); runBatchEnrichment(); };
+          document.body.appendChild(badge);
+        }
+      });
+
+      overlay.querySelector('#enrichStartBtn')?.addEventListener('click', () => {
+        const books = _buildNeedsEnrich();
+        if (!books.length) {
+          overlay.remove();
+          const toast = document.createElement('div');
+          toast.className = 'scan-toast';
+          toast.textContent = '✓ 所有书的信息都已完整，无需补全';
+          document.body.appendChild(toast);
+          setTimeout(() => toast.remove(), 2500);
+          return;
+        }
+        _enrichJob = { books, i: 0, enriched: 0, skipped: 0, failed: 0, done: false, cancelled: false, current: '', log: [], ui: null };
+        overlay.remove();
+        _showEnrichModal(); // reopen with running state
+        _runEnrichLoop(_enrichJob);
+      });
+    }
+
+    async function runBatchEnrichment() {
+      if (_enrichJob && !_enrichJob.done && !_enrichJob.cancelled) {
+        // Already running — show modal attached to existing job
+        _showEnrichModal();
+        return;
+      }
+      if (_enrichJob?.done) {
+        // Previous job done — let user restart
+        _showEnrichModal();
+        return;
+      }
+      // Fresh start — check if there's anything to do
+      const books = _buildNeedsEnrich();
+      if (!books.length) {
+        const toast = document.createElement('div');
+        toast.className = 'scan-toast';
+        toast.textContent = '✓ 所有书信息完整（近 7 天内已检查）';
+        document.body.appendChild(toast);
+        setTimeout(() => toast.remove(), 2500);
+        return;
+      }
+      _showEnrichModal();
+    }
+    // ── End Batch Enrichment ───────────────────────────────────────────────
 
     async function runBatchEnrichment() {
       const books = loadActiveBooks();
