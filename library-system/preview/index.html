@@ -3157,9 +3157,11 @@ ${list.map(b => `<tr>
           if (gbRaw?.items?.[0]) {
             const vi = gbRaw.items[0].volumeInfo || {};
             // Apply same zoom=2 / edge=curl strip as mergeResults so the stored cover
-            // is large enough to pass the onCoverLoad ≤200px filter
+            // is large enough to pass the onCoverLoad ≤200px filter.
+            // Small-step safety rule: if the book already has any cover, let Google Books
+            // fill text fields only and do not overwrite the existing cover.
             const gbThumb = (vi.imageLinks?.thumbnail || '').replace(/^http:/, 'https:').replace('&edge=curl', '').replace('zoom=1', 'zoom=2');
-            trySetCover(gbThumb, 'Google Books');
+            if (!book.coverUrl) trySetCover(gbThumb, 'Google Books');
             if (!candidates.description && !book.description && qualityOk(vi.description)) candidates.description = vi.description.slice(0, 600);
             if (!candidates.author && !book.author && vi.authors?.length) candidates.author = vi.authors.join(', ');
             if (!candidates.publishedYear && !book.publishedYear && vi.publishedDate) {
