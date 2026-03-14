@@ -1547,7 +1547,7 @@
       const stored = String(book.coverUrl || '').trim();
       return stored && stored !== primary ? stored : '';
     }
-    function handleCoverError(img) {
+    function swapToCoverFallbackOrPlaceholder(img) {
       const fallback = String(img?.dataset?.fallbackSrc || '').trim();
       if (fallback && img.src !== fallback && !img.dataset.fallbackTried) {
         img.dataset.fallbackTried = '1';
@@ -1556,19 +1556,22 @@
       }
       showCoverPlaceholder(img);
     }
-    // Detect 1x1 placeholder images from OpenLibrary and hide them
+    function handleCoverError(img) {
+      swapToCoverFallbackOrPlaceholder(img);
+    }
+    // Detect placeholder / unusable covers and prefer fallback before hiding them
     function onCoverLoad(img) {
       const w = img.naturalWidth, h = img.naturalHeight;
       // 1x1 GIF from Open Library
-      if (w <= 2 && h <= 2) { showCoverPlaceholder(img); return; }
+      if (w <= 2 && h <= 2) { swapToCoverFallbackOrPlaceholder(img); return; }
       // Google Books grey "image not available" placeholder commonly loads as 128x196,
       // including when proxied, so catch by dimensions instead of hostname only.
-      if (w === 128 && h === 196) { showCoverPlaceholder(img); return; }
+      if (w === 128 && h === 196) { swapToCoverFallbackOrPlaceholder(img); return; }
       // Catch any small cover from books.google.com (real covers are usually larger)
       const src = img.src || '';
-      if (src.includes('books.google.com') && w <= 200) { showCoverPlaceholder(img); return; }
+      if (src.includes('books.google.com') && w <= 200) { swapToCoverFallbackOrPlaceholder(img); return; }
       // Generic small placeholder detection
-      if (w <= 80 && h <= 120) { showCoverPlaceholder(img); return; }
+      if (w <= 80 && h <= 120) { swapToCoverFallbackOrPlaceholder(img); return; }
     }
     function coverHtml(cu, title, fallbackSrc = '') {
       if (cu) return `<div class="cover-wrap"><img src="${escapeHtml(cu)}" alt="${escapeHtml(title || '')}" loading="lazy" ${fallbackSrc ? `data-fallback-src="${escapeHtml(fallbackSrc)}"` : ''} onload="onCoverLoad(this)" onerror="handleCoverError(this)" /></div>`;
