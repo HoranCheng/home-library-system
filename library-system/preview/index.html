@@ -1716,7 +1716,7 @@
       const currentDraftLocation = String(els.location?.value || '').trim();
       els.entrySessionHint.textContent = mode === 'entry' && entrySessionCount > 0
         ? `连续录入中：本轮已添加 ${entrySessionCount} 本`
-        : '自动从 Open Library · Google Books 补全书目信息';
+        : '自动从 豆瓣读书 · Google Books · Open Library 补全书目信息';
       // Save button text: "导入库中" for new, "保存修改" for edit
       if (!editingBookId) els.saveBtn.textContent = '导入库中';
       // Scan preview card (replaces old review card)
@@ -2322,7 +2322,15 @@
       clearDraftFields({ keepIsbn: true });
       const result = await fillBookMetaByIsbn(isbn, 'manual', '已搜索 ISBN');
       lookupCompleted = Boolean(result?.found || els.title.value.trim() || els.author.value.trim());
-      render();
+      if (lookupCompleted) {
+        if (scannerActive) stopScanner();
+        render();
+        requestAnimationFrame(() => {
+          document.getElementById('scanPreviewArea')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        });
+      } else {
+        render();
+      }
       return lookupCompleted;
     }
 
@@ -3900,27 +3908,47 @@ ${list.map(b => `<tr>
           return data.items[0];
         }
 
-        // ── Phase 1: Fast path — Google Books + Bookcover in parallel (~300-800ms) ──
+        // ── Phase 1: Fast path — Chinese ISBNs prefer 豆瓣 first, then Google Books + Bookcover ──
+        const isChineseIsbn = /^9787|^97895[67]/.test(compact);
         const gbUrl = `${_gb}/?q=isbn:${encodeURIComponent(compact)}&maxResults=5`;
         const gbLangUrl = preferredLang
           ? `${_gb}/?q=isbn:${encodeURIComponent(compact)}&langRestrict=${encodeURIComponent(preferredLang)}&maxResults=5`
           : null;
+        const doubanUrl = (isChineseIsbn || preferredLang === 'zh')
+          ? `${GBOOKS_PROXY}/douban/${encodeURIComponent(compact)}`
+          : null;
         const bcUrl = `https://bookcover.longitood.com/bookcover/${encodeURIComponent(compact)}`;
 
-        const phase1Urls = [gbUrl, gbLangUrl, bcUrl].filter(Boolean);
+        const phase1Urls = [doubanUrl, gbLangUrl, gbUrl, bcUrl].filter(Boolean);
         const phase1 = await Promise.allSettled(phase1Urls.map(u =>
           fetchWithTimeout(u).then(r => r.ok ? r.json() : null).catch(() => null)
         ));
 
-        const gbRes = phase1[0].status === 'fulfilled' ? phase1[0].value : null;
-        const gbLangRes = gbLangUrl ? (phase1[1].status === 'fulfilled' ? phase1[1].value : null) : null;
-        const bcIdx = gbLangUrl ? 2 : 1;
-        const bcCover = (phase1[bcIdx]?.status === 'fulfilled' ? phase1[bcIdx].value : null)?.url || '';
+        let p1 = 0;
+        const doubanResFast = doubanUrl ? (phase1[p1++]?.status === 'fulfilled' ? phase1[p1 - 1].value : null) : null;
+        const gbLangRes = gbLangUrl ? (phase1[p1++]?.status === 'fulfilled' ? phase1[p1 - 1].value : null) : null;
+        const gbRes = phase1[p1++]?.status === 'fulfilled' ? phase1[p1 - 1].value : null;
+        const bcCover = (phase1[p1]?.status === 'fulfilled' ? phase1[p1].value : null)?.url || '';
 
         const gbParsed = parseGoogleBooks(bestGbItem(gbRes));
         const gbLangParsed = parseGoogleBooks(bestGbItem(gbLangRes));
+        const doubanFastParsed = doubanResFast?.title ? {
+          title: doubanResFast.title,
+          authors: doubanResFast.author ? [doubanResFast.author] : [],
+          year: doubanResFast.publishedYear || '',
+          category: '',
+          coverUrl: doubanResFast.coverUrl || '',
+          description: doubanResFast.description || '',
+          publisher: doubanResFast.publisher || '',
+          isbnNote: doubanResFast.isbnNote || '',
+          subjectUrl: doubanResFast.subjectUrl || '',
+          sourcePriority: Number(doubanResFast.sourcePriority || 120),
+          lang: doubanResFast.bookLang || 'zh-CN',
+          sources: ['豆瓣读书'],
+        } : null;
 
         const fastResult = [];
+        if (doubanFastParsed) fastResult.push({ source: '豆瓣读书', data: doubanFastParsed });
         if (gbLangParsed) fastResult.push({ source: 'Google Books', data: gbLangParsed });
         if (gbParsed) fastResult.push({ source: 'Google Books', data: gbParsed });
 
@@ -4122,7 +4150,7 @@ ${list.map(b => `<tr>
       els.manualNotice.innerHTML = makeNotice('warn', '已清空预填信息，请手动输入。');
     };
 
-    function handleScanResult(rawValue) {
+    async function handleScanResult(rawValue) {
       stopScanner();
       const isbn = rawValue.replace(/[^0-9Xx]/g, '');
       if (isbn.length === 10 || isbn.length === 13) {
@@ -4137,7 +4165,12 @@ ${list.map(b => `<tr>
         }
         els.isbn.value = isbn;
         els.isbn.classList.add('auto-filled');
-        fillBookMetaByIsbn(isbn, 'scan');
+        const result = await fillBookMetaByIsbn(isbn, 'scan');
+        if (result?.found || els.title.value.trim() || els.author.value.trim()) {
+          requestAnimationFrame(() => {
+            document.getElementById('scanPreviewArea')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          });
+        }
       } else {
         els.scanNotice.innerHTML = makeNotice('warn', `识别到条码但非 ISBN 格式（${rawValue}），请手动录入 ISBN。`);
         setEntryMode('manual');
