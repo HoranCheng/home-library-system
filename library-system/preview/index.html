@@ -3225,9 +3225,11 @@ ${list.map(b => `<tr>
           }
         } catch (err) {
           job.failed++;
-          const logMsg = `✗ ${book.title || book.isbn}：查询失败`;
+          const errDetail = err?.message ? ` (${err.message})` : '';
+          const logMsg = `✗ ${book.title || book.isbn}：查询失败${errDetail}`;
           job.log.push(logMsg);
           job.ui?.addLog(logMsg);
+          console.error('[enrichment]', book.title || book.isbn, err);
         }
 
         job.ui?.updateProgress(i + 1, job.books.length, job.enriched, job.skipped, job.failed, '');
@@ -3628,7 +3630,7 @@ ${list.map(b => `<tr>
             }
           } catch (err) {
             failed++;
-            addLog(`✗ ${book.title || book.isbn}：查询失败`);
+            addLog(`✗ ${book.title || book.isbn}：查询失败 (${err?.message || err})`);
           }
 
           // Polite rate limit: wait 1.5s between books
