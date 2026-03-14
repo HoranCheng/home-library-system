@@ -3141,6 +3141,11 @@ ${list.map(b => `<tr>
           return true;
         }
 
+        // AbortSignal.timeout() requires iOS 16+ / Safari 16+; polyfill for older browsers
+        function safeAbortSignal(ms) {
+          try { return AbortSignal.timeout(ms); } catch (_) { return undefined; }
+        }
+
         for (let i = 0; i < needsEnrich.length; i++) {
           if (cancelled) break;
           const book = needsEnrich[i];
@@ -3159,7 +3164,10 @@ ${list.map(b => `<tr>
             ].filter(Boolean);
 
             const results = await Promise.allSettled(
-              urls.map(u => fetch(u, { signal: AbortSignal.timeout(8000) }).then(r => r.ok ? r.json() : null).catch(() => null))
+              urls.map(u => {
+                const sig = safeAbortSignal(8000);
+                return fetch(u, sig ? { signal: sig } : {}).then(r => r.ok ? r.json() : null).catch(() => null);
+              })
             );
 
             let si = 0;
