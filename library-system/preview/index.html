@@ -3039,13 +3039,36 @@ ${list.map(b => `<tr>
 
     // ── Share bookshelf ──
     // ── Batch Enrichment ───────────────────────────────────────────────────
+    // Score an existing book's cover by how trustworthy the source is.
+    // Higher = more confident it's actually the right cover.
+    function coverScore(book) {
+      if (!book.coverUrl) return 0;
+      const src = Array.isArray(book.metadataSources) ? book.metadataSources : [];
+      if (src.includes('豆瓣读书')) return 95;
+      if (src.includes('Google Books')) return 80;
+      if (src.includes('community-cache')) return 70;
+      if (src.includes('Open Library')) return 60;
+      // Cover URL exists but source is unknown (manual entry or early version)
+      return 35;
+    }
+    // Score a candidate cover URL by its source name
+    function candidateCoverScore(sourceName) {
+      if (sourceName === '豆瓣读书') return 95;
+      if (sourceName === 'Google Books') return 80;
+      if (sourceName === 'Open Library') return 60;
+      return 50;
+    }
+    const COVER_REPLACE_THRESHOLD = 50; // replace existing if current score ≤ this
+
     async function runBatchEnrichment() {
       const books = loadActiveBooks();
       const needsEnrich = books.filter(b => {
         if (!b.isbn) return false;
         const c = b.isbn.replace(/[^0-9Xx]/g, '');
         if (c.length !== 10 && c.length !== 13) return false;
-        return !b.coverUrl || !b.description || !b.author || !b.category || !b.publishedYear;
+        // Include: any missing text field, OR cover with low-confidence source
+        return !b.description || !b.author || !b.category || !b.publishedYear ||
+               coverScore(b) < COVER_REPLACE_THRESHOLD;
       });
 
       if (!needsEnrich.length) {
@@ -3063,10 +3086,11 @@ ${list.map(b => `<tr>
       overlay.innerHTML = `
         <div class="enrich-modal">
           <div class="enrich-title">🔍 自动补全书目信息</div>
-          <div class="enrich-sub">将为以下 ${needsEnrich.length} 本缺少信息的书自动补全：<br>封面图 / 简介 / 作者 / 分类 / 出版年份</div>
+          <div class="enrich-sub">将为以下 ${needsEnrich.length} 本书自动补全或改进：<br>简介 / 作者 / 分类 / 出版年份 / 封面图</div>
           <div class="enrich-info" style="font-size:11px;color:var(--muted);margin-top:4px">
             查询顺序：豆瓣读书 → Google Books → Open Library<br>
-            <b>只有新数据更完整时才会覆盖，不会乱盖已有内容。</b>
+            缺失字段 → 直接补上；封面 → 按来源可信度打分，更可靠的才会替换<br>
+            <b>来源：豆瓣(95) &gt; Google Books(80) &gt; Open Library(60) &gt; 来源不明(35)</b>
           </div>
           <div id="enrichProgress" style="margin-top:14px;display:none">
             <div class="enrich-bar-bg"><div id="enrichBar" class="enrich-bar" style="width:0%"></div></div>
@@ -3143,19 +3167,31 @@ ${list.map(b => `<tr>
             const gbRaw = results[si++]?.value;
             const olRaw = results[si++]?.value;
 
-            // Parse candidates
+            // Parse candidates — cover uses scoring; other fields only fill gaps
             const candidates = {};
+            let bestCoverScore = coverScore(book); // current cover's score
+            let bestCoverSrc = '';
+
+            function trySetCover(url, srcName) {
+              if (!qualityOk(url)) return;
+              const score = candidateCoverScore(srcName);
+              if (score > bestCoverScore) {
+                bestCoverScore = score;
+                bestCoverSrc = srcName;
+                candidates.coverUrl = url;
+                candidates._coverReplaced = Boolean(book.coverUrl);
+              }
+            }
+
             if (doubanRaw?.title) {
-              if (!book.coverUrl && qualityOk(doubanRaw.coverUrl)) candidates.coverUrl = doubanRaw.coverUrl;
+              trySetCover(doubanRaw.coverUrl, '豆瓣读书');
               if (!book.description && qualityOk(doubanRaw.description)) candidates.description = doubanRaw.description;
               if (!book.author && qualityOk(doubanRaw.author)) candidates.author = doubanRaw.author;
               if (!book.publishedYear && qualityOk(doubanRaw.publishedYear)) candidates.publishedYear = doubanRaw.publishedYear;
             }
             if (gbRaw?.items?.[0]) {
               const vi = gbRaw.items[0].volumeInfo || {};
-              if (!candidates.coverUrl && !book.coverUrl && qualityOk(vi.imageLinks?.thumbnail)) {
-                candidates.coverUrl = (vi.imageLinks.thumbnail || '').replace(/^http:/, 'https:');
-              }
+              trySetCover((vi.imageLinks?.thumbnail || '').replace(/^http:/, 'https:'), 'Google Books');
               if (!candidates.description && !book.description && qualityOk(vi.description)) {
                 candidates.description = vi.description.slice(0, 600);
               }
@@ -3179,14 +3215,18 @@ ${list.map(b => `<tr>
               if (!candidates.publishedYear && !book.publishedYear && d.first_publish_year) {
                 candidates.publishedYear = String(d.first_publish_year);
               }
-              if (!candidates.coverUrl && !book.coverUrl && d.cover_i) {
-                candidates.coverUrl = `https://covers.openlibrary.org/b/id/${d.cover_i}-M.jpg`;
+              if (d.cover_i) {
+                trySetCover(`https://covers.openlibrary.org/b/id/${d.cover_i}-M.jpg`, 'Open Library');
               }
               if (!candidates.category && !book.category && d.subject?.length) {
                 const cat = translateCategory(d.subject[0]);
                 if (cat) candidates.category = cat;
               }
             }
+
+            // Strip internal flags before saving
+            const coverReplaced = candidates._coverReplaced;
+            delete candidates._coverReplaced;
 
             if (Object.keys(candidates).length === 0) {
               skipped++;
@@ -3201,16 +3241,20 @@ ${list.map(b => `<tr>
                 if (isZh && doubanRaw?.title) {
                   if (!updated.metadataSources.includes('豆瓣读书')) updated.metadataSources.push('豆瓣读书');
                 }
-                if (candidates.coverUrl || candidates.description) {
-                  const src = isZh ? '豆瓣读书' : 'Google Books';
-                  if (!updated.metadataSources.includes(src)) updated.metadataSources.push(src);
+                if (candidates.coverUrl && bestCoverSrc && !updated.metadataSources.includes(bestCoverSrc)) {
+                  updated.metadataSources.push(bestCoverSrc);
                 }
                 allBooks[idx] = updated;
                 saveBooks(allBooks);
 
-                // Contribute improved data back to community cache
-                const fieldsAdded = Object.keys(candidates).join(', ');
-                addLog(`✓ ${book.title || book.isbn}：补全了 ${fieldsAdded}`);
+                // Build a human-readable log
+                const fieldLabels = [];
+                if (candidates.coverUrl) fieldLabels.push(coverReplaced ? `封面(替换→${bestCoverSrc})` : `封面(+${bestCoverSrc})`);
+                if (candidates.description) fieldLabels.push('简介');
+                if (candidates.author) fieldLabels.push('作者');
+                if (candidates.publishedYear) fieldLabels.push('年份');
+                if (candidates.category) fieldLabels.push('分类');
+                addLog(`✓ ${book.title || book.isbn}：${fieldLabels.join(' · ')}`);
                 enriched++;
 
                 try {
