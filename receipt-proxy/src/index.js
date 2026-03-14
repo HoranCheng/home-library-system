@@ -64,13 +64,21 @@ CRITICAL — is_receipt MUST default to true. Set is_receipt=false ONLY if the i
 
 is_receipt = TRUE for ALL of these:
 - Paper receipts (thermal, dot-matrix, inkjet, handwritten)
-- Faded, crumpled, partial, or blurry receipts (do your best to extract data)
+- Faded, crumpled, partial, shadowed, glare-affected, or blurry receipts (do your best to extract data)
 - Electronic/digital receipts (screenshots, emails, app confirmations)
 - Tax invoices, invoices, bills, statements
 - Payment confirmations (EFTPOS, credit card, PayPal, etc.)
 - Fuel dockets, parking tickets, toll receipts
 - Foreign language receipts
-- ANY image that shows a transaction amount, merchant name, or itemized list
+- Provisional receipts, pre-authorisation slips, order confirmations, kitchen copies, merchant copies, or any receipt-like document that still shows transaction evidence
+- Receipts that contain phrases like "NOT A PURCHASE RECEIPT", "PROVISIONAL RECEIPT", "MERCHANT COPY", "TAX INVOICE", or similar — these are STILL financial documents if they show merchant/date/amount/items
+- ANY image that shows a transaction amount, merchant name, itemized list, subtotal, total, tax, payment method, or order number
+
+IMPORTANT FALSE-NEGATIVE GUARD:
+- If you can read ANY TWO of these with reasonable confidence: merchant name, date, total amount, itemized lines, payment method, order/invoice number → set is_receipt=true
+- Do NOT reject just because the document is not the final customer copy
+- Do NOT reject just because parts are shadowed or partially obscured
+- Prefer returning partial fields with lower confidence rather than returning is_receipt=false
 
 is_receipt = FALSE ONLY for:
 - Photos of people, animals, scenery, food (not a receipt photo of food)
@@ -86,8 +94,10 @@ EXTRACTION RULES:
 - Amount: the TOTAL paid (after discounts, including GST). Number only, no currency symbol. If multiple totals shown, use the final "TOTAL" or "Amount Due".
 - Currency: usually AUD unless clearly otherwise.
 - Category: exactly ONE of: Grocery, Dining, Fuel, Medical, Hardware & Garden, Outdoor & Camping, Transport, Utilities, Entertainment, Shopping, Education, Insurance, Subscription, Other
-- Confidence: 0-100 your certainty about ALL extracted fields combined. Even faded/partial receipts should get 30-60 confidence, not 0.
+- Confidence: 0-100 your certainty about ALL extracted fields combined. Even faded/partial/shadowed receipts should usually get 30-60 confidence, not 0.
 - items: list the first 5-10 line items if visible. Empty array if items not readable.
+- If the document looks receipt-like but some fields are obscured, still return your BEST partial guess for visible fields instead of rejecting the document.
+- For provisional / merchant-copy / not-final receipts: extract the visible merchant, date, total, and items normally.
 
 Respond ONLY with this JSON, no markdown, no backticks:
 {"is_receipt":true,"date":"YYYY-MM-DD","merchant":"Specific Store Name","amount":0.00,"currency":"AUD","category":"Category","items":["item1","item2"],"confidence":85}`;
