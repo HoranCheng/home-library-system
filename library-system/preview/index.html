@@ -3173,14 +3173,16 @@ ${list.map(b => `<tr>
     }
     function _coverDiagText(code, meta = {}) {
       if (code === 'invalid-isbn') return 'ISBN 无效或缺失';
-      if (code === 'isbn-candidates-empty') return 'ISBN 查询未返回可用封面';
+      if (code === 'isbn-candidates-empty') return 'ISBN 查询没有返回可用封面';
+      if (code === 'isbn-fallback-started') return 'ISBN 失败 → 尝试书名/作者补图';
       if (code === 'fallback-not-triggered') return '未触发书名/作者兜底';
-      if (code === 'fallback-low-score') return `书名/作者候选分数过低（${meta.score || 0} < ${meta.threshold || 0}）`;
+      if (code === 'fallback-success') return `书名/作者补图成功 → ${meta.source || 'Open Library'}`;
+      if (code === 'fallback-low-score') return `书名/作者补图分数不足（${meta.score || 0} < ${meta.threshold || 0}）`;
       if (code === 'placeholder-filtered') return `${meta.source || '候选封面'} 命中过滤占位图`; 
       if (code === 'unsafe-url-filtered') return `${meta.source || '候选封面'} URL 无效`; 
       if (code === 'existing-cover-kept') return `保留原封面：现有评分 ${meta.currentScore ?? 0} ≥ 候选 ${meta.candidateScore ?? 0}`;
       if (code === 'same-cover-kept') return '候选与现有封面相同';
-      if (code === 'no-title-for-fallback') return '缺少书名，无法做书名兜底';
+      if (code === 'no-title-for-fallback') return '缺少书名，无法做书名/作者补图';
       if (code === 'no-title-author-fallback') return '缺少书名/作者，未触发兜底';
       return meta.text || '未更新';
     }
@@ -3208,6 +3210,8 @@ ${list.map(b => `<tr>
         return options.includeDiagnostics ? { candidate: null, diagnostics, isbn: compact } : null;
       }
       const isZh = /^9787|^97895[67]/.test(compact);
+      const currentDirty = isStoredCoverDirty(book);
+      const canRunTitleFallback = !book?.coverUrl || currentDirty;
       let bestUrl = '';
       let bestSource = '';
       let bestScore = 0;
@@ -3251,30 +3255,38 @@ ${list.map(b => `<tr>
         tryRecoveredCover(pickBestOpenLibraryCover(olRaw, { title: wantedTitle, author: wantedAuthor }), 'Open Library');
         tryRecoveredCover(bcRaw?.url, 'Bookcover API');
 
-        if (!bestUrl && wantedTitle) {
-          const titleSearch = new URL('https://openlibrary.org/search.json');
-          titleSearch.searchParams.set('title', wantedTitle);
-          if (wantedAuthor) titleSearch.searchParams.set('author', wantedAuthor);
-          titleSearch.searchParams.set('fields', 'title,subtitle,author_name,cover_i');
-          titleSearch.searchParams.set('limit', '5');
-          const olTitleRaw = await fetchWithTimeout(titleSearch.toString()).then(r => r.ok ? r.json() : null).catch(() => null);
-          const titleCandidate = bestOpenLibraryCoverCandidate(olTitleRaw, { title: wantedTitle, author: wantedAuthor });
-          const minScore = wantedAuthor ? 35 : 30;
-          if (titleCandidate) {
-            if (titleCandidate.score >= minScore) {
-              tryRecoveredCover(titleCandidate.url, 'Open Library');
-            } else {
-              _pushCoverDiag(diagnostics, 'fallback-low-score', { score: titleCandidate.score, threshold: minScore });
-            }
-          } else {
+        if (!bestUrl) {
+          _pushCoverDiag(diagnostics, 'isbn-candidates-empty');
+          if (!canRunTitleFallback) {
+            _pushCoverDiag(diagnostics, 'fallback-not-triggered');
+          } else if (!wantedTitle) {
             _pushCoverDiag(diagnostics, wantedAuthor ? 'no-title-author-fallback' : 'no-title-for-fallback');
+          } else {
+            _pushCoverDiag(diagnostics, 'isbn-fallback-started');
+            const titleSearch = new URL('https://openlibrary.org/search.json');
+            titleSearch.searchParams.set('title', wantedTitle);
+            if (wantedAuthor) titleSearch.searchParams.set('author', wantedAuthor);
+            titleSearch.searchParams.set('fields', 'title,subtitle,author_name,cover_i');
+            titleSearch.searchParams.set('limit', '5');
+            const olTitleRaw = await fetchWithTimeout(titleSearch.toString()).then(r => r.ok ? r.json() : null).catch(() => null);
+            const titleCandidate = bestOpenLibraryCoverCandidate(olTitleRaw, { title: wantedTitle, author: wantedAuthor });
+            const minScore = wantedAuthor ? 45 : 40;
+            if (titleCandidate) {
+              if (titleCandidate.score >= minScore) {
+                bestUrl = titleCandidate.url;
+                bestSource = 'Open Library';
+                bestScore = _coverSourceScore('Open Library');
+                _pushCoverDiag(diagnostics, 'fallback-success', { source: 'Open Library' });
+              } else {
+                _pushCoverDiag(diagnostics, 'fallback-low-score', { score: titleCandidate.score, threshold: minScore });
+              }
+            } else {
+              _pushCoverDiag(diagnostics, wantedAuthor ? 'no-title-author-fallback' : 'no-title-for-fallback');
+            }
           }
-        } else if (!wantedTitle) {
-          _pushCoverDiag(diagnostics, 'fallback-not-triggered');
         }
       } catch {}
       if (!bestUrl) {
-        if (!isbnCandidateSeen) _pushCoverDiag(diagnostics, 'isbn-candidates-empty');
         return options.includeDiagnostics ? { candidate: null, diagnostics, isbn: compact } : null;
       }
       const candidate = { url: bestUrl, source: bestSource, score: bestScore, isbn: compact };
@@ -4537,8 +4549,8 @@ ${list.map(b => `<tr>
           const titleBlob = [title, subtitle].filter(Boolean).join(' ');
           const authorsBlob = normalizedSearchText(Array.isArray(doc.author_name) ? doc.author_name.join(' ') : '');
           if (wantedTitle && titleBlob) {
-            if (titleBlob === wantedTitle) score += 30;
-            else if (titleBlob.includes(wantedTitle) || wantedTitle.includes(title)) score += 18;
+            if (titleBlob === wantedTitle || title === wantedTitle) score += 36;
+            else if (titleBlob.includes(wantedTitle) || wantedTitle.includes(title)) score += 22;
           }
           if (wantedAuthor && authorsBlob) {
             if (authorsBlob === wantedAuthor) score += 18;
