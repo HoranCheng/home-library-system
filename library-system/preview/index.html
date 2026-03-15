@@ -1571,19 +1571,28 @@
       if (isOpenLibraryCoverUrl(stored) && /\/b\/isbn\//i.test(stored) && !sources.includes('豆瓣读书')) return true;
       return false;
     }
-    function coverUrl(book) {
+    function coverProxyUrl(book) {
       if (!book) return '';
       const isbn = String(book.isbn || '').replace(/[^0-9Xx]/g, '');
       if (isbn && (isbn.length === 10 || isbn.length === 13)) {
         return `${GBOOKS_PROXY}/cover/${isbn}`;
       }
-      return book.coverUrl || '';
+      return '';
+    }
+    function coverUrl(book) {
+      if (!book) return '';
+      const stored = String(book.coverUrl || '').trim();
+      if (stored && !isStoredCoverDirty(book)) return stored;
+      return coverProxyUrl(book) || stored;
     }
     function coverFallbackUrl(book) {
       if (!book) return '';
       const primary = coverUrl(book);
       const stored = String(book.coverUrl || '').trim();
-      return stored && stored !== primary ? stored : '';
+      const proxy = coverProxyUrl(book);
+      if (primary === stored) return proxy && proxy !== primary ? proxy : '';
+      if (stored && stored !== primary) return stored;
+      return proxy && proxy !== primary ? proxy : '';
     }
     function swapToCoverFallbackOrPlaceholder(img) {
       const fallback = String(img?.dataset?.fallbackSrc || '').trim();
@@ -2248,13 +2257,16 @@
         })(),
         (() => {
           const running = _coverRefreshJob && !_coverRefreshJob.done && !_coverRefreshJob.cancelled;
+          const smartCount = _buildCoverRefreshCandidates({ force: false }).length;
           const total = _buildCoverRefreshCandidates({ force: true }).length;
           const sub = running
             ? `后台扫描中：${_coverRefreshJob.i}/${_coverRefreshJob.books.length} 本 — 点击查看进度`
-            : total
-              ? `${total} 本本地图书可重新扫描 / 更新封面`
-              : '当前没有可扫描的本地图书';
-          return { icon: running ? '🖼️' : '🔄', label: '扫描/更新全部封面', sub, action: 'refreshAllCovers' };
+            : smartCount
+              ? `${smartCount} 本书缺失 / 脏封面，推荐先补齐`
+              : total
+                ? `缺失封面已补齐；如需对 ${total} 本书做全量重扫，可手动进入高级模式`
+                : '当前没有可扫描的本地图书';
+          return { icon: running ? '🖼️' : '🔄', label: '补齐缺失封面', sub, action: 'refreshAllCovers' };
         })(),
         { icon: '💬', label: '反馈建议', sub: '告诉我们你的想法，帮助毛毛书房变得更好', action: 'feedback' },
         { icon: '🌐', label: currentLang() === 'en' ? '切换到中文' : 'Switch to English', sub: currentLang() === 'en' ? 'Change language to Chinese' : '切换界面语言', action: 'toggleLang' },
@@ -3604,16 +3616,18 @@ ${list.map(b => `<tr>
       const forceCount = _buildCoverRefreshCandidates({ force: true }).length;
       overlay.innerHTML = `
         <div class="enrich-modal">
-          <div class="enrich-title">🖼️ 扫描 / 更新全部封面</div>
+          <div class="enrich-title">🖼️ 补齐缺失 / 修复异常封面</div>
           <div class="enrich-sub" id="coverRefreshSub">${isRunning
             ? `后台运行中 · ${job.i + 1}/${total} 本`
             : isDone
               ? `完成！共处理 ${total} 本`
-              : `可扫描 ${forceCount} 本本地图书封面`
+              : smartCount
+                ? `推荐先处理 ${smartCount} 本缺失 / 脏封面的图书`
+                : `缺失封面已补齐；如需检查全部 ${forceCount} 本图书，可手动全量重扫`
           }</div>
           ${!isDone && !isRunning ? `<div class="mini-note">
-            智能修复：只处理缺失 / 脏封面，适合日常补救。<br>
-            全量重扫：会重新检查全部本地图书，但 <b>只有新封面评分更高或旧封面明显有问题</b> 时才替换，不会盲目覆盖好封面。
+            默认推荐：<b>只补缺失 / 脏封面</b>，先保住现有大面积可用封面覆盖。<br>
+            高级模式：全量重扫会重新检查全部本地图书，但 <b>只有新封面评分更高或旧封面明显有问题</b> 时才替换，不会盲目覆盖好封面。
           </div>` : ''}
           <div id="coverRefreshProgress" style="margin-top:14px;${!isRunning && !isDone ? 'display:none' : ''}">
             <div class="enrich-bar-bg"><div id="coverRefreshBar" class="enrich-bar" style="width:${isRunning || isDone ? pct : 0}%"></div></div>
@@ -3622,8 +3636,8 @@ ${list.map(b => `<tr>
           </div>
           <div id="coverRefreshResult" style="${isDone ? '' : 'display:none'};margin-top:10px;font-size:13px;color:var(--ok);font-weight:600;text-align:center">${isDone ? `完成 ${job.updated} 本，跳过 ${job.skipped} 本，失败 ${job.failed} 本` : ''}</div>
           <div class="enrich-actions" id="coverRefreshActions" style="${isRunning || isDone ? 'display:none' : ''};flex-direction:column">
-            <button class="btn secondary" id="coverRefreshSmartBtn">智能修复缺失/脏封面 (${smartCount})</button>
-            <button class="btn primary" id="coverRefreshForceBtn">全量重扫全部本地图书 (${forceCount})</button>
+            <button class="btn primary" id="coverRefreshSmartBtn">推荐：只补缺失 / 脏封面 (${smartCount})</button>
+            <button class="btn secondary" id="coverRefreshForceBtn">高级：全量重扫全部本地图书 (${forceCount})</button>
             <button class="btn ghost" id="coverRefreshCancelBtn">取消</button>
           </div>
           ${isRunning ? `<div style="margin-top:12px;display:flex;gap:8px">
@@ -5598,9 +5612,10 @@ ${list.map(b => `<tr>
               <div style="font-size:13px;color:var(--muted);margin-top:4px">${data.bookCount} 本书</div>
             </div>
             <div class="book-grid">${data.books.map(b => {
-              const cu = b.isbn ? `${GBOOKS_PROXY}/cover/${b.isbn.replace(/[^0-9Xx]/g, '')}` : (b.coverUrl || '');
+              const cu = coverUrl(b);
+              const fallbackCu = coverFallbackUrl(b);
               return `<div class="book-grid-item">
-                ${cu ? `<div class="cover-wrap"><img src="${escapeHtml(cu)}" alt="${escapeHtml(b.title || '')}" loading="lazy" ${b.coverUrl && b.coverUrl !== cu ? `data-fallback-src="${escapeHtml(b.coverUrl)}"` : ''} onload="onCoverLoad(this)" onerror="handleCoverError(this)" /></div>` : `<div class="cover-wrap"><div class="cover-placeholder">📖</div></div>`}
+                ${cu ? `<div class="cover-wrap"><img src="${escapeHtml(cu)}" alt="${escapeHtml(b.title || '')}" loading="lazy" ${fallbackCu ? `data-fallback-src="${escapeHtml(fallbackCu)}"` : ''} onload="onCoverLoad(this)" onerror="handleCoverError(this)" /></div>` : `<div class="cover-wrap"><div class="cover-placeholder">📖</div></div>`}
                 <div class="book-grid-title">${escapeHtml(b.title || '未命名')}</div>
                 <div class="book-grid-author">${escapeHtml(b.author || '')}</div>
               </div>`;
