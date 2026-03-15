@@ -3303,7 +3303,9 @@ ${list.map(b => `<tr>
             }
           }
         }
-      } catch {}
+      } catch (err) {
+        _pushCoverDiag(diagnostics, 'repair-flow-error', { text: `补图流程异常：${err?.message || '未知错误'}` });
+      }
       if (!bestUrl) {
         return options.includeDiagnostics ? { candidate: null, diagnostics, isbn: compact } : null;
       }
