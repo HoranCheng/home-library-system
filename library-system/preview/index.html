@@ -1548,6 +1548,17 @@
     function isOpenLibraryCoverUrl(url) {
       return /covers\.openlibrary\.org\//i.test(String(url || '').trim());
     }
+    function isGBPlaceholderUrl(url) {
+      if (!url) return true;
+      const s = String(url).trim();
+      if (!s) return true;
+      // Volume IDs ending with ACAAJ typically have no real cover image
+      const m = s.match(/[?&]id=([^&]+)/);
+      if (m && m[1].endsWith('ACAAJ')) return true;
+      // Some low-confidence Google thumbnails still slip through without ACAAJ
+      if (/books\.google(?:usercontent)?\./i.test(s) && /[?&]zoom=1\b/i.test(s)) return true;
+      return false;
+    }
     function isStoredCoverDirty(book) {
       const stored = String(book?.coverUrl || '').trim();
       if (!stored) return true;
@@ -4402,19 +4413,6 @@ ${list.map(b => `<tr>
         let coverUrl = thumb ? thumb.replace(/^http:/, 'https:').replace('&edge=curl', '').replace('zoom=1', 'zoom=2') : '';
         if (isGBPlaceholderUrl(coverUrl)) coverUrl = '';
         return { title, authors, category, description, year, lang, coverUrl };
-      }
-
-      // Check if a Google Books volume likely has no real cover
-      function isGBPlaceholderUrl(url) {
-        if (!url) return true;
-        const s = String(url).trim();
-        if (!s) return true;
-        // Volume IDs ending with ACAAJ typically have no real cover image
-        const m = s.match(/[?&]id=([^&]+)/);
-        if (m && m[1].endsWith('ACAAJ')) return true;
-        // Some low-confidence Google thumbnails still slip through without ACAAJ
-        if (/books\.google(?:usercontent)?\./i.test(s) && /[?&]zoom=1\b/i.test(s)) return true;
-        return false;
       }
 
       // Extract cover from ANY Google Books item (not just best-language match)
