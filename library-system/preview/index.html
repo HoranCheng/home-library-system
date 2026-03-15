@@ -2532,18 +2532,17 @@
         return false;
       }
 
-      // If we have ISBN but no cover, try Bookcover API
+      // If we still have no usable cover, reuse the repair pipeline conservatively.
       if (!coverUrl && isbn) {
-        const compact = isbn.replace(/[^0-9Xx]/g, '');
-        if (compact) {
-          try {
-            const bcRes = await fetchWithTimeout(`https://bookcover.longitood.com/bookcover/${encodeURIComponent(compact)}`);
-            if (bcRes.ok) {
-              const bcData = await bcRes.json();
-              if (bcData.url) coverUrl = bcData.url;
-            }
-          } catch (_) {}
-        }
+        const fallbackCandidate = await _fetchBestCoverCandidateForBook({
+          isbn,
+          title,
+          author,
+          bookLang,
+          coverUrl: '',
+          metadataSources,
+        }).catch(() => null);
+        if (fallbackCandidate?.url) coverUrl = fallbackCandidate.url;
       }
 
       const wasEditing = Boolean(editingBookId);
@@ -3214,8 +3213,8 @@ ${list.map(b => `<tr>
         const olRaw = results[ri++]?.value;
         const bcRaw = results[ri++]?.value;
         tryRecoveredCover(doubanRaw?.coverUrl, '豆瓣读书');
-        tryRecoveredCover(extractAnyCover(gbRaw), 'Google Books');
-        tryRecoveredCover(olRaw?.docs?.[0]?.cover_i ? `https://covers.openlibrary.org/b/id/${olRaw.docs[0].cover_i}-M.jpg` : '', 'Open Library');
+        tryRecoveredCover(extractAnyCover(gbRaw, { isbn: compact, title: book?.title, author: book?.author, preferredLang: isZh ? 'zh' : '' }), 'Google Books');
+        tryRecoveredCover(pickBestOpenLibraryCover(olRaw, { title: book?.title, author: book?.author }), 'Open Library');
         tryRecoveredCover(bcRaw?.url, 'Bookcover API');
       } catch {}
       if (!bestUrl) return null;
@@ -3289,7 +3288,9 @@ ${list.map(b => `<tr>
             // Guardrail: Google Books may replace only when the current stored cover is
             // clearly dirty/bad; otherwise it still behaves as fill-missing-only.
             const gbThumb = (vi.imageLinks?.thumbnail || '').replace(/^http:/, 'https:').replace('&edge=curl', '').replace('zoom=1', 'zoom=2');
-            if (!book.coverUrl || currentCoverDirty) trySetCover(gbThumb, 'Google Books');
+            if (!book.coverUrl || currentCoverDirty) {
+              trySetCover(pickBestGoogleCover(gbRaw, { isbn: compact, title: book?.title || vi.title, author: book?.author || (vi.authors || []).join(', '), preferredLang: isZh ? 'zh' : (book?.bookLang || '') }) || gbThumb, 'Google Books');
+            }
             if (!candidates.description && !book.description && qualityOk(vi.description)) candidates.description = vi.description.slice(0, 600);
             if (!candidates.author && !book.author && vi.authors?.length) candidates.author = vi.authors.join(', ');
             if (!candidates.publishedYear && !book.publishedYear && vi.publishedDate) {
@@ -3305,7 +3306,7 @@ ${list.map(b => `<tr>
             const d = olRaw.docs[0];
             if (!candidates.author && !book.author && d.author_name?.length) candidates.author = d.author_name.slice(0, 3).join(', ');
             if (!candidates.publishedYear && !book.publishedYear && d.first_publish_year) candidates.publishedYear = String(d.first_publish_year);
-            if (d.cover_i && (!book.coverUrl || currentCoverDirty)) trySetCover(`https://covers.openlibrary.org/b/id/${d.cover_i}-M.jpg`, 'Open Library');
+            if (!book.coverUrl || currentCoverDirty) trySetCover(pickBestOpenLibraryCover(olRaw, { title: book?.title || d.title, author: book?.author || (d.author_name || []).join(', ') }) || (d.cover_i ? `https://covers.openlibrary.org/b/id/${d.cover_i}-M.jpg` : ''), 'Open Library');
             if (!candidates.category && !book.category && d.subject?.length) {
               const cat = translateCategory(d.subject[0]);
               if (cat) candidates.category = cat;
@@ -4398,6 +4399,88 @@ ${list.map(b => `<tr>
         return { title, authors, category, description: desc, year, lang: langKey || null, coverUrl: coverThumb };
       }
 
+      function normalizeGoogleCoverUrl(url) {
+        const s = String(url || '').trim();
+        if (!s) return '';
+        const normalized = s.replace(/^http:/, 'https:').replace('&edge=curl', '').replace('zoom=1', 'zoom=2');
+        return isGBPlaceholderUrl(normalized) ? '' : normalized;
+      }
+
+      function extractGoogleImageLinks(item) {
+        const imgs = item?.volumeInfo?.imageLinks || {};
+        return [imgs.extraLarge, imgs.large, imgs.medium, imgs.small, imgs.thumbnail, imgs.smallThumbnail]
+          .map(normalizeGoogleCoverUrl)
+          .filter(Boolean);
+      }
+
+      function normalizedSearchText(text) {
+        return String(text || '').toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
+      }
+
+      function pickBestGoogleCover(gbData, options = {}) {
+        if (!gbData?.items?.length) return '';
+        const preferredLang = String(options.preferredLang || '').toLowerCase();
+        const wantedTitle = normalizedSearchText(options.title || '');
+        const wantedAuthor = normalizedSearchText(options.author || '');
+        const wantedIsbn = String(options.isbn || '').replace(/[^0-9Xx]/g, '').toUpperCase();
+        let bestUrl = '';
+        let bestScore = -1;
+        for (const item of gbData.items) {
+          const info = item?.volumeInfo || {};
+          const urls = extractGoogleImageLinks(item);
+          if (!urls.length) continue;
+          let score = 10;
+          const lang = String(info.language || '').toLowerCase();
+          if (preferredLang && lang.startsWith(preferredLang)) score += 30;
+          const title = normalizedSearchText(info.title || '');
+          const subtitle = normalizedSearchText(info.subtitle || '');
+          const titleBlob = [title, subtitle].filter(Boolean).join(' ');
+          const authorsBlob = normalizedSearchText(Array.isArray(info.authors) ? info.authors.join(' ') : '');
+          if (wantedTitle && titleBlob) {
+            if (titleBlob === wantedTitle) score += 40;
+            else if (titleBlob.includes(wantedTitle) || wantedTitle.includes(title)) score += 25;
+          }
+          if (wantedAuthor && authorsBlob) {
+            if (authorsBlob.includes(wantedAuthor) || wantedAuthor.includes(authorsBlob)) score += 20;
+          }
+          if (wantedIsbn && Array.isArray(info.industryIdentifiers) && info.industryIdentifiers.some(id => String(id?.identifier || '').replace(/[^0-9Xx]/g, '').toUpperCase() === wantedIsbn)) score += 20;
+          if (score > bestScore) {
+            bestScore = score;
+            bestUrl = urls[0];
+          }
+        }
+        return bestUrl;
+      }
+
+      function pickBestOpenLibraryCover(data, options = {}) {
+        const docs = Array.isArray(data?.docs) ? data.docs : [];
+        if (!docs.length) return '';
+        const wantedTitle = normalizedSearchText(options.title || '');
+        const wantedAuthor = normalizedSearchText(options.author || '');
+        let bestUrl = '';
+        let bestScore = -1;
+        for (const doc of docs) {
+          if (!doc?.cover_i) continue;
+          let score = 5;
+          const title = normalizedSearchText(doc.title || '');
+          const subtitle = normalizedSearchText(doc.subtitle || '');
+          const titleBlob = [title, subtitle].filter(Boolean).join(' ');
+          const authorsBlob = normalizedSearchText(Array.isArray(doc.author_name) ? doc.author_name.join(' ') : '');
+          if (wantedTitle && titleBlob) {
+            if (titleBlob === wantedTitle) score += 30;
+            else if (titleBlob.includes(wantedTitle) || wantedTitle.includes(title)) score += 18;
+          }
+          if (wantedAuthor && authorsBlob) {
+            if (authorsBlob.includes(wantedAuthor) || wantedAuthor.includes(authorsBlob)) score += 12;
+          }
+          if (score > bestScore) {
+            bestScore = score;
+            bestUrl = `https://covers.openlibrary.org/b/id/${doc.cover_i}-M.jpg`;
+          }
+        }
+        return bestUrl;
+      }
+
       function parseGoogleBooks(item) {
         if (!item) return null;
         const info = item.volumeInfo || {};
@@ -4422,24 +4505,13 @@ ${list.map(b => `<tr>
         const yearMatch = String(info.publishedDate || '').match(/(19|20)\d{2}/);
         const year = yearMatch ? yearMatch[0] : '';
         const lang = info.language || null;
-        // Google Books thumbnail — ensure HTTPS, improve quality, filter placeholders
-        const thumb = info.imageLinks?.thumbnail || info.imageLinks?.smallThumbnail || '';
-        let coverUrl = thumb ? thumb.replace(/^http:/, 'https:').replace('&edge=curl', '').replace('zoom=1', 'zoom=2') : '';
-        if (isGBPlaceholderUrl(coverUrl)) coverUrl = '';
+        const coverUrl = extractGoogleImageLinks(item)[0] || '';
         return { title, authors, category, description, year, lang, coverUrl };
       }
 
       // Extract cover from ANY Google Books item (not just best-language match)
-      function extractAnyCover(gbData) {
-        if (!gbData?.items?.length) return '';
-        for (const item of gbData.items) {
-          const imgs = item?.volumeInfo?.imageLinks;
-          if (imgs?.thumbnail || imgs?.smallThumbnail) {
-            const url = (imgs.thumbnail || imgs.smallThumbnail).replace(/^http:/, 'https:').replace('&edge=curl', '').replace('zoom=1', 'zoom=2');
-            if (!isGBPlaceholderUrl(url)) return url;
-          }
-        }
-        return '';
+      function extractAnyCover(gbData, options = {}) {
+        return pickBestGoogleCover(gbData, options);
       }
 
       function parseCrossref(item) {
@@ -4653,7 +4725,7 @@ ${list.map(b => `<tr>
         if (gbParsed) fastResult.push({ source: 'Google Books', data: gbParsed });
 
         let merged = mergeResults(fastResult, preferredLang);
-        if (!merged.coverUrl) merged.coverUrl = bcCover || extractAnyCover(gbLangRes) || extractAnyCover(gbRes) || '';
+        if (!merged.coverUrl) merged.coverUrl = bcCover || extractAnyCover(gbLangRes, { isbn: compact, title: merged.title, author: merged.authors.join(', '), preferredLang }) || extractAnyCover(gbRes, { isbn: compact, title: merged.title, author: merged.authors.join(', '), preferredLang }) || '';
         if (merged.category) merged.category = translateCategory(merged.category);
 
         // Title + author is enough to show immediately; category filled in background
@@ -4683,7 +4755,7 @@ ${list.map(b => `<tr>
                 els.publishedYear.value = olSearchParsed.year; markAutoFilled('publishedYear');
               }
               if (!els.manualCard.dataset.pendingCoverUrl) {
-                const fallback = olSearchParsed?.coverUrl || '';
+                const fallback = pickBestOpenLibraryCover(enrichRes[0].status === 'fulfilled' ? enrichRes[0].value : null, { title: els.title.value, author: els.author.value }) || olSearchParsed?.coverUrl || '';
                 if (fallback) els.manualCard.dataset.pendingCoverUrl = fallback;
               }
             } catch (enrichErr) {
@@ -4763,7 +4835,7 @@ ${list.map(b => `<tr>
           if (doubanParsed) allResults.push({ source: '豆瓣读书', data: doubanParsed });
 
           merged = mergeResults(allResults, preferredLang);
-          if (!merged.coverUrl) merged.coverUrl = bcCover || extractAnyCover(gbAltRes) || extractAnyCover(gbTitleRes) || '';
+          if (!merged.coverUrl) merged.coverUrl = bcCover || extractAnyCover(gbAltRes, { isbn: altIsbn || compact, title: merged.title, author: merged.authors.join(', '), preferredLang }) || extractAnyCover(gbTitleRes, { isbn: compact, title: merged.title, author: merged.authors.join(', '), preferredLang }) || pickBestOpenLibraryCover(olSearchRes, { title: merged.title, author: merged.authors.join(', ') }) || '';
           if (!merged.coverUrl) merged.coverUrl = `https://covers.openlibrary.org/b/isbn/${compact}-M.jpg`;
           if (merged.category) merged.category = translateCategory(merged.category);
           applyToForm(merged);
