@@ -3220,6 +3220,55 @@ ${list.map(b => `<tr>
         return isStoredCoverDirty(b);
       });
     }
+    function normalizeGoogleCoverUrl(url) {
+      const s = String(url || '').trim();
+      if (!s) return '';
+      const normalized = s.replace(/^http:/, 'https:').replace('&edge=curl', '').replace('zoom=1', 'zoom=2');
+      return isGBPlaceholderUrl(normalized) ? '' : normalized;
+    }
+    function extractGoogleImageLinks(item) {
+      const imgs = item?.volumeInfo?.imageLinks || {};
+      return [imgs.extraLarge, imgs.large, imgs.medium, imgs.small, imgs.thumbnail, imgs.smallThumbnail]
+        .map(normalizeGoogleCoverUrl)
+        .filter(Boolean);
+    }
+    function normalizedSearchText(text) {
+      return String(text || '').toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
+    }
+    function pickBestGoogleCover(gbData, options = {}) {
+      if (!gbData?.items?.length) return '';
+      const preferredLang = String(options.preferredLang || '').toLowerCase();
+      const wantedTitle = normalizedSearchText(options.title || '');
+      const wantedAuthor = normalizedSearchText(options.author || '');
+      const wantedIsbn = String(options.isbn || '').replace(/[^0-9Xx]/g, '').toUpperCase();
+      let bestUrl = '';
+      let bestScore = -1;
+      for (const item of gbData.items) {
+        const info = item?.volumeInfo || {};
+        const urls = extractGoogleImageLinks(item);
+        if (!urls.length) continue;
+        let score = 10;
+        const lang = String(info.language || '').toLowerCase();
+        if (preferredLang && lang.startsWith(preferredLang)) score += 30;
+        const title = normalizedSearchText(info.title || '');
+        const subtitle = normalizedSearchText(info.subtitle || '');
+        const titleBlob = [title, subtitle].filter(Boolean).join(' ');
+        const authorsBlob = normalizedSearchText(Array.isArray(info.authors) ? info.authors.join(' ') : '');
+        if (wantedTitle && titleBlob) {
+          if (titleBlob === wantedTitle) score += 40;
+          else if (titleBlob.includes(wantedTitle) || wantedTitle.includes(title)) score += 25;
+        }
+        if (wantedAuthor && authorsBlob) {
+          if (authorsBlob.includes(wantedAuthor) || wantedAuthor.includes(authorsBlob)) score += 20;
+        }
+        if (wantedIsbn && Array.isArray(info.industryIdentifiers) && info.industryIdentifiers.some(id => String(id?.identifier || '').replace(/[^0-9Xx]/g, '').toUpperCase() === wantedIsbn)) score += 20;
+        if (score > bestScore) {
+          bestScore = score;
+          bestUrl = urls[0];
+        }
+      }
+      return bestUrl;
+    }
     function extractAnyCover(gbData, options = {}) {
       return pickBestGoogleCover(gbData, options);
     }
@@ -4503,59 +4552,6 @@ ${list.map(b => `<tr>
         let coverThumb = book.cover ? (book.cover.large || book.cover.medium || book.cover.small || '') : '';
         if (!coverThumb && book.cover_i) coverThumb = `https://covers.openlibrary.org/b/id/${book.cover_i}-M.jpg`;
         return { title, authors, category, description: desc, year, lang: langKey || null, coverUrl: coverThumb };
-      }
-
-      function normalizeGoogleCoverUrl(url) {
-        const s = String(url || '').trim();
-        if (!s) return '';
-        const normalized = s.replace(/^http:/, 'https:').replace('&edge=curl', '').replace('zoom=1', 'zoom=2');
-        return isGBPlaceholderUrl(normalized) ? '' : normalized;
-      }
-
-      function extractGoogleImageLinks(item) {
-        const imgs = item?.volumeInfo?.imageLinks || {};
-        return [imgs.extraLarge, imgs.large, imgs.medium, imgs.small, imgs.thumbnail, imgs.smallThumbnail]
-          .map(normalizeGoogleCoverUrl)
-          .filter(Boolean);
-      }
-
-      function normalizedSearchText(text) {
-        return String(text || '').toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
-      }
-
-      function pickBestGoogleCover(gbData, options = {}) {
-        if (!gbData?.items?.length) return '';
-        const preferredLang = String(options.preferredLang || '').toLowerCase();
-        const wantedTitle = normalizedSearchText(options.title || '');
-        const wantedAuthor = normalizedSearchText(options.author || '');
-        const wantedIsbn = String(options.isbn || '').replace(/[^0-9Xx]/g, '').toUpperCase();
-        let bestUrl = '';
-        let bestScore = -1;
-        for (const item of gbData.items) {
-          const info = item?.volumeInfo || {};
-          const urls = extractGoogleImageLinks(item);
-          if (!urls.length) continue;
-          let score = 10;
-          const lang = String(info.language || '').toLowerCase();
-          if (preferredLang && lang.startsWith(preferredLang)) score += 30;
-          const title = normalizedSearchText(info.title || '');
-          const subtitle = normalizedSearchText(info.subtitle || '');
-          const titleBlob = [title, subtitle].filter(Boolean).join(' ');
-          const authorsBlob = normalizedSearchText(Array.isArray(info.authors) ? info.authors.join(' ') : '');
-          if (wantedTitle && titleBlob) {
-            if (titleBlob === wantedTitle) score += 40;
-            else if (titleBlob.includes(wantedTitle) || wantedTitle.includes(title)) score += 25;
-          }
-          if (wantedAuthor && authorsBlob) {
-            if (authorsBlob.includes(wantedAuthor) || wantedAuthor.includes(authorsBlob)) score += 20;
-          }
-          if (wantedIsbn && Array.isArray(info.industryIdentifiers) && info.industryIdentifiers.some(id => String(id?.identifier || '').replace(/[^0-9Xx]/g, '').toUpperCase() === wantedIsbn)) score += 20;
-          if (score > bestScore) {
-            bestScore = score;
-            bestUrl = urls[0];
-          }
-        }
-        return bestUrl;
       }
 
       function bestOpenLibraryCoverCandidate(data, options = {}) {
