@@ -3192,6 +3192,24 @@ ${list.map(b => `<tr>
       if (!text) return;
       if (!diags.some(d => d?.code === code && d?.text === text)) diags.push({ code, text, ...meta });
     }
+    function _pickBestCoverDiag(diags) {
+      if (!Array.isArray(diags) || !diags.length) return null;
+      const priority = {
+        'fallback-success': 100,
+        'fallback-low-score': 90,
+        'same-cover-kept': 80,
+        'existing-cover-kept': 75,
+        'isbn-fallback-started': 60,
+        'placeholder-filtered': 55,
+        'unsafe-url-filtered': 50,
+        'no-title-author-fallback': 40,
+        'no-title-for-fallback': 40,
+        'fallback-not-triggered': 35,
+        'isbn-candidates-empty': 20,
+        'invalid-isbn': 10,
+      };
+      return diags.slice().sort((a, b) => (priority[b?.code] || 0) - (priority[a?.code] || 0))[0];
+    }
     function _buildCoverRefreshCandidates(options = {}) {
       const force = options.force === true;
       const graceCutoff = Date.now() - COVER_REFRESH_GRACE_DAYS * 86400 * 1000;
@@ -3639,7 +3657,7 @@ ${list.map(b => `<tr>
             allBooks[idx].coverRefreshedAt = new Date().toISOString();
             saveBooks(allBooks);
             job.skipped++;
-            const reason = diagnostics[0]?.text || '未找到更好的封面';
+            const reason = _pickBestCoverDiag(diagnostics)?.text || '未找到更好的封面';
             logMsg = `— ${book.title || book.isbn}：${reason}`;
           } else {
             const existingUrl = String(allBooks[idx].coverUrl || '').trim();
@@ -3654,7 +3672,7 @@ ${list.map(b => `<tr>
               allBooks[idx].coverRefreshedAt = new Date().toISOString();
               saveBooks(allBooks);
               job.skipped++;
-              const reason = diagnostics[0]?.text || '现有封面更稳妥，保留原图';
+              const reason = _pickBestCoverDiag(diagnostics)?.text || '现有封面更稳妥，保留原图';
               logMsg = `— ${book.title || book.isbn}：${reason}`;
             } else {
               const updated = { ...allBooks[idx], coverUrl: candidate.url, coverRefreshedAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
