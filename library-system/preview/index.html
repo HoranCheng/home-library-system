@@ -3171,6 +3171,25 @@ ${list.map(b => `<tr>
       const compact = String(book?.isbn || '').replace(/[^0-9Xx]/g, '');
       return compact.length === 10 || compact.length === 13;
     }
+    function _coverDiagText(code, meta = {}) {
+      if (code === 'invalid-isbn') return 'ISBN 无效或缺失';
+      if (code === 'isbn-candidates-empty') return 'ISBN 查询未返回可用封面';
+      if (code === 'fallback-not-triggered') return '未触发书名/作者兜底';
+      if (code === 'fallback-low-score') return `书名/作者候选分数过低（${meta.score || 0} < ${meta.threshold || 0}）`;
+      if (code === 'placeholder-filtered') return `${meta.source || '候选封面'} 命中过滤占位图`; 
+      if (code === 'unsafe-url-filtered') return `${meta.source || '候选封面'} URL 无效`; 
+      if (code === 'existing-cover-kept') return `保留原封面：现有评分 ${meta.currentScore ?? 0} ≥ 候选 ${meta.candidateScore ?? 0}`;
+      if (code === 'same-cover-kept') return '候选与现有封面相同';
+      if (code === 'no-title-for-fallback') return '缺少书名，无法做书名兜底';
+      if (code === 'no-title-author-fallback') return '缺少书名/作者，未触发兜底';
+      return meta.text || '未更新';
+    }
+    function _pushCoverDiag(diags, code, meta = {}) {
+      if (!Array.isArray(diags)) return;
+      const text = _coverDiagText(code, meta);
+      if (!text) return;
+      if (!diags.some(d => d?.code === code && d?.text === text)) diags.push({ code, text, ...meta });
+    }
     function _buildCoverRefreshCandidates(options = {}) {
       const force = options.force === true;
       const graceCutoff = Date.now() - COVER_REFRESH_GRACE_DAYS * 86400 * 1000;
@@ -3183,17 +3202,30 @@ ${list.map(b => `<tr>
     }
     async function _fetchBestCoverCandidateForBook(book, options = {}) {
       const compact = String(book?.isbn || '').replace(/[^0-9Xx]/g, '');
-      if (compact.length !== 10 && compact.length !== 13) return null;
+      const diagnostics = [];
+      if (compact.length !== 10 && compact.length !== 13) {
+        _pushCoverDiag(diagnostics, 'invalid-isbn');
+        return options.includeDiagnostics ? { candidate: null, diagnostics, isbn: compact } : null;
+      }
       const isZh = /^9787|^97895[67]/.test(compact);
       let bestUrl = '';
       let bestSource = '';
       let bestScore = 0;
+      let isbnCandidateSeen = false;
       const wantedTitle = String(book?.title || '').trim();
       const wantedAuthor = String(book?.author || '').trim();
       const tryRecoveredCover = (url, sourceName) => {
         const s = String(url || '').trim();
-        if (!s || !isSafeUrl(s)) return;
-        if (_normalizeCoverSourceForScore(sourceName) === 'Google Books' && isGBPlaceholderUrl(s)) return;
+        if (!s) return;
+        isbnCandidateSeen = true;
+        if (!isSafeUrl(s)) {
+          _pushCoverDiag(diagnostics, 'unsafe-url-filtered', { source: sourceName });
+          return;
+        }
+        if (_normalizeCoverSourceForScore(sourceName) === 'Google Books' && isGBPlaceholderUrl(s)) {
+          _pushCoverDiag(diagnostics, 'placeholder-filtered', { source: sourceName });
+          return;
+        }
         const score = _coverSourceScore(sourceName);
         if (score > bestScore) {
           bestScore = score;
@@ -3227,13 +3259,26 @@ ${list.map(b => `<tr>
           titleSearch.searchParams.set('limit', '5');
           const olTitleRaw = await fetchWithTimeout(titleSearch.toString()).then(r => r.ok ? r.json() : null).catch(() => null);
           const titleCandidate = bestOpenLibraryCoverCandidate(olTitleRaw, { title: wantedTitle, author: wantedAuthor });
-          if (titleCandidate && titleCandidate.score >= (wantedAuthor ? 35 : 30)) {
-            tryRecoveredCover(titleCandidate.url, 'Open Library');
+          const minScore = wantedAuthor ? 35 : 30;
+          if (titleCandidate) {
+            if (titleCandidate.score >= minScore) {
+              tryRecoveredCover(titleCandidate.url, 'Open Library');
+            } else {
+              _pushCoverDiag(diagnostics, 'fallback-low-score', { score: titleCandidate.score, threshold: minScore });
+            }
+          } else {
+            _pushCoverDiag(diagnostics, wantedAuthor ? 'no-title-author-fallback' : 'no-title-for-fallback');
           }
+        } else if (!wantedTitle) {
+          _pushCoverDiag(diagnostics, 'fallback-not-triggered');
         }
       } catch {}
-      if (!bestUrl) return null;
-      return { url: bestUrl, source: bestSource, score: bestScore, isbn: compact };
+      if (!bestUrl) {
+        if (!isbnCandidateSeen) _pushCoverDiag(diagnostics, 'isbn-candidates-empty');
+        return options.includeDiagnostics ? { candidate: null, diagnostics, isbn: compact } : null;
+      }
+      const candidate = { url: bestUrl, source: bestSource, score: bestScore, isbn: compact };
+      return options.includeDiagnostics ? { candidate, diagnostics, isbn: compact } : candidate;
     }
 
     async function _runEnrichLoop(job) {
@@ -3570,7 +3615,9 @@ ${list.map(b => `<tr>
         job.current = book.title || book.isbn;
         job.ui?.updateProgress(i, job.books.length, job.updated, job.skipped, job.failed, job.current);
         try {
-          const candidate = await _fetchBestCoverCandidateForBook(book, { force: job.force });
+          const scan = await _fetchBestCoverCandidateForBook(book, { force: job.force, includeDiagnostics: true });
+          const candidate = scan?.candidate || null;
+          const diagnostics = Array.isArray(scan?.diagnostics) ? [...scan.diagnostics] : [];
           const allBooks = loadBooks();
           const idx = allBooks.findIndex(ab => ab.id === book.id);
           if (idx < 0) continue;
@@ -3580,14 +3627,23 @@ ${list.map(b => `<tr>
             allBooks[idx].coverRefreshedAt = new Date().toISOString();
             saveBooks(allBooks);
             job.skipped++;
-            logMsg = `— ${book.title || book.isbn}：未找到更好的封面`;
+            const reason = diagnostics[0]?.text || '未找到更好的封面';
+            logMsg = `— ${book.title || book.isbn}：${reason}`;
           } else {
+            const existingUrl = String(allBooks[idx].coverUrl || '').trim();
+            const sameCover = candidate.url === existingUrl;
             const shouldReplace = currentDirty || candidate.score > currentScore;
-            if (!shouldReplace || candidate.url === String(allBooks[idx].coverUrl || '').trim()) {
+            if (!shouldReplace || sameCover) {
+              if (sameCover) {
+                _pushCoverDiag(diagnostics, 'same-cover-kept');
+              } else {
+                _pushCoverDiag(diagnostics, 'existing-cover-kept', { currentScore, candidateScore: candidate.score });
+              }
               allBooks[idx].coverRefreshedAt = new Date().toISOString();
               saveBooks(allBooks);
               job.skipped++;
-              logMsg = `— ${book.title || book.isbn}：现有封面更稳妥，保留原图`;
+              const reason = diagnostics[0]?.text || '现有封面更稳妥，保留原图';
+              logMsg = `— ${book.title || book.isbn}：${reason}`;
             } else {
               const updated = { ...allBooks[idx], coverUrl: candidate.url, coverRefreshedAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
               const sources = normalizeMetadataSources(updated.metadataSources);
