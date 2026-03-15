@@ -3220,6 +3220,9 @@ ${list.map(b => `<tr>
         return isStoredCoverDirty(b);
       });
     }
+    function extractAnyCover(gbData, options = {}) {
+      return pickBestGoogleCover(gbData, options);
+    }
     async function _fetchBestCoverCandidateForBook(book, options = {}) {
       const compact = String(book?.isbn || '').replace(/[^0-9Xx]/g, '');
       const diagnostics = [];
@@ -4616,11 +4619,6 @@ ${list.map(b => `<tr>
         const lang = info.language || null;
         const coverUrl = extractGoogleImageLinks(item)[0] || '';
         return { title, authors, category, description, year, lang, coverUrl };
-      }
-
-      // Extract cover from ANY Google Books item (not just best-language match)
-      function extractAnyCover(gbData, options = {}) {
-        return pickBestGoogleCover(gbData, options);
       }
 
       function parseCrossref(item) {
