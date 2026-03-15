@@ -3188,6 +3188,8 @@ ${list.map(b => `<tr>
       let bestUrl = '';
       let bestSource = '';
       let bestScore = 0;
+      const wantedTitle = String(book?.title || '').trim();
+      const wantedAuthor = String(book?.author || '').trim();
       const tryRecoveredCover = (url, sourceName) => {
         const s = String(url || '').trim();
         if (!s || !isSafeUrl(s)) return;
@@ -3213,9 +3215,22 @@ ${list.map(b => `<tr>
         const olRaw = results[ri++]?.value;
         const bcRaw = results[ri++]?.value;
         tryRecoveredCover(doubanRaw?.coverUrl, '豆瓣读书');
-        tryRecoveredCover(extractAnyCover(gbRaw, { isbn: compact, title: book?.title, author: book?.author, preferredLang: isZh ? 'zh' : '' }), 'Google Books');
-        tryRecoveredCover(pickBestOpenLibraryCover(olRaw, { title: book?.title, author: book?.author }), 'Open Library');
+        tryRecoveredCover(extractAnyCover(gbRaw, { isbn: compact, title: wantedTitle, author: wantedAuthor, preferredLang: isZh ? 'zh' : '' }), 'Google Books');
+        tryRecoveredCover(pickBestOpenLibraryCover(olRaw, { title: wantedTitle, author: wantedAuthor }), 'Open Library');
         tryRecoveredCover(bcRaw?.url, 'Bookcover API');
+
+        if (!bestUrl && wantedTitle) {
+          const titleSearch = new URL('https://openlibrary.org/search.json');
+          titleSearch.searchParams.set('title', wantedTitle);
+          if (wantedAuthor) titleSearch.searchParams.set('author', wantedAuthor);
+          titleSearch.searchParams.set('fields', 'title,subtitle,author_name,cover_i');
+          titleSearch.searchParams.set('limit', '5');
+          const olTitleRaw = await fetchWithTimeout(titleSearch.toString()).then(r => r.ok ? r.json() : null).catch(() => null);
+          const titleCandidate = bestOpenLibraryCoverCandidate(olTitleRaw, { title: wantedTitle, author: wantedAuthor });
+          if (titleCandidate && titleCandidate.score >= (wantedAuthor ? 35 : 30)) {
+            tryRecoveredCover(titleCandidate.url, 'Open Library');
+          }
+        }
       } catch {}
       if (!bestUrl) return null;
       return { url: bestUrl, source: bestSource, score: bestScore, isbn: compact };
@@ -4452,13 +4467,12 @@ ${list.map(b => `<tr>
         return bestUrl;
       }
 
-      function pickBestOpenLibraryCover(data, options = {}) {
+      function bestOpenLibraryCoverCandidate(data, options = {}) {
         const docs = Array.isArray(data?.docs) ? data.docs : [];
-        if (!docs.length) return '';
+        if (!docs.length) return null;
         const wantedTitle = normalizedSearchText(options.title || '');
         const wantedAuthor = normalizedSearchText(options.author || '');
-        let bestUrl = '';
-        let bestScore = -1;
+        let best = null;
         for (const doc of docs) {
           if (!doc?.cover_i) continue;
           let score = 5;
@@ -4471,14 +4485,21 @@ ${list.map(b => `<tr>
             else if (titleBlob.includes(wantedTitle) || wantedTitle.includes(title)) score += 18;
           }
           if (wantedAuthor && authorsBlob) {
-            if (authorsBlob.includes(wantedAuthor) || wantedAuthor.includes(authorsBlob)) score += 12;
+            if (authorsBlob === wantedAuthor) score += 18;
+            else if (authorsBlob.includes(wantedAuthor) || wantedAuthor.includes(authorsBlob)) score += 12;
           }
-          if (score > bestScore) {
-            bestScore = score;
-            bestUrl = `https://covers.openlibrary.org/b/id/${doc.cover_i}-M.jpg`;
-          }
+          const candidate = {
+            url: `https://covers.openlibrary.org/b/id/${doc.cover_i}-M.jpg`,
+            score,
+            doc,
+          };
+          if (!best || candidate.score > best.score) best = candidate;
         }
-        return bestUrl;
+        return best;
+      }
+
+      function pickBestOpenLibraryCover(data, options = {}) {
+        return bestOpenLibraryCoverCandidate(data, options)?.url || '';
       }
 
       function parseGoogleBooks(item) {
