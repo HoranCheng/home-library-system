@@ -1533,6 +1533,29 @@
       return '';  // 未读（默认）
     }
 
+    function normalizeMetadataSources(val) {
+      if (Array.isArray(val)) return val.filter(Boolean).map(v => String(v).trim()).filter(Boolean);
+      if (typeof val === 'string') return val.split(/\s*\/\s*/).map(v => v.trim()).filter(Boolean);
+      return [];
+    }
+    function isGoogleHostedCoverUrl(url) {
+      return /books\.google(?:usercontent)?\./i.test(String(url || '').trim());
+    }
+    function isOpenLibraryCoverUrl(url) {
+      return /covers\.openlibrary\.org\//i.test(String(url || '').trim());
+    }
+    function isStoredCoverDirty(book) {
+      const stored = String(book?.coverUrl || '').trim();
+      if (!stored) return true;
+      if (!isSafeUrl(stored)) return true;
+      if (isGBPlaceholderUrl(stored)) return true;
+      const sources = normalizeMetadataSources(book?.metadataSources);
+      // Earlier regressions mainly came from low-confidence Google/Open Library covers.
+      // Be conservative: only flag obvious known-bad states we can identify from stored data.
+      if (isGoogleHostedCoverUrl(stored) && !/[?&]zoom=2\b/i.test(stored) && !sources.includes('豆瓣读书')) return true;
+      if (isOpenLibraryCoverUrl(stored) && /\/b\/isbn\//i.test(stored) && !sources.includes('豆瓣读书')) return true;
+      return false;
+    }
     function coverUrl(book) {
       if (!book) return '';
       const isbn = String(book.isbn || '').replace(/[^0-9Xx]/g, '');
@@ -3058,8 +3081,8 @@ ${list.map(b => `<tr>
     // ── Batch Enrichment ───────────────────────────────────────────────────
     // Score an existing book's cover by how trustworthy the source is.
     function coverScore(book) {
-      if (!book.coverUrl) return 0;
-      const src = Array.isArray(book.metadataSources) ? book.metadataSources : [];
+      if (!book.coverUrl || isStoredCoverDirty(book)) return 0;
+      const src = normalizeMetadataSources(book.metadataSources);
       if (src.includes('豆瓣读书')) return 95;
       if (src.includes('Google Books')) return 80;
       if (src.includes('community-cache')) return 70;
@@ -3137,13 +3160,14 @@ ${list.map(b => `<tr>
           const olRaw = results[si++]?.value;
 
           const candidates = {};
+          const currentCoverDirty = isStoredCoverDirty(book);
           let bestCS = coverScore(book);
           let bestCoverSrc = '';
 
           function trySetCover(url, srcName) {
             if (!qualityOk(url)) return;
             const score = candidateCoverScore(srcName);
-            if (score > bestCS) {
+            if (currentCoverDirty || score > bestCS) {
               bestCS = score;
               bestCoverSrc = srcName;
               candidates.coverUrl = url;
@@ -3161,10 +3185,10 @@ ${list.map(b => `<tr>
             const vi = gbRaw.items[0].volumeInfo || {};
             // Apply same zoom=2 / edge=curl strip as mergeResults so the stored cover
             // is large enough to pass the onCoverLoad ≤200px filter.
-            // Small-step safety rule: if the book already has any cover, let Google Books
-            // fill text fields only and do not overwrite the existing cover.
+            // Guardrail: Google Books may replace only when the current stored cover is
+            // clearly dirty/bad; otherwise it still behaves as fill-missing-only.
             const gbThumb = (vi.imageLinks?.thumbnail || '').replace(/^http:/, 'https:').replace('&edge=curl', '').replace('zoom=1', 'zoom=2');
-            if (!book.coverUrl) trySetCover(gbThumb, 'Google Books');
+            if (!book.coverUrl || currentCoverDirty) trySetCover(gbThumb, 'Google Books');
             if (!candidates.description && !book.description && qualityOk(vi.description)) candidates.description = vi.description.slice(0, 600);
             if (!candidates.author && !book.author && vi.authors?.length) candidates.author = vi.authors.join(', ');
             if (!candidates.publishedYear && !book.publishedYear && vi.publishedDate) {
@@ -3180,7 +3204,7 @@ ${list.map(b => `<tr>
             const d = olRaw.docs[0];
             if (!candidates.author && !book.author && d.author_name?.length) candidates.author = d.author_name.slice(0, 3).join(', ');
             if (!candidates.publishedYear && !book.publishedYear && d.first_publish_year) candidates.publishedYear = String(d.first_publish_year);
-            if (d.cover_i && !book.coverUrl) trySetCover(`https://covers.openlibrary.org/b/id/${d.cover_i}-M.jpg`, 'Open Library');
+            if (d.cover_i && (!book.coverUrl || currentCoverDirty)) trySetCover(`https://covers.openlibrary.org/b/id/${d.cover_i}-M.jpg`, 'Open Library');
             if (!candidates.category && !book.category && d.subject?.length) {
               const cat = translateCategory(d.subject[0]);
               if (cat) candidates.category = cat;
@@ -5333,35 +5357,70 @@ ${list.map(b => `<tr>
 
     if (!new URLSearchParams(window.location.search).get('share')) render();
 
-    // One-time migration: fetch missing/placeholder covers from Bookcover API
+    // One-time migration: safely recover clearly dirty/missing stored covers
     (async function migrateCovers() {
       if (new URLSearchParams(window.location.search).get('share')) return;
-      const COVER_MIG_KEY = 'lib:cover-migration:v3';
+      const COVER_MIG_KEY = 'lib:cover-migration:v4';
       if (localStorage.getItem(COVER_MIG_KEY)) return;
       const books = loadBooks();
-      // Need cover: no coverUrl, OR obviously bad Google Books placeholder/low-confidence thumbnail
-      const isGBPlaceholder = (url) => {
-        const s = String(url || '').trim();
-        if (!s) return true;
-        if (s.includes('books.google.com') && s.includes('ACAAJ')) return true;
-        if (/books\.google(?:usercontent)?\./i.test(s) && /[?&]zoom=1\b/i.test(s)) return true;
-        return false;
-      };
-      const needCover = books.filter(b => b.isbn && (!b.coverUrl || isGBPlaceholder(b.coverUrl)));
+      const needCover = books.filter(b => {
+        if (!b?.isbn) return false;
+        const isbn = String(b.isbn).replace(/[^0-9Xx]/g, '');
+        if (isbn.length !== 10 && isbn.length !== 13) return false;
+        return isStoredCoverDirty(b);
+      });
       if (!needCover.length) { localStorage.setItem(COVER_MIG_KEY, Date.now().toString()); return; }
       let changed = false;
       for (const b of needCover) {
         const isbn = String(b.isbn).replace(/[^0-9Xx]/g, '');
         if (!isbn) continue;
-        try {
-          const res = await fetchWithTimeout(`https://bookcover.longitood.com/bookcover/${encodeURIComponent(isbn)}`);
-          if (res.ok) {
-            const data = await res.json();
-            if (data.url) { b.coverUrl = data.url; b.updatedAt = new Date().toISOString(); changed = true; }
+        const isZh = /^9787|^97895[67]/.test(isbn);
+        let bestUrl = '';
+        let bestSource = '';
+        let bestScore = 0;
+        const tryRecoveredCover = (url, sourceName) => {
+          const s = String(url || '').trim();
+          if (!s || !isSafeUrl(s)) return;
+          if (sourceName === 'Google Books' && isGBPlaceholderUrl(s)) return;
+          const score = sourceName === '豆瓣读书' ? 95
+            : sourceName === 'Bookcover API' ? 85
+            : sourceName === 'Google Books' ? 80
+            : sourceName === 'Open Library' ? 60
+            : 0;
+          if (score > bestScore) {
+            bestScore = score;
+            bestSource = sourceName;
+            bestUrl = s;
           }
+        };
+        try {
+          const urls = [
+            isZh ? `${GBOOKS_PROXY}/douban/${encodeURIComponent(isbn)}` : null,
+            `${GBOOKS_PROXY}/?q=isbn:${encodeURIComponent(isbn)}&maxResults=3`,
+            `https://openlibrary.org/search.json?isbn=${encodeURIComponent(isbn)}&fields=cover_i&limit=1`,
+            `https://bookcover.longitood.com/bookcover/${encodeURIComponent(isbn)}`,
+          ].filter(Boolean);
+          const results = await Promise.allSettled(urls.map(u => fetchWithTimeout(u).then(r => r.ok ? r.json() : null).catch(() => null)));
+          let ri = 0;
+          const doubanRaw = isZh ? results[ri++]?.value : null;
+          const gbRaw = results[ri++]?.value;
+          const olRaw = results[ri++]?.value;
+          const bcRaw = results[ri++]?.value;
+          tryRecoveredCover(doubanRaw?.coverUrl, '豆瓣读书');
+          tryRecoveredCover(extractAnyCover(gbRaw), 'Google Books');
+          tryRecoveredCover(olRaw?.docs?.[0]?.cover_i ? `https://covers.openlibrary.org/b/id/${olRaw.docs[0].cover_i}-M.jpg` : '', 'Open Library');
+          tryRecoveredCover(bcRaw?.url, 'Bookcover API');
         } catch (_) {}
-        // Small delay to be nice to the API
-        await new Promise(r => setTimeout(r, 300));
+        if (bestUrl && bestUrl !== String(b.coverUrl || '').trim()) {
+          b.coverUrl = bestUrl;
+          b.updatedAt = new Date().toISOString();
+          const sources = normalizeMetadataSources(b.metadataSources);
+          if (bestSource && !sources.includes(bestSource)) sources.push(bestSource);
+          b.metadataSources = sources;
+          changed = true;
+        }
+        // Small delay to be nice to upstream APIs
+        await new Promise(r => setTimeout(r, 350));
       }
       if (changed) { saveBooks(books); render(); }
       localStorage.setItem(COVER_MIG_KEY, Date.now().toString());
