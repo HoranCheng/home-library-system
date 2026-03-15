@@ -3272,6 +3272,39 @@ ${list.map(b => `<tr>
     function extractAnyCover(gbData, options = {}) {
       return pickBestGoogleCover(gbData, options);
     }
+    function bestOpenLibraryCoverCandidate(data, options = {}) {
+      const docs = Array.isArray(data?.docs) ? data.docs : [];
+      if (!docs.length) return null;
+      const wantedTitle = normalizedSearchText(options.title || '');
+      const wantedAuthor = normalizedSearchText(options.author || '');
+      let best = null;
+      for (const doc of docs) {
+        if (!doc?.cover_i) continue;
+        let score = 5;
+        const title = normalizedSearchText(doc.title || '');
+        const subtitle = normalizedSearchText(doc.subtitle || '');
+        const titleBlob = [title, subtitle].filter(Boolean).join(' ');
+        const authorsBlob = normalizedSearchText(Array.isArray(doc.author_name) ? doc.author_name.join(' ') : '');
+        if (wantedTitle && titleBlob) {
+          if (titleBlob === wantedTitle || title === wantedTitle) score += 36;
+          else if (titleBlob.includes(wantedTitle) || wantedTitle.includes(title)) score += 22;
+        }
+        if (wantedAuthor && authorsBlob) {
+          if (authorsBlob === wantedAuthor) score += 18;
+          else if (authorsBlob.includes(wantedAuthor) || wantedAuthor.includes(authorsBlob)) score += 12;
+        }
+        const candidate = {
+          url: `https://covers.openlibrary.org/b/id/${doc.cover_i}-M.jpg`,
+          score,
+          doc,
+        };
+        if (!best || candidate.score > best.score) best = candidate;
+      }
+      return best;
+    }
+    function pickBestOpenLibraryCover(data, options = {}) {
+      return bestOpenLibraryCoverCandidate(data, options)?.url || '';
+    }
     async function _fetchBestCoverCandidateForBook(book, options = {}) {
       const compact = String(book?.isbn || '').replace(/[^0-9Xx]/g, '');
       const diagnostics = [];
@@ -4552,41 +4585,6 @@ ${list.map(b => `<tr>
         let coverThumb = book.cover ? (book.cover.large || book.cover.medium || book.cover.small || '') : '';
         if (!coverThumb && book.cover_i) coverThumb = `https://covers.openlibrary.org/b/id/${book.cover_i}-M.jpg`;
         return { title, authors, category, description: desc, year, lang: langKey || null, coverUrl: coverThumb };
-      }
-
-      function bestOpenLibraryCoverCandidate(data, options = {}) {
-        const docs = Array.isArray(data?.docs) ? data.docs : [];
-        if (!docs.length) return null;
-        const wantedTitle = normalizedSearchText(options.title || '');
-        const wantedAuthor = normalizedSearchText(options.author || '');
-        let best = null;
-        for (const doc of docs) {
-          if (!doc?.cover_i) continue;
-          let score = 5;
-          const title = normalizedSearchText(doc.title || '');
-          const subtitle = normalizedSearchText(doc.subtitle || '');
-          const titleBlob = [title, subtitle].filter(Boolean).join(' ');
-          const authorsBlob = normalizedSearchText(Array.isArray(doc.author_name) ? doc.author_name.join(' ') : '');
-          if (wantedTitle && titleBlob) {
-            if (titleBlob === wantedTitle || title === wantedTitle) score += 36;
-            else if (titleBlob.includes(wantedTitle) || wantedTitle.includes(title)) score += 22;
-          }
-          if (wantedAuthor && authorsBlob) {
-            if (authorsBlob === wantedAuthor) score += 18;
-            else if (authorsBlob.includes(wantedAuthor) || wantedAuthor.includes(authorsBlob)) score += 12;
-          }
-          const candidate = {
-            url: `https://covers.openlibrary.org/b/id/${doc.cover_i}-M.jpg`,
-            score,
-            doc,
-          };
-          if (!best || candidate.score > best.score) best = candidate;
-        }
-        return best;
-      }
-
-      function pickBestOpenLibraryCover(data, options = {}) {
-        return bestOpenLibraryCoverCandidate(data, options)?.url || '';
       }
 
       function parseGoogleBooks(item) {
