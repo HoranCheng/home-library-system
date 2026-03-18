@@ -1627,10 +1627,17 @@
       if (isBadCover) {
         // Clear the stored coverUrl so isStoredCoverDirty() recognises it as dirty
         // on next load, enabling the repair/fallback pipeline to re-fetch.
+        // Only write when the stored URL is non-empty to avoid redundant saves.
         const bookEl = img.closest('[data-id]');
         const bookId = bookEl?.dataset?.id;
         if (bookId) {
-          try { updateBook(bookId, b => ({ coverUrl: '' })); } catch (_) { /* best-effort */ }
+          try {
+            const books = loadBooks();
+            const existing = books.find(b => b.id === bookId);
+            if (existing && String(existing.coverUrl || '').trim()) {
+              updateBook(bookId, () => ({ coverUrl: '' }));
+            }
+          } catch (_) { /* best-effort */ }
         }
         swapToCoverFallbackOrPlaceholder(img);
         return;
