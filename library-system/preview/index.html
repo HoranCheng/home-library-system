@@ -1609,19 +1609,32 @@
     // Detect placeholder / unusable covers and prefer fallback before hiding them
     function onCoverLoad(img) {
       const w = img.naturalWidth, h = img.naturalHeight;
-      // 1x1 GIF from Open Library
-      if (w <= 2 && h <= 2) { swapToCoverFallbackOrPlaceholder(img); return; }
       const src = String(img.src || '');
       const fallback = String(img?.dataset?.fallbackSrc || '');
       const looksGoogle = /books\.google(?:usercontent)?\./i.test(src) || /books\.google(?:usercontent)?\./i.test(fallback);
+      let isBadCover = false;
+      // 1x1 GIF from Open Library
+      if (w <= 2 && h <= 2) isBadCover = true;
       // Google Books grey "image not available" placeholder commonly loads as 128x196.
       // Tighten the rule: only treat it as bad when it also looks like a Google image.
-      if (w === 128 && h === 196 && looksGoogle) { swapToCoverFallbackOrPlaceholder(img); return; }
+      else if (w === 128 && h === 196 && looksGoogle) isBadCover = true;
       // Catch any small Google-hosted cover (real covers are usually larger)
-      if (looksGoogle && w <= 200) { swapToCoverFallbackOrPlaceholder(img); return; }
+      else if (looksGoogle && w <= 200) isBadCover = true;
       // Generic tiny placeholder detection — keep this conservative so we don't hide
       // legitimate low-res covers from non-Google sources.
-      if (w <= 60 && h <= 90) { swapToCoverFallbackOrPlaceholder(img); return; }
+      else if (w <= 60 && h <= 90) isBadCover = true;
+
+      if (isBadCover) {
+        // Clear the stored coverUrl so isStoredCoverDirty() recognises it as dirty
+        // on next load, enabling the repair/fallback pipeline to re-fetch.
+        const bookEl = img.closest('[data-id]');
+        const bookId = bookEl?.dataset?.id;
+        if (bookId) {
+          try { updateBook(bookId, b => ({ coverUrl: '' })); } catch (_) { /* best-effort */ }
+        }
+        swapToCoverFallbackOrPlaceholder(img);
+        return;
+      }
     }
     function coverHtml(cu, title, fallbackSrc = '') {
       if (cu) return `<div class="cover-wrap"><img src="${escapeHtml(cu)}" alt="${escapeHtml(title || '')}" loading="lazy" ${fallbackSrc ? `data-fallback-src="${escapeHtml(fallbackSrc)}"` : ''} onload="onCoverLoad(this)" onerror="handleCoverError(this)" /></div>`;
