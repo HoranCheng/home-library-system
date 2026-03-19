@@ -4592,6 +4592,12 @@ ${list.map(b => `<tr>
         else els.manualNotice.innerHTML = html;
       };
 
+      // Early offline check — avoid 8s timeout wait
+      if (!navigator.onLine) {
+        setNotice('warn', `${sourceLabel}：${isbn}，当前离线，无法查询书目信息。请联网后重试，或手动补充。`);
+        return { found: false, offline: true };
+      }
+
       // Infer preferred language from ISBN prefix
       function inferLang(isbnStr) {
         const c = String(isbnStr || '').replace(/[^0-9Xx]/g, '');
