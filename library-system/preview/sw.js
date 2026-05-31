@@ -1,5 +1,7 @@
-const CACHE_VERSION = 'library-v3';
-const PRECACHE_ASSETS = ['./index.html', './manifest.json'];
+// Bump CACHE_VERSION on every meaningful release so old shells are evicted.
+// Format: library-vYYYYMMDD-N
+const CACHE_VERSION = 'library-v20260529-1';
+const PRECACHE_ASSETS = ['./manifest.json']; // Don't precache index.html — always fetch fresh
 
 // Install: precache known app shell assets
 self.addEventListener('install', e => {
@@ -30,6 +32,15 @@ self.addEventListener('fetch', e => {
 
   // Skip API/worker requests even if same-origin
   if (url.pathname.startsWith('/auth/') || url.pathname.startsWith('/sync/')) return;
+
+  // Always go to network for HTML — avoid stale app shell after a deploy.
+  const isHtml = e.request.mode === 'navigate' || url.pathname.endsWith('.html') || url.pathname === '/';
+  if (isHtml) {
+    e.respondWith(
+      fetch(e.request).catch(() => caches.match(e.request))
+    );
+    return;
+  }
 
   e.respondWith(
     fetch(e.request)
