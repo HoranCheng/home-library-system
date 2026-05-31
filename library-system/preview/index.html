@@ -17,7 +17,7 @@
       --bg:#F6F3ED; --bg2:#EDE8E0; --card:#FFFDF8; --line:rgba(44,38,31,.07);
       --text:#2C261F; --muted:#7A6F62; --accent:#3D5E4C; --accent-light:#E8EFE9;
       --accent2:#8B6F4E; --brown-light:#F5EDE2;
-      --ok:#4A7C59; --ok-light:#EAF3EC; --warn:#B8863A; --warn-light:#FFF7E6; --danger:#A84E4E;
+      --ok:#4A7C59; --ok-light:#EAF3EC; --warn:#B8863A; --warn-light:#FFF7E6; --danger:#A84E4E; --danger-light:#FDECEC;
       --surface:#F3EFE8; --surface-2:#EBE6DC;
       --shadow:0 2px 12px rgba(44,38,31,.06);
       --shadow-md:0 4px 20px rgba(44,38,31,.10);
@@ -68,6 +68,20 @@
     /* ── Content area ── */
     .content { padding:0 20px calc(var(--safe-bottom) + 72px); }
     .hidden { display:none !important; }
+    @media (prefers-reduced-motion: reduce) {
+      ::view-transition-old(root),
+      ::view-transition-new(root) {
+        animation-duration: 0.01s;
+      }
+    }
+    ::view-transition-old(root) {
+      animation: pageOut 0.18s cubic-bezier(.4,0,1,1) forwards;
+    }
+    ::view-transition-new(root) {
+      animation: pageIn 0.22s cubic-bezier(0,0,.2,1) forwards;
+    }
+    @keyframes pageOut { to { opacity: 0; transform: scale(0.985); } }
+    @keyframes pageIn { from { opacity: 0; transform: scale(1.012); } }
 
     /* ── Section title ── */
     .section-title { font-size:18px; font-family:var(--serif); font-weight:700; margin:0 0 14px; }
@@ -199,7 +213,7 @@
     }
     .scan-preview-actions .btn { flex:1; font-size:13px; padding:10px 0; }
     .enrich-overlay { position:fixed; inset:0; background:rgba(0,0,0,.5); z-index:9999; display:flex; align-items:flex-end; }
-    .enrich-modal { background:var(--card); border-radius:20px 20px 0 0; padding:24px; width:100%; box-shadow:0 -8px 40px rgba(0,0,0,.2); animation:previewSlideUp .3s ease; }
+    .enrich-modal { background:var(--card); border-radius:20px 20px 0 0; padding:24px; width:100%; box-shadow:0 -8px 40px rgba(0,0,0,.2); animation:previewSlideUp .3s ease; will-change:transform, opacity; }
     .enrich-title { font-size:18px; font-weight:700; margin-bottom:6px; }
     .enrich-sub { font-size:13px; color:var(--muted); line-height:1.5; }
     .enrich-info { background:var(--surface); border-radius:10px; padding:10px 12px; margin-top:8px; line-height:1.6; }
@@ -263,14 +277,31 @@
 
     /* ── Scanner ── */
     .scanner-box { display:none; margin-top:10px; border-radius:14px; overflow:hidden; position:relative; background:#000; }
-    .scanner-video { width:100%; display:block; max-height:200px; object-fit:cover; transition:filter .15s ease; }
+    .scanner-video { width:100%; display:block; max-height:200px; object-fit:cover; transition:filter .15s ease; will-change:filter; }
     .scanner-video.freeze { filter:brightness(1.15) contrast(1.05); }
     .scanner-freeze-flash { position:absolute; inset:0; background:rgba(255,255,255,.25); pointer-events:none; opacity:0; z-index:4; transition:opacity .12s ease; }
     .scanner-freeze-flash.active { opacity:1; }
     .scanner-aim { position:absolute; inset:0; pointer-events:none; display:flex; align-items:center; justify-content:center; flex-direction:column; gap:4px; }
     .scanner-aim-inner { width:240px; height:48px; border:2px solid var(--accent); border-radius:6px; box-shadow:0 0 0 9999px rgba(0,0,0,.55); position:relative; overflow:hidden; }
-    .scanner-aim-inner::after { content:''; position:absolute; left:8px; right:8px; height:2px; background:linear-gradient(90deg, transparent, var(--accent), transparent); animation:scanLine 1.8s ease-in-out infinite; }
-    @keyframes scanLine { 0% { top:15%; opacity:.3; } 50% { top:85%; opacity:1; } 100% { top:15%; opacity:.3; } }
+    .scanner-aim-inner::after { content:''; position:absolute; left:8px; right:8px; top:7px; height:2px; background:linear-gradient(90deg, transparent, var(--accent), transparent); animation:scanLine 1.8s ease-in-out infinite; will-change:transform, opacity; }
+    @keyframes scanLine { 0% { transform:translateY(0); opacity:.3; } 50% { transform:translateY(34px); opacity:1; } 100% { transform:translateY(0); opacity:.3; } }
+    .scanner-success {
+      position:absolute; inset:0; display:none; align-items:center; justify-content:center;
+      z-index:6; pointer-events:none; will-change:transform, opacity;
+    }
+    .scanner-success.active {
+      display:flex;
+      animation:scanSuccess .35s cubic-bezier(.2,.8,.25,1) forwards;
+    }
+    .scanner-success svg {
+      width:80px; height:80px;
+      filter:drop-shadow(0 4px 12px rgba(74,124,89,.4));
+    }
+    @keyframes scanSuccess {
+      0% { opacity:0; transform:scale(.5); }
+      60% { opacity:1; transform:scale(1.08); }
+      100% { opacity:1; transform:scale(1); }
+    }
     .scanner-hint { color:rgba(255,255,255,.75); font-size:11px; font-weight:500; text-shadow:0 1px 3px rgba(0,0,0,.6); margin-top:2px; }
     .scanner-pro-backdrop { position:absolute; inset:0; background:rgba(0,0,0,.25); z-index:9; }
     .scanner-controls { position:absolute; top:10px; right:10px; display:flex; gap:8px; z-index:5; }
@@ -278,7 +309,7 @@
     .scanner-ctrl-btn { background:rgba(0,0,0,.65); color:#fff; border:0; border-radius:10px; padding:7px 14px; font-size:14px; cursor:pointer; font-weight:600; }
     .scanner-ctrl-btn.active { background:rgba(255,200,0,.85); color:#000; }
     @keyframes camBounce { 0%,100% { transform:translateY(0) scale(1); } 50% { transform:translateY(-10px) scale(1.1); } }
-    .scanner-pro-panel { position:absolute; bottom:6px; left:6px; right:6px; background:rgba(0,0,0,.8); backdrop-filter:blur(8px); -webkit-backdrop-filter:blur(8px); color:#fff; padding:10px 12px; border-radius:10px; animation:slideUp .2s ease; z-index:10; }
+    .scanner-pro-panel { position:absolute; bottom:6px; left:6px; right:6px; background:rgba(0,0,0,.8); backdrop-filter:blur(8px); -webkit-backdrop-filter:blur(8px); color:#fff; padding:10px 12px; border-radius:10px; animation:slideUp .2s ease; transform-origin:bottom center; will-change:transform, opacity; z-index:10; }
     .pro-panel-title { display:none; }
     .pro-row { display:flex; align-items:center; gap:8px; margin-bottom:6px; }
     .pro-row:last-child { margin-bottom:0; }
@@ -317,16 +348,18 @@
       position:fixed; top:60px; left:50%; transform:translateX(-50%); z-index:999;
       background:var(--ok); color:#fff; padding:12px 24px; border-radius:14px;
       font-size:15px; font-weight:700; box-shadow:0 6px 20px rgba(74,124,89,.4);
-      animation: toastIn .3s ease, toastOut .3s ease 1.5s forwards;
+      animation:toastIn .18s cubic-bezier(.2,.8,.25,1), toastOut .18s ease 1.5s forwards;
       pointer-events:none;
+      will-change:transform, opacity;
     }
-    @keyframes toastIn { from { opacity:0; transform:translateX(-50%) translateY(-20px); } to { opacity:1; transform:translateX(-50%) translateY(0); } }
-    @keyframes toastOut { from { opacity:1; } to { opacity:0; } }
+    @keyframes toastIn { from { opacity:0; transform:translateX(-50%) translateY(-10px) scale(.96); } to { opacity:1; transform:translateX(-50%) translateY(0) scale(1); } }
+    @keyframes toastOut { from { opacity:1; transform:translateX(-50%) translateY(0) scale(1); } to { opacity:0; transform:translateX(-50%) translateY(-8px) scale(.98); } }
 
     /* ── Book grid ── */
-    .book-list { margin-top:12px; }
-    .book-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(90px, 1fr)); gap:12px; margin-top:12px; }
-    .book-grid-item { text-align:center; cursor:pointer; max-width:140px; }
+    .book-list { margin-top:12px; contain:layout style paint; }
+    .book-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(90px, 1fr)); gap:12px; margin-top:12px; contain:layout style paint; will-change:transform; }
+    .book-grid-item { text-align:center; cursor:pointer; max-width:140px; content-visibility:auto; contain-intrinsic-size:auto 200px; transition:transform .12s ease; will-change:transform; }
+    .book-grid-item:active { transform:scale(.97); }
     .book-grid-item .cover-wrap { position:relative; width:100%; padding-top:150%; border-radius:10px; overflow:hidden; background:var(--surface-2); border:1px solid var(--line); }
     .book-grid-item .cover-wrap img { position:absolute; top:0; left:0; width:100%; height:100%; object-fit:cover; display:block; }
     .book-grid-item .cover-wrap .cover-placeholder { position:absolute; top:0; left:0; width:100%; height:100%; display:flex; align-items:center; justify-content:center; font-size:28px; color:var(--muted); }
@@ -345,11 +378,12 @@
     }
     .shelf-view-btn.active { background:var(--card); color:var(--text); box-shadow:0 1px 4px rgba(44,38,31,.1); }
     /* ── List View ── */
-    .book-list-view { display:flex; flex-direction:column; gap:10px; margin-top:12px; }
+    .book-list-view { display:flex; flex-direction:column; gap:10px; margin-top:12px; contain:layout style paint; }
     .book-list-item {
       display:flex; gap:12px; align-items:center; padding:10px 12px;
       background:var(--card); border-radius:12px; cursor:pointer;
       border:1px solid var(--line); transition:background .15s;
+      content-visibility:auto; contain-intrinsic-size:auto 84px;
     }
     .book-list-item:active { background:var(--surface); }
     .book-list-cover {
@@ -424,6 +458,9 @@
     .setting-label { font-size:14px; font-weight:600; }
     .setting-sub { font-size:12px; color:var(--muted); margin-top:2px; }
     .setting-arrow { color:var(--muted); font-size:16px; }
+    .settings-page { display:none; opacity:0; transform:translateY(10px) scale(.98); transform-origin:top center; }
+    .settings-page.active { display:block; animation:settingsPageIn .18s cubic-bezier(.2,.8,.25,1) forwards; }
+    @keyframes settingsPageIn { to { opacity:1; transform:translateY(0) scale(1); } }
     pre { margin:12px 0 0; padding:12px; border-radius:12px; background:#1E1A15; color:#D4CBB8; white-space:pre-wrap; word-break:break-word; font-size:12px; }
 
     /* ── Auth UI ── */
@@ -476,8 +513,10 @@
     .modal-sheet {
       width:calc(100% - 32px); max-width:420px; background:var(--bg); border-radius:20px;
       padding:0 0 24px; max-height:82vh; overflow-y:auto;
+      -webkit-overflow-scrolling:touch;
       box-shadow:0 16px 48px rgba(44,38,31,.2);
       animation:modalScaleIn .3s ease;
+      will-change:transform, opacity;
     }
     .modal-sheet .detail-anim { opacity:0; animation:detailContentIn .35s ease forwards; }
     .modal-handle { display:none; } /* hidden — centered modal doesn't need pull handle */
@@ -519,6 +558,7 @@
       z-index:40;
       transition:opacity .5s cubic-bezier(.4,0,.2,1), transform .5s cubic-bezier(.4,0,.2,1);
       box-shadow:0 4px 24px rgba(44,38,31,.18);
+      will-change:transform, opacity;
     }
     .ghost-nav.hidden {
       opacity:0; transform:translateX(-50%) translateY(20px); pointer-events:none;
@@ -545,8 +585,8 @@
     .ghost-nav .ghost-fab svg { width:22px; height:22px; stroke:rgba(255,253,248,.45); stroke-width:1.6; }
 
     /* ── Page header (collapsible) ── */
-    .page-header { transition:max-height .25s ease, opacity .25s ease; overflow:hidden; }
-    .page-header.collapsed { max-height:0; opacity:0; margin:0; padding:0; }
+    .page-header { transition:opacity .18s ease, transform .18s cubic-bezier(.2,.8,.25,1); overflow:hidden; }
+    .page-header.collapsed { max-height:0; opacity:0; margin:0; padding:0; transform:translateY(-8px) scale(.98); pointer-events:none; }
     .muted { color:var(--muted); font-size:13px; }
     .cover-card { display:flex; gap:14px; align-items:flex-start; }
     .cover-thumb { width:86px; height:122px; border-radius:12px; object-fit:cover; background:var(--surface-2); border:1px solid var(--line); }
@@ -780,6 +820,7 @@
         <div class="scanner-box" id="scannerBox">
           <video id="scannerVideo" autoplay playsinline muted class="scanner-video"></video>
           <div class="scanner-freeze-flash" id="scannerFlash"></div>
+          <div class="scanner-success" id="scannerSuccess"><svg viewBox="0 0 80 80"><circle cx="40" cy="40" r="36" fill="#4A7C59"/><path d="M22 41 L35 54 L58 28" stroke="#fff" stroke-width="5" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
           <div class="scanner-aim">
             <div class="scanner-aim-inner"></div>
             <div class="scanner-hint">将条形码或 ISBN 数字对准框内</div>
@@ -1011,6 +1052,14 @@
   </div>
 
   <script>
+    const reducedMotionQuery = window.matchMedia ? window.matchMedia('(prefers-reduced-motion: reduce)') : null;
+    function syncReducedMotionClass() {
+      document.documentElement.classList.toggle('reduced-motion', !!reducedMotionQuery?.matches);
+    }
+    syncReducedMotionClass();
+    if (reducedMotionQuery?.addEventListener) reducedMotionQuery.addEventListener('change', syncReducedMotionClass);
+    else if (reducedMotionQuery?.addListener) reducedMotionQuery.addListener(syncReducedMotionClass);
+
     // ── Universal zoom lock (all browsers, all platforms) ──────────────
     // 1. iOS Safari gesture events (pinch zoom)
     document.addEventListener('gesturestart', e => e.preventDefault(), { passive: false });
@@ -1062,6 +1111,7 @@
     function setLang(lang) { localStorage.setItem(LANG_KEY, lang); }
 
     const GBOOKS_PROXY = 'https://maomao-books-proxy.henrycdev26.workers.dev';
+    const PUBLIC_SHARE_BASE = 'https://horancheng.github.io/home-library-system/';
     // ────────────────────────────────────────────────────────
 
     // ── Backup tracking ──────────────────────────────────────────────────
@@ -1119,12 +1169,40 @@
       },
     };
 
+    function errorMessage(e, fallback = '操作失败，请稍后重试') {
+      return e?.message || e?.error || fallback;
+    }
+
+    function syncFailureMessage(e) {
+      if (e?.status === 401) return '登录已过期，请重新登录';
+      if (e?.error === 'SCHEMA_MISMATCH') return '服务端数据库需要升级，请稍后再试或联系管理员';
+      if (e?.error === 'SYNC_PUSH_FAILED') return '上传到云端失败，本地数据已保留，下次自动重试';
+      if (e?.error === 'SYNC_PULL_FAILED') return '从云端拉取失败，请检查网络后重试';
+      if (e?.error === 'TOO_MANY_BOOKS') return e.message || '本次同步数据过多，请稍后再试';
+      if (e?.error === 'RATE_LIMITED') return '同步请求太频繁，请稍后再试';
+      if (e?.error === 'TIMEOUT') return '请求超时，请检查网络';
+      if (syncManager._isNetworkError(e)) return '网络连接不稳定，稍后会自动重试同步';
+      return errorMessage(e, '同步失败，请稍后重试');
+    }
+
     // API helper
-    async function apiFetch(path, options = {}) {
+    async function apiFetch(path, options = {}, timeoutMs = 15000) {
       const headers = { 'Content-Type': 'application/json', ...options.headers };
       if (auth.token) headers['Authorization'] = `Bearer ${auth.token}`;
-      const resp = await fetch(`${API_BASE}${path}`, { ...options, headers });
-      const data = await resp.json();
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), timeoutMs);
+      let resp;
+      try {
+        resp = await fetch(`${API_BASE}${path}`, { ...options, headers, signal: controller.signal });
+      } finally {
+        clearTimeout(timer);
+      }
+      const text = await resp.text();
+      let data = {};
+      if (text) {
+        try { data = JSON.parse(text); }
+        catch { data = { error: 'INVALID_RESPONSE', message: text.slice(0, 200) }; }
+      }
       if (!resp.ok) throw { status: resp.status, ...data };
       return data;
     }
@@ -1135,6 +1213,7 @@
       _timer: null,
       _syncing: false,
       _retryTimer: null,
+      _sessionVersion: 0,
 
       /** Check if there are pending offline changes */
       hasPendingChanges() {
@@ -1153,6 +1232,20 @@
         return false;
       },
 
+      cancel() {
+        clearTimeout(this._timer);
+        clearTimeout(this._retryTimer);
+        this._timer = null;
+        this._retryTimer = null;
+        this._syncing = false;
+        this._retryDelay = 30000;
+        this._sessionVersion += 1;
+      },
+
+      _isCurrentSession(version) {
+        return version === this._sessionVersion && auth.isLoggedIn();
+      },
+
       /** Start listening for online events to replay queued sync */
       _setupOnlineListener() {
         if (this._onlineListenerActive) return;
@@ -1168,31 +1261,51 @@
       async push(force = false) {
         if (!auth.isLoggedIn()) return;
         if (this._syncing && !force) return;
+        const sessionVersion = this._sessionVersion;
         this._syncing = true;
         this._updateUI('syncing');
         try {
           const books = loadBooks();
           const presets = loadLocationPresets();
-          const resp = await apiFetch('/sync/push', {
-            method: 'POST',
-            body: JSON.stringify({ books, locationPresets: presets }),
-          });
+          const maxBatchSize = 40;
+          const batches = books.length
+            ? Array.from({ length: Math.ceil(books.length / maxBatchSize) }, (_, i) => books.slice(i * maxBatchSize, (i + 1) * maxBatchSize))
+            : [[]];
+          const summary = { accepted: 0, conflicts: [], serverUpdatedAt: null };
+
+          for (let i = 0; i < batches.length; i++) {
+            const resp = await apiFetch('/sync/push', {
+              method: 'POST',
+              body: JSON.stringify({
+                books: batches[i],
+                ...(i === 0 ? { locationPresets: presets } : {}),
+              }),
+            });
+            if (!this._isCurrentSession(sessionVersion)) return summary;
+            summary.accepted += resp.accepted || 0;
+            if (resp.conflicts?.length) summary.conflicts.push(...resp.conflicts);
+            summary.serverUpdatedAt = resp.serverUpdatedAt || summary.serverUpdatedAt;
+            if (batches.length > 1) {
+              this._updateUI('syncing', `正在上传 ${i + 1}/${batches.length} 批…`);
+            }
+          }
           localStorage.setItem(SYNC_LAST_KEY, new Date().toISOString());
           this._markPending(false);
           clearTimeout(this._retryTimer);
 
           // Handle conflicts: if server has newer versions, pull them
-          if (resp.conflicts && resp.conflicts.length > 0) {
-            this._updateUI('syncing', `检测到 ${resp.conflicts.length} 条冲突，正在同步云端版本…`);
+          if (summary.conflicts.length > 0) {
+            this._updateUI('syncing', `检测到 ${summary.conflicts.length} 条冲突，正在同步云端版本…`);
             await this._pullOnly();
-            this._updateUI('synced', `${resp.accepted || 0} 本已上传 · ${resp.conflicts.length} 本与云端冲突，已保留云端较新版本`);
+            this._updateUI('synced', `${summary.accepted || 0} 本已上传 · ${summary.conflicts.length} 本与云端冲突，已保留云端较新版本`);
           } else {
-            this._updateUI('synced', `已同步 ${resp.accepted || 0} 本书到云端`);
+            this._updateUI('synced', `已同步 ${summary.accepted || 0} 本书到云端`);
           }
-          return resp;
+          return summary;
         } catch (e) {
           console.warn('Sync push failed:', e);
-          if (e.status === 401) { auth.clear(); render(); showToast('登录已过期，请重新登录'); return; }
+          if (!this._isCurrentSession(sessionVersion)) return;
+          if (e.status === 401) { this.cancel(); auth.clear(); render(); showToast('登录已过期，请重新登录'); return; }
 
           // Offline / network error → queue for later
           if (this._isNetworkError(e)) {
@@ -1200,7 +1313,7 @@
             this._updateUI('offline', '离线中，改动已缓存，联网后自动同步');
             this._scheduleRetry();
           } else {
-            this._updateUI('error');
+            this._updateUI('error', errorMessage(e, '同步失败'));
           }
           throw e;
         } finally {
@@ -1227,11 +1340,13 @@
 
       /** Internal pull without syncing guard (for use after push conflicts) */
       async _pullOnly() {
+        const sessionVersion = this._sessionVersion;
         try {
           const data = await apiFetch('/sync/pull', {
             method: 'POST',
             body: JSON.stringify({}),
           });
+          if (!this._isCurrentSession(sessionVersion)) return;
           this._mergeFromCloud(data);
         } catch (e) {
           console.warn('Conflict pull failed:', e);
@@ -1283,6 +1398,7 @@
       async pull(force = false) {
         if (!auth.isLoggedIn()) return;
         if (this._syncing && !force) return;
+        const sessionVersion = this._sessionVersion;
         this._syncing = true;
         this._updateUI('syncing');
         try {
@@ -1291,6 +1407,7 @@
             method: 'POST',
             body: JSON.stringify({}),
           });
+          if (!this._isCurrentSession(sessionVersion)) return null;
 
           const result = this._mergeFromCloud(data);
 
@@ -1306,7 +1423,8 @@
           return result;
         } catch (e) {
           console.warn('Sync pull failed:', e);
-          if (e.status === 401) { auth.clear(); render(); showToast('登录已过期，请重新登录'); }
+          if (!this._isCurrentSession(sessionVersion)) return null;
+          if (e.status === 401) { this.cancel(); auth.clear(); render(); showToast('登录已过期，请重新登录'); }
           this._updateUI('error');
           throw e;
         } finally {
@@ -1343,8 +1461,10 @@
         if (!auth.isLoggedIn()) return;
         // Step 1: Pull cloud data (including tombstones) and merge into local
         const pullResult = await this.pull(true);
+        if (!auth.isLoggedIn() || !pullResult) return;
         // Step 2: Push merged local data to cloud
         const pushResult = await this.push(true);
+        if (!auth.isLoggedIn()) return;
         // Show summary
         const localTotal = loadActiveBooks().length;
         const pushed = pushResult?.accepted || 0;
@@ -1358,15 +1478,57 @@
       },
     };
 
+    async function completeAuthSession(data, successMessage) {
+      syncManager.cancel();
+      auth.setSession(data.token, data.user);
+      render();
+      if (successMessage) showToast(successMessage);
+
+      try {
+        await syncManager.initialSync();
+        render();
+      } catch (e) {
+        console.warn('Initial sync failed after login:', e);
+        syncManager._updateUI('error', '登录成功，同步失败，可稍后重试');
+        showToast(syncFailureMessage(e));
+      }
+    }
+
+    function socialLogoutProviders(user) {
+      const providers = [];
+      if (user?.google_sub || user?.google_email) providers.push('google');
+      if (user?.apple_sub || user?.apple_email) providers.push('apple');
+      return providers;
+    }
+
+    function withTimeout(promise, timeoutMs) {
+      return Promise.race([
+        promise,
+        new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), timeoutMs)),
+      ]);
+    }
+
+    async function nativeSocialLogout(user) {
+      const SocialLogin = window.Capacitor?.Plugins?.SocialLogin;
+      if (!window.Capacitor?.isNativePlatform?.() || !SocialLogin?.logout) return;
+
+      const providers = socialLogoutProviders(user);
+      await Promise.allSettled(providers.map(provider =>
+        withTimeout(SocialLogin.logout({ provider }), 2500)
+      ));
+    }
+
     // Auth actions
     async function authRegister(email, password, displayName) {
       const data = await apiFetch('/auth/register', {
         method: 'POST',
         body: JSON.stringify({ email, password, displayName }),
       });
-      auth.setSession(data.token, data.user);
-      await syncManager.initialSync();
-      render();
+      if (!data.token) {
+        // 邮箱已注册（防枚举：服务端不会告诉我们）
+        throw { code: 'EMAIL_MAYBE_EXISTS', message: '该邮箱可能已注册。请尝试登录，或重置密码。' };
+      }
+      await completeAuthSession(data, '注册成功');
     }
 
     async function authLogin(email, password) {
@@ -1374,15 +1536,24 @@
         method: 'POST',
         body: JSON.stringify({ email, password }),
       });
-      auth.setSession(data.token, data.user);
-      await syncManager.initialSync();
-      render();
+      await completeAuthSession(data, '登录成功');
     }
 
     async function authLogout() {
+      if (!auth.isLoggedIn()) {
+        render();
+        return;
+      }
+      const previousUser = auth.user;
+      syncManager.cancel();
       auth.clear();
       render();
+      showToast('已退出登录');
+      try { globalThis.google?.accounts?.id?.disableAutoSelect?.(); } catch (_) {}
+      nativeSocialLogout(previousUser).catch(e => console.warn('Native social logout failed:', e));
     }
+    window.authLogout = authLogout;
+    window.syncManager = syncManager;
 
     // ── End Auth & Sync ─────────────────────────────────────────────────
 
@@ -1452,6 +1623,16 @@
       return ['home', 'search', 'organize', 'settings'].includes(page) ? page : 'home';
     }
     function setPage(page, options = {}) {
+      if (document.startViewTransition && !document.documentElement.classList.contains('reduced-motion')) {
+        try {
+          document.startViewTransition(() => doSetPage(page, options));
+          return;
+        } catch (_) {}
+      }
+      doSetPage(page, options);
+    }
+
+    function doSetPage(page, options = {}) {
       localStorage.setItem(PAGE_KEY, page);
       if (options.mode) localStorage.setItem(MODE_KEY, options.mode);
       render();
@@ -1465,15 +1646,51 @@
         } catch (_) {}
       });
     }
-    function makeNotice(kind, text) { return `<div class="notice ${kind}">${escapeHtml(text)}</div>`; }
+    // Default: escape user-supplied text. Pass { html: true } only when the caller
+    // has already escaped untrusted values and is intentionally embedding markup
+    // (e.g. <br>, <span>). Mixing the two breaks the share-link / advanced notices.
+    function makeNotice(kind, text, opts) {
+      const content = opts && opts.html ? String(text ?? '') : escapeHtml(text);
+      return `<div class="notice ${kind}">${content}</div>`;
+    }
 
     // ── Haptic feedback helpers ──────────────────────────────────────────
-    function hapticScan() {
-      // Short single tap — "I see a barcode"
-      if (navigator.vibrate) navigator.vibrate(40);
+    async function hapticScan() {
+      if (window.Capacitor?.isNativePlatform?.()) {
+        try {
+          const { Haptics, ImpactStyle } = await import('@capacitor/haptics');
+          await Haptics.impact({ style: ImpactStyle.Medium });
+          return;
+        } catch (_) {
+          try {
+            await window.Capacitor?.Plugins?.Haptics?.impact?.({ style: 'MEDIUM' });
+            return;
+          } catch (_) {}
+        }
+      }
+      if ('vibrate' in navigator) navigator.vibrate(30);
     }
-    function hapticSaved() {
+    async function hapticSaved() {
       // Double-tap pattern — "Book saved!"
+      if (window.Capacitor?.isNativePlatform?.()) {
+        try {
+          const { Haptics, ImpactStyle, NotificationType } = await import('@capacitor/haptics');
+          // Success notification haptic — distinct from scan
+          if (Haptics?.notification && NotificationType?.Success) {
+            await Haptics.notification({ type: NotificationType.Success });
+            return;
+          }
+          if (Haptics?.impact && ImpactStyle?.Light) {
+            await Haptics.impact({ style: ImpactStyle.Light });
+            return;
+          }
+        } catch (_) {
+          try {
+            await window.Capacitor?.Plugins?.Haptics?.notification?.({ type: 'SUCCESS' });
+            return;
+          } catch (_) {}
+        }
+      }
       if (navigator.vibrate) navigator.vibrate([50, 60, 90]);
     }
     // ── End haptic helpers ───────────────────────────────────────────────
@@ -1539,6 +1756,7 @@
       scannerBox: document.getElementById('scannerBox'),
       scannerVideo: document.getElementById('scannerVideo'),
       scannerFlash: document.getElementById('scannerFlash'),
+      scannerSuccess: document.getElementById('scannerSuccess'),
       scannerCancelBtn: document.getElementById('scannerCancelBtn'),
       torchBtn: document.getElementById('torchBtn'),
       proBtn: document.getElementById('proBtn'),
@@ -2056,6 +2274,7 @@
         ? locationPresets.map(v => `<button class="chip location-preset-btn" data-value="${escapeHtml(v)}">${escapeHtml(v)}</button>`).join('')
         : '';
 
+      if (page === 'search') {
       // Search
       const query = String(els.searchInput?.value || '').trim().toLowerCase();
       els.searchClearBtn.style.display = query ? 'block' : 'none';
@@ -2103,7 +2322,9 @@
             }).join('')
           : '<div class="muted" style="margin-top:12px">没有找到匹配的图书</div>';
       }
+      }
 
+      if (page === 'organize') {
       // Organize
       const todoBooks = books.filter(b => b.status === 'to_be_sorted');
       els.organizeStats.innerHTML = todoBooks.length
@@ -2181,6 +2402,7 @@
             `<div class="loc-card"><div class="loc-icon" style="background:${bgColors[name] || 'var(--surface-2)'}">${icons[name] || '📍'}</div><div class="loc-info"><div class="loc-name">${escapeHtml(name)}</div><div class="loc-count">${count} 本书</div></div><span style="color:var(--muted);font-size:14px">›</span></div>`
           ).join('');
       }
+      }
 
       // Organize: todo badge
       const todoBadgeEl = document.getElementById('todoBadge');
@@ -2189,6 +2411,7 @@
         todoBadgeEl.style.display = todoCount ? 'block' : 'none';
       }
 
+      if (page === 'settings') {
       // Settings — user-friendly
       const bookCount = books.length;
       const lastUpdated = loadMeta().updatedAt ? new Date(loadMeta().updatedAt).toLocaleDateString('zh-CN') : '—';
@@ -2215,8 +2438,8 @@
               <span class="sync-dot synced" id="syncStatusDot"></span>
               <span id="syncStatusLabel">已同步 · ${escapeHtml(syncTime)}</span>
             </div>
-            <button class="auth-btn secondary" onclick="syncManager.initialSync().then(()=>render()).catch(()=>{})" style="margin-top:10px">🔄 立即同步</button>
-            <button class="auth-btn secondary" onclick="if(confirm('确定退出登录？本地数据不会丢失，但需要重新登录才能继续同步。'))authLogout()" style="margin-top:6px;color:var(--danger)">退出登录</button>
+            <button class="auth-btn secondary" onclick="syncManager.initialSync().then(()=>render()).catch(e=>{ showToast(syncFailureMessage(e)); if(e?.status===401){ authLogout(); } })" style="margin-top:10px">🔄 立即同步</button>
+            <button class="auth-btn secondary" onclick="authLogout()" style="margin-top:10px;color:var(--danger);border-color:var(--danger-light)">退出登录</button>
           </div>`;
       } else {
         authHtml = `
@@ -2231,12 +2454,15 @@
               </div>
               <div class="auth-field">
                 <label>邮箱</label>
-                <input type="email" id="authEmail" placeholder="your@email.com" autocomplete="email">
+                <input type="email" id="authEmail" placeholder="your@email.com" autocomplete="email" onkeydown="if(event.key==='Enter'){event.preventDefault();document.getElementById('authPassword')?.focus();}">
               </div>
               <div class="auth-field">
                 <label>密码</label>
-                <input type="password" id="authPassword" placeholder="至少 8 位，包含字母和数字" autocomplete="current-password">
+                <input type="password" id="authPassword" placeholder="至少 8 位，包含字母和数字" autocomplete="current-password" onkeydown="if(event.key==='Enter'){event.preventDefault();handleAuthSubmit();}">
               </div>
+            </div>
+            <div id="forgotPasswordLink" style="text-align:right;margin-top:6px">
+              <a onclick="handleForgotPassword()" style="font-size:12px;color:var(--muted);cursor:pointer;text-decoration:underline">忘记密码？</a>
             </div>
             <button class="auth-btn primary" id="authSubmitBtn" onclick="handleAuthSubmit()">登录</button>
             <div style="display:flex;align-items:center;gap:12px;margin:16px 0 12px">
@@ -2248,6 +2474,10 @@
               <svg width="18" height="18" viewBox="0 0 24 24"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/></svg>
               使用 Google 登录
             </button>
+            <button class="auth-btn secondary" id="appleSignInBtn" onclick="handleAppleSignIn()" style="display:none;align-items:center;justify-content:center;gap:8px;margin-top:8px;background:#000;color:#fff;border-color:#000">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M17.05 20.28c-.98.95-2.05.8-3.08.35-1.09-.46-2.09-.48-3.24 0-1.44.62-2.2.44-3.06-.35C2.79 15.25 3.51 7.59 9.05 7.31c1.35.07 2.29.74 3.08.8 1.18-.24 2.31-.93 3.57-.84 1.51.12 2.65.72 3.4 1.8-3.12 1.87-2.38 5.98.48 7.13-.57 1.5-1.31 2.99-2.54 4.09zM12.03 7.25c-.15-2.23 1.66-4.07 3.74-4.25.29 2.58-2.34 4.5-3.74 4.25z"/></svg>
+              使用 Apple 登录
+            </button>
             <div class="auth-toggle">
               <span id="authToggleText">还没有账号？</span>
               <a id="authToggleLink" onclick="toggleAuthMode()">注册</a>
@@ -2255,64 +2485,213 @@
           </div>`;
       }
 
-      els.settingsRows.innerHTML = authHtml + `
-        <div class="card" style="margin-bottom:14px;padding:16px">
-          <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px">
-            <div style="width:44px;height:44px;border-radius:12px;background:var(--accent-light);display:flex;align-items:center;justify-content:center;font-size:22px">📚</div>
-            <div>
-              <div style="font-size:16px;font-weight:700">我的藏书数据</div>
-              <div style="font-size:12px;color:var(--muted);margin-top:2px">${bookCount} 本书 · 最后更新 ${escapeHtml(lastUpdated)}</div>
-            </div>
-          </div>
-          <div style="font-size:12px;color:var(--muted);background:var(--surface);padding:10px 12px;border-radius:8px">
-            ${auth.isLoggedIn()
-              ? '☁️ 数据已开启云同步，会自动备份到云端。'
-              : '💡 数据保存在你的浏览器本地，建议定期备份。登录后可开启云同步。'}
-            ${(() => {
-              const bs = getBackupStatus();
-              if (bs.lastExport) {
-                const d = new Date(bs.lastExport);
-                return `<div style="margin-top:6px;font-size:11px">上次备份：${d.toLocaleDateString('zh-CN')} · ${bs.lastCount} 本${bs.newSinceExport > 0 ? ` · 此后新增 ${bs.newSinceExport} 本` : ''}</div>`;
-              }
-              return bs.currentCount > 0 ? '<div style="margin-top:6px;font-size:11px;color:var(--warn)">⚠️ 还没有导出过备份</div>' : '';
-            })()}
-          </div>
-        </div>` + [
-        { icon: '💾', label: '备份数据', sub: '导出完整的藏书记录', action: 'exportJson' },
-        { icon: '📊', label: '导出表格', sub: '导出为 CSV，可用 Excel 打开', action: 'exportCsv' },
-        { icon: '📄', label: '导出书单', sub: '生成可打印的 HTML 书单页面', action: 'exportPrintable' },
-        ...(auth.isLoggedIn() ? [{ icon: '🔗', label: '分享书单', sub: '生成只读链接，让朋友看看你的藏书', action: 'shareBookshelf' }] : []),
-        (() => {
-          const running = _enrichJob && !_enrichJob.done && !_enrichJob.cancelled;
-          const needCount = running ? _enrichJob.books.length - _enrichJob.i : _buildNeedsEnrich().length;
-          const sub = running
-            ? `后台运行中：${_enrichJob.i}/${_enrichJob.books.length} 本 — 点击查看进度`
-            : needCount
-              ? `${needCount} 本书有缺失信息，点击自动补全`
-              : '所有书信息完整（近 7 天已检查）';
-          return { icon: running ? '⏳' : '🔍', label: '补全缺失信息', sub, action: 'enrichBooks' };
-        })(),
-        (() => {
-          const running = _coverRefreshJob && !_coverRefreshJob.done && !_coverRefreshJob.cancelled;
-          const smartCount = _buildCoverRefreshCandidates({ force: false }).length;
-          const total = _buildCoverRefreshCandidates({ force: true }).length;
-          const sub = running
-            ? `后台扫描中：${_coverRefreshJob.i}/${_coverRefreshJob.books.length} 本 — 点击查看进度`
-            : smartCount
-              ? `${smartCount} 本书缺失 / 脏封面，推荐先补齐`
-              : total
-                ? `缺失封面已补齐；如需对 ${total} 本书做全量重扫，可手动进入高级模式`
-                : '当前没有可扫描的本地图书';
-          return { icon: running ? '🖼️' : '🔄', label: '补齐缺失封面', sub, action: 'refreshAllCovers' };
-        })(),
-        { icon: '💬', label: '反馈建议', sub: '告诉我们你的想法，帮助毛毛书房变得更好', action: 'feedback' },
-        { icon: '🌐', label: currentLang() === 'en' ? '切换到中文' : 'Switch to English', sub: currentLang() === 'en' ? 'Change language to Chinese' : '切换界面语言', action: 'toggleLang' },
-        ...(auth.isLoggedIn() ? [{ icon: '🗑️', label: '删除账号', sub: '永久删除账号和所有云端数据', action: 'deleteAccount' }] : []),
-      ].map(item => `<div class="setting-row setting-action" data-action="${item.action}">
-        <span class="setting-icon">${item.icon}</span>
-        <div class="setting-info"><div class="setting-label">${item.label}</div><div class="setting-sub">${item.sub}</div></div>
-        <span class="setting-arrow">›</span>
-      </div>`).join('');
+      const enrichRunning = _enrichJob && !_enrichJob.done && !_enrichJob.cancelled;
+      const enrichNeedCount = enrichRunning
+        ? Math.max(0, _enrichJob.books.length - _enrichJob.i)
+        : (typeof _buildNeedsEnrich === 'function' ? _buildNeedsEnrich().length : 65);
+      const coverRunning = _coverRefreshJob && !_coverRefreshJob.done && !_coverRefreshJob.cancelled;
+      const coverNeedCount = coverRunning
+        ? Math.max(0, _coverRefreshJob.books.length - _coverRefreshJob.i)
+        : (typeof _buildCoverRefreshCandidates === 'function' ? _buildCoverRefreshCandidates({ force: false }).length : 15);
+      const organizeBadgeCount = enrichNeedCount + coverNeedCount;
+
+      els.settingsRows.innerHTML = `
+
+<!-- PAGE: MAIN SETTINGS -->
+<div id="settingsMain" class="settings-page active">
+  ${authHtml}
+
+  <!-- 统计卡片：藏书数量 -->
+  <div class="card" style="margin-bottom:14px;padding:16px">
+    <div style="display:flex;align-items:center;gap:12px">
+      <div style="width:44px;height:44px;border-radius:12px;background:var(--accent-light);display:flex;align-items:center;justify-content:center;font-size:22px">📚</div>
+      <div>
+        <div style="font-size:16px;font-weight:700">${bookCount} 本藏书</div>
+        <div style="font-size:12px;color:var(--muted);margin-top:2px">最后更新 ${escapeHtml(lastUpdated)}</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 主菜单项1：整理藏书 -->
+  <div class="settings-main-menu-item settings-action" data-action="openOrganize" style="cursor:pointer;padding:16px;background:var(--surface);margin-bottom:1px;display:flex;align-items:center;justify-content:space-between;border-radius:8px">
+    <div>
+      <div style="font-size:15px;font-weight:600">整理藏书</div>
+      <div style="font-size:12px;color:var(--muted);margin-top:4px">补全缺失信息 · 补齐缺失封面</div>
+    </div>
+    <div style="display:flex;align-items:center;gap:8px">
+      ${organizeBadgeCount ? `<span style="min-width:23px;height:22px;padding:0 7px;border-radius:11px;background:var(--accent);color:#fff;font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center">${organizeBadgeCount}</span>` : ''}
+      <span class="setting-arrow" style="font-size:18px">›</span>
+    </div>
+  </div>
+
+  <!-- 主菜单项2：导出与备份 -->
+  <div class="settings-main-menu-item settings-action" data-action="openBackup" style="cursor:pointer;padding:16px;background:var(--surface);margin-bottom:1px;display:flex;align-items:center;justify-content:space-between;border-radius:8px">
+    <div>
+      <div style="font-size:15px;font-weight:600">导出与备份</div>
+      <div style="font-size:12px;color:var(--muted);margin-top:4px">备份/导出/分享</div>
+    </div>
+    <div style="display:flex;align-items:center;gap:6px">
+      <span style="width:6px;height:6px;background:var(--warn);border-radius:50%"></span>
+      <span class="setting-arrow" style="font-size:18px">›</span>
+    </div>
+  </div>
+
+  <!-- 主菜单项3：设置 -->
+  <div class="settings-main-menu-item settings-action" data-action="openConfig" style="cursor:pointer;padding:16px;background:var(--surface);margin-bottom:1px;display:flex;align-items:center;justify-content:space-between;border-radius:8px">
+    <div>
+      <div style="font-size:15px;font-weight:600">设置</div>
+      <div style="font-size:12px;color:var(--muted);margin-top:4px">反馈/语言</div>
+    </div>
+    <span class="setting-arrow" style="font-size:18px">›</span>
+  </div>
+</div>
+
+<!-- PAGE: ORGANIZE (次级页面① - 整理藏书) -->
+<div id="settingsOrganize" class="settings-page">
+  <div style="padding:16px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:8px;cursor:pointer" onclick="settingsNavigation('main')">
+    <span style="font-size:18px">‹</span>
+    <span>我的</span>
+  </div>
+
+  <!-- 补全缺失信息 -->
+  <div class="settings-action" data-action="enrichBooks" style="cursor:pointer;padding:16px;background:var(--surface);margin:12px;border-radius:8px;display:flex;align-items:center;gap:12px">
+    <div style="width:40px;height:40px;background:var(--danger-light);border-radius:8px;display:flex;align-items:center;justify-content:center;color:var(--danger)">⚠️</div>
+    <div style="flex:1">
+      <div style="font-weight:600;font-size:14px">补全缺失信息</div>
+      <div style="font-size:12px;color:var(--muted);margin-top:2px">${enrichRunning ? `后台运行中：${_enrichJob.i}/${_enrichJob.books.length} 本` : `自动检测到 ${enrichNeedCount} 项缺失`}</div>
+    </div>
+    <span style="font-size:13px;color:var(--danger);font-weight:700">${enrichNeedCount || ''}</span>
+    <span class="setting-arrow">›</span>
+  </div>
+
+  <!-- 补齐缺失封面 -->
+  <div class="settings-action" data-action="refreshAllCovers" style="cursor:pointer;padding:16px;background:var(--surface);margin:0 12px 12px;border-radius:8px;display:flex;align-items:center;gap:12px">
+    <div style="width:40px;height:40px;background:var(--accent-light);border-radius:8px;display:flex;align-items:center;justify-content:center;color:var(--accent)">🖼️</div>
+    <div style="flex:1">
+      <div style="font-weight:600;font-size:14px">补齐缺失封面</div>
+      <div style="font-size:12px;color:var(--muted);margin-top:2px">${coverRunning ? `后台扫描中：${_coverRefreshJob.i}/${_coverRefreshJob.books.length} 本` : `需要补齐 ${coverNeedCount} 本`}</div>
+    </div>
+    <span style="font-size:13px;color:var(--muted);font-weight:700">${coverNeedCount || ''}</span>
+    <span class="setting-arrow">›</span>
+  </div>
+</div>
+
+<!-- PAGE: BACKUP (次级页面② - 导出与备份) -->
+<div id="settingsBackup" class="settings-page">
+  <div style="padding:16px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:8px;cursor:pointer" onclick="settingsNavigation('main')">
+    <span style="font-size:18px">‹</span>
+    <span>我的</span>
+  </div>
+
+  <!-- 备份数据 -->
+  <div style="padding:12px;margin:12px;font-size:12px;color:var(--muted)">备份</div>
+  <div class="settings-action" data-action="exportJson" style="cursor:pointer;padding:16px;background:var(--surface);margin:0 12px 12px;border-radius:8px;display:flex;align-items:center;gap:12px">
+    <div style="width:40px;height:40px;background:var(--warn-light);border-radius:8px;display:flex;align-items:center;justify-content:center;color:var(--warn);font-size:18px">💾</div>
+    <div style="flex:1">
+      <div style="font-weight:600;font-size:14px">备份数据</div>
+      <div style="font-size:12px;color:var(--muted);margin-top:2px">导出完整的藏书记录</div>
+    </div>
+    <span style="width:6px;height:6px;background:var(--warn);border-radius:50%"></span>
+    <span class="setting-arrow">›</span>
+  </div>
+
+  <!-- 导出 -->
+  <div style="padding:12px;margin:12px 12px 0;font-size:12px;color:var(--muted)">导出</div>
+  <div class="settings-action" data-action="exportCsv" style="cursor:pointer;padding:16px;background:var(--surface);margin:0 12px 1px;border-radius:0;display:flex;align-items:center;gap:12px">
+    <div style="width:40px;height:40px;background:var(--surface-2);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:18px">📊</div>
+    <div style="flex:1">
+      <div style="font-weight:600;font-size:14px">导出表格</div>
+      <div style="font-size:12px;color:var(--muted);margin-top:2px">导出为 CSV，可用 Excel 打开</div>
+    </div>
+    <span class="setting-arrow">›</span>
+  </div>
+  <div class="settings-action" data-action="exportPrintable" style="cursor:pointer;padding:16px;background:var(--surface);margin:0 12px 12px;border-radius:0;display:flex;align-items:center;gap:12px">
+    <div style="width:40px;height:40px;background:var(--surface-2);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:18px">📄</div>
+    <div style="flex:1">
+      <div style="font-weight:600;font-size:14px">导出书单</div>
+      <div style="font-size:12px;color:var(--muted);margin-top:2px">生成可打印的 HTML 书单页面</div>
+    </div>
+    <span class="setting-arrow">›</span>
+  </div>
+
+  <!-- 分享 -->
+  ${auth.isLoggedIn() ? `
+  <div style="padding:12px;margin:12px 12px 0;font-size:12px;color:var(--muted)">分享</div>
+  <div class="settings-action" data-action="shareBookshelf" style="cursor:pointer;padding:16px;background:var(--surface);margin:0 12px 12px;border-radius:0;display:flex;align-items:center;gap:12px">
+    <div style="width:40px;height:40px;background:var(--surface-2);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:18px">🔗</div>
+    <div style="flex:1">
+      <div style="font-weight:600;font-size:14px">分享书单</div>
+      <div style="font-size:12px;color:var(--muted);margin-top:2px">生成只读链接，让朋友看看你的藏书</div>
+    </div>
+    <span class="setting-arrow">›</span>
+  </div>
+  <div class="settings-action" data-action="revokeShare" style="cursor:pointer;padding:16px;background:var(--surface);margin:0 12px 12px;border-radius:0;display:flex;align-items:center;gap:12px">
+    <div style="width:36px;height:36px;border-radius:10px;background:var(--danger-light);display:flex;align-items:center;justify-content:center">🚫</div>
+    <div style="flex:1">
+      <div style="font-weight:600;font-size:14px">撤销分享链接</div>
+      <div style="font-size:12px;color:var(--muted);margin-top:2px">让已经分享出去的链接立即失效</div>
+    </div>
+  </div>
+  ` : ''}
+</div>
+
+<!-- PAGE: CONFIG (次级页面③ - 设置) -->
+<div id="settingsConfig" class="settings-page">
+  <div style="padding:16px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:8px;cursor:pointer" onclick="settingsNavigation('main')">
+    <span style="font-size:18px">‹</span>
+    <span>我的</span>
+  </div>
+
+  <!-- 应用设置 -->
+  <div style="padding:12px;margin:12px 12px 0;font-size:12px;color:var(--muted)">应用</div>
+  <div class="settings-action" data-action="feedback" style="cursor:pointer;padding:16px;background:var(--surface);margin:0 12px 1px;border-radius:0;display:flex;align-items:center;gap:12px">
+    <div style="width:40px;height:40px;background:var(--surface-2);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:18px">💬</div>
+    <div style="flex:1">
+      <div style="font-weight:600;font-size:14px">反馈建议</div>
+      <div style="font-size:12px;color:var(--muted);margin-top:2px">帮助我们变得更好</div>
+    </div>
+    <span class="setting-arrow">›</span>
+  </div>
+  <div class="settings-action" data-action="toggleLang" style="cursor:pointer;padding:16px;background:var(--surface);margin:0 12px 12px;border-radius:0;display:flex;align-items:center;gap:12px">
+    <div style="width:40px;height:40px;background:var(--surface-2);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:18px">🌐</div>
+    <div style="flex:1">
+      <div style="font-weight:600;font-size:14px">${currentLang() === 'en' ? '切换到中文' : 'Switch to English'}</div>
+      <div style="font-size:12px;color:var(--muted);margin-top:2px">${currentLang() === 'en' ? 'Change language to Chinese' : '切换界面语言'}</div>
+    </div>
+    <span class="setting-arrow">›</span>
+  </div>
+
+  <!-- 账号管理 -->
+  ${auth.isLoggedIn() ? `
+  <div style="padding:12px;margin:12px 12px 0;font-size:12px;color:var(--muted)">账号</div>
+  <div class="settings-action" data-action="logout" onclick="authLogout()" style="cursor:pointer;padding:16px;background:var(--surface);margin:0 12px 1px;border-radius:0;display:flex;align-items:center;gap:12px">
+    <div style="width:40px;height:40px;background:var(--surface-2);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:18px;color:var(--danger)">↗️</div>
+    <div style="flex:1">
+      <div style="font-weight:600;font-size:14px;color:var(--danger)">退出登录</div>
+      <div style="font-size:12px;color:var(--muted);margin-top:2px">本地数据保留，可重新登录</div>
+    </div>
+    <span class="setting-arrow">›</span>
+  </div>
+  <div class="settings-action" data-action="deleteAccount" style="cursor:pointer;padding:16px;background:var(--surface);margin:0 12px 12px;border-radius:0;display:flex;align-items:center;gap:12px">
+    <div style="width:40px;height:40px;background:var(--surface-2);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:18px;color:var(--danger)">🗑️</div>
+    <div style="flex:1">
+      <div style="font-weight:600;font-size:14px;color:var(--danger)">删除账号</div>
+      <div style="font-size:12px;color:var(--muted);margin-top:2px">永久删除账号和云端数据</div>
+    </div>
+    <span class="setting-arrow">›</span>
+  </div>
+  ` : ''}
+</div>
+`;
+        // Apple Sign In requires a paid Apple Developer Program account for the
+        // entitlement. Until you enroll, leave this button hidden — re-enable
+        // by setting APPLE_SIGNIN_ENABLED below to true once provisioning works.
+        const APPLE_SIGNIN_ENABLED = false;
+        if (APPLE_SIGNIN_ENABLED && window.Capacitor?.isNativePlatform?.()) {
+          const appleBtn = document.getElementById('appleSignInBtn');
+          if (appleBtn) appleBtn.style.display = 'flex';
+        }
+      }
 
       // Sync wander carousel if displayed book's data changed
       if (typeof syncWanderIfDirty === 'function') syncWanderIfDirty();
@@ -2621,7 +3000,10 @@
         if (coverUrl) target.coverUrl = coverUrl;
         target.status = isCompleteRecord ? 'in_library' : 'to_be_sorted';
         target.updatedAt = new Date().toISOString();
-        saveBooks(books);
+        if (!saveBooks(books)) {
+          els.manualNotice.innerHTML = makeNotice('err', '保存失败：本地存储空间不足，请先在设置中导出备份');
+          return false;
+        }
         hapticSaved();
         els.manualNotice.innerHTML = makeNotice('ok', `已更新：${title}${isCompleteRecord ? '（已入库）' : '（信息待补充）'}`);
         editingBookId = null;
@@ -2636,15 +3018,23 @@
           ...(coverUrl ? { coverUrl } : {}),
           status: isCompleteRecord ? 'in_library' : 'to_be_sorted', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString()
         });
-        saveBooks(books);
+        if (!saveBooks(books)) {
+          // Roll back the in-memory addition and surface the error
+          books.pop();
+          els.manualNotice.innerHTML = makeNotice('err', '保存失败：本地存储空间不足，请先在设置中导出备份');
+          return false;
+        }
         entrySessionCount += 1;
         hapticSaved();
 
-        // Contribute to community book cache (non-blocking)
-        if (isbn && title) {
+        // Contribute to community book cache (non-blocking, only when logged in)
+        if (isbn && title && auth.token) {
           fetchWithTimeout(`${GBOOKS_PROXY}/cache/contribute`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${auth.token}`,
+            },
             body: JSON.stringify({ isbn, title, author, category, publishedYear, bookLang, coverUrl, description, metadataSources }),
           }, 5000).catch(() => {}); // fire-and-forget
         }
@@ -2939,20 +3329,30 @@
         return;
       }
 
-      const settingAction = event.target.closest('.setting-action');
+      // BUGFIX: actual class is `.settings-action` (plural). The old `.setting-action`
+      // selector matched nothing, breaking logout/export/feedback/etc.
+      const settingAction = event.target.closest('.settings-action, .setting-action');
       if (settingAction) {
-        const action = settingAction.dataset.action;
+        const action = settingAction.getAttribute('data-action');
+
+        // Navigation actions are handled by the settings navigation listener below.
+        if (action === 'openOrganize' || action === 'openBackup' || action === 'openConfig') {
+          return;
+        }
+
         if (action === 'exportJson') els.exportJsonBtn_handler();
-        if (action === 'exportCsv') els.exportCsvBtn_handler();
-        if (action === 'exportPrintable') exportPrintableBooklist();
-        if (action === 'shareBookshelf') handleShareBookshelf();
-        if (action === 'feedback') handleFeedback();
-        if (action === 'deleteAccount') handleDeleteAccount();
-        if (action === 'toggleLang') { setLang(currentLang() === 'en' ? 'zh-CN' : 'en'); render(); }
-        if (action === 'validate') els.validateBtn.click();
-        if (action === 'importJson') { els.importText.focus(); }
-        if (action === 'enrichBooks') runBatchEnrichment();
-        if (action === 'refreshAllCovers') runCoverRefresh();
+        else if (action === 'exportCsv') els.exportCsvBtn_handler();
+        else if (action === 'exportPrintable') exportPrintableBooklist();
+        else if (action === 'shareBookshelf') handleShareBookshelf();
+        else if (action === 'revokeShare') handleRevokeShare();
+        else if (action === 'feedback') handleFeedback();
+        else if (action === 'toggleLang') { setLang(currentLang() === 'en' ? 'zh-CN' : 'en'); render(); }
+        else if (action === 'logout') authLogout();
+        else if (action === 'deleteAccount') handleDeleteAccount();
+        else if (action === 'validate') els.validateBtn.click();
+        else if (action === 'importJson') els.importText.focus();
+        else if (action === 'enrichBooks') runBatchEnrichment();
+        else if (action === 'refreshAllCovers') runCoverRefresh();
         return;
       }
 
@@ -3041,6 +3441,30 @@
 
       document.querySelectorAll('.menu-panel').forEach(el => el.remove());
       openMenuBookId = null;
+    });
+
+    // Settings page navigation
+    window.settingsNavigation = (page) => {
+      const pages = ['main', 'organize', 'backup', 'config'];
+      pages.forEach(p => {
+        const el = document.getElementById(`settings${p.charAt(0).toUpperCase() + p.slice(1)}`);
+        if (el) {
+          el.classList.toggle('active', p === page);
+          el.setAttribute('aria-hidden', p === page ? 'false' : 'true');
+        }
+      });
+    };
+
+    // Handle settings page navigation actions
+    document.addEventListener('click', (e) => {
+      const navAction = e.target.closest('[data-action="openOrganize"]');
+      if (navAction) { window.settingsNavigation('organize'); return; }
+
+      const navBackup = e.target.closest('[data-action="openBackup"]');
+      if (navBackup) { window.settingsNavigation('backup'); return; }
+
+      const navConfig = e.target.closest('[data-action="openConfig"]');
+      if (navConfig) { window.settingsNavigation('config'); return; }
     });
 
     function downloadFile(content, filename, mime) {
@@ -3563,7 +3987,10 @@ ${list.map(b => `<tr>
               try {
                 await fetch(`${GBOOKS_PROXY}/cache/contribute`, {
                   method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
+                  headers: {
+                    'Content-Type': 'application/json',
+                    ...(auth.token ? { 'Authorization': `Bearer ${auth.token}` } : {}),
+                  },
                   body: JSON.stringify({
                     isbn: compact, title: updated.title, author: updated.author || '',
                     category: updated.category || '', publishedYear: updated.publishedYear || '',
@@ -3633,7 +4060,7 @@ ${list.map(b => `<tr>
           <div id="enrichProgress" style="margin-top:14px;${!isRunning && !isDone ? 'display:none' : ''}">
             <div class="enrich-bar-bg"><div id="enrichBar" class="enrich-bar" style="width:${isRunning || isDone ? pct : 0}%"></div></div>
             <div id="enrichStatus" style="font-size:12px;color:var(--muted);margin-top:6px;text-align:center">${isRunning ? `(${job.i + 1}/${total}) 正在查：${job.current || ''}` : isDone ? '完成！' : '准备中…'}</div>
-            <div id="enrichLog" style="font-size:11px;color:var(--muted);margin-top:8px;max-height:120px;overflow:auto;line-height:1.7">${(job?.log || []).map(l => `<div>${l}</div>`).join('')}</div>
+            <div id="enrichLog" style="font-size:11px;color:var(--muted);margin-top:8px;max-height:120px;overflow:auto;-webkit-overflow-scrolling:touch;line-height:1.7">${(job?.log || []).map(l => `<div>${l}</div>`).join('')}</div>
           </div>
           <div id="enrichResult" style="${isDone ? '' : 'display:none'};margin-top:10px;font-size:13px;color:var(--ok);font-weight:600;text-align:center">${isDone ? `完成 ${job.enriched} 本，跳过 ${job.skipped} 本，失败 ${job.failed} 本` : ''}</div>
           <div class="enrich-actions" id="enrichActions" style="${isRunning || isDone ? 'display:none' : ''}">
@@ -3858,7 +4285,7 @@ ${list.map(b => `<tr>
           <div id="coverRefreshProgress" style="margin-top:14px;${!isRunning && !isDone ? 'display:none' : ''}">
             <div class="enrich-bar-bg"><div id="coverRefreshBar" class="enrich-bar" style="width:${isRunning || isDone ? pct : 0}%"></div></div>
             <div id="coverRefreshStatus" style="font-size:12px;color:var(--muted);margin-top:6px;text-align:center">${isRunning ? `(${job.i + 1}/${total}) 正在查：${job.current || ''}` : isDone ? '完成！' : '准备中…'}</div>
-            <div id="coverRefreshLog" style="font-size:11px;color:var(--muted);margin-top:8px;max-height:120px;overflow:auto;line-height:1.7">${(job?.log || []).map(l => `<div>${l}</div>`).join('')}</div>
+            <div id="coverRefreshLog" style="font-size:11px;color:var(--muted);margin-top:8px;max-height:120px;overflow:auto;-webkit-overflow-scrolling:touch;line-height:1.7">${(job?.log || []).map(l => `<div>${l}</div>`).join('')}</div>
           </div>
           <div id="coverRefreshResult" style="${isDone ? '' : 'display:none'};margin-top:10px;font-size:13px;color:var(--ok);font-weight:600;text-align:center">${isDone ? `完成 ${job.updated} 本，跳过 ${job.skipped} 本，失败 ${job.failed} 本` : ''}</div>
           <div class="enrich-actions" id="coverRefreshActions" style="${isRunning || isDone ? 'display:none' : ''};flex-direction:column">
@@ -3969,16 +4396,32 @@ ${list.map(b => `<tr>
       els.settingsNotice.innerHTML = makeNotice('warn', '正在生成分享链接…');
       try {
         const data = await apiFetch('/share/create', { method: 'POST' });
-        const shareUrl = `${window.location.origin}${window.location.pathname}?share=${data.token}`;
+        const isNative = !!window.Capacitor?.isNativePlatform?.();
+        const baseUrl = isNative ? PUBLIC_SHARE_BASE : `${window.location.origin}${window.location.pathname}`;
+        const shareUrl = `${baseUrl}?share=${data.token}`;
         // Copy to clipboard
         if (navigator.clipboard) {
           await navigator.clipboard.writeText(shareUrl);
-          els.settingsNotice.innerHTML = makeNotice('ok', `分享链接已复制到剪贴板 🔗<br><span style="font-size:11px;color:var(--muted);word-break:break-all">${escapeHtml(shareUrl)}</span>`);
+          els.settingsNotice.innerHTML = makeNotice('ok', `分享链接已复制到剪贴板 🔗<br><span style="font-size:11px;color:var(--muted);word-break:break-all">${escapeHtml(shareUrl)}</span>`, { html: true });
         } else {
-          els.settingsNotice.innerHTML = makeNotice('ok', `分享链接 🔗<br><span style="font-size:11px;word-break:break-all;user-select:all">${escapeHtml(shareUrl)}</span>`);
+          els.settingsNotice.innerHTML = makeNotice('ok', `分享链接 🔗<br><span style="font-size:11px;word-break:break-all;user-select:all">${escapeHtml(shareUrl)}</span>`, { html: true });
         }
       } catch (e) {
         els.settingsNotice.innerHTML = makeNotice('err', `生成失败：${escapeHtml(e.message || '网络错误')}`);
+      }
+    }
+
+    async function handleRevokeShare() {
+      if (!auth.isLoggedIn()) {
+        els.settingsNotice.innerHTML = makeNotice('warn', '需要先登录');
+        return;
+      }
+      if (!confirm('撤销后，已分享的链接将立即失效。继续？')) return;
+      try {
+        await apiFetch('/share/revoke', { method: 'DELETE' });
+        els.settingsNotice.innerHTML = makeNotice('ok', '已撤销分享链接');
+      } catch (e) {
+        els.settingsNotice.innerHTML = makeNotice('err', `撤销失败：${escapeHtml(e.message || '网络错误')}`);
       }
     }
 
@@ -4039,9 +4482,10 @@ ${list.map(b => `<tr>
       }
       try {
         await apiFetch('/auth/account', { method: 'DELETE' });
-        auth.logout();
-        els.settingsNotice.innerHTML = makeNotice('ok', '账号已删除。本地数据仍保留在此浏览器中。');
-        setTimeout(() => render(), 1000);
+        auth.clear();
+        localStorage.removeItem('lib:sync:pending:v1');
+        els.settingsNotice.innerHTML = makeNotice('ok', '账号已删除。本地数据仍保留在此设备中。');
+        render();
       } catch (e) {
         els.settingsNotice.innerHTML = makeNotice('err', `删除失败：${escapeHtml(e.message || '网络错误')}`);
       }
@@ -4262,6 +4706,7 @@ ${list.map(b => `<tr>
       const toggleLink = document.getElementById('authToggleLink');
       const errorEl = document.getElementById('authError');
       const passwordInput = document.getElementById('authPassword');
+      const forgotLink = document.getElementById('forgotPasswordLink');
 
       if (title) title.textContent = authIsRegisterMode ? '注册' : '登录';
       if (nameField) nameField.style.display = authIsRegisterMode ? 'block' : 'none';
@@ -4270,6 +4715,7 @@ ${list.map(b => `<tr>
       if (toggleLink) toggleLink.textContent = authIsRegisterMode ? '登录' : '注册';
       if (errorEl) { errorEl.style.display = 'none'; errorEl.textContent = ''; }
       if (passwordInput) passwordInput.autocomplete = authIsRegisterMode ? 'new-password' : 'current-password';
+      if (forgotLink) forgotLink.style.display = authIsRegisterMode ? 'none' : 'block';
     }
 
     async function handleAuthSubmit() {
@@ -4304,12 +4750,78 @@ ${list.map(b => `<tr>
       }
     }
 
+    async function handleForgotPassword() {
+      const emailInput = document.getElementById('authEmail');
+      const email = emailInput?.value?.trim();
+      if (!email) {
+        showToast('请先在邮箱框输入你的邮箱地址');
+        emailInput?.focus();
+        return;
+      }
+      try {
+        await apiFetch('/auth/forgot-password', {
+          method: 'POST',
+          body: JSON.stringify({ email }),
+        });
+        showToast('如果该邮箱已注册，我们已发送重置邮件，30 分钟内有效');
+      } catch (e) {
+        showToast(e.message || '请求失败，请稍后重试');
+      }
+    }
+
     // ── Google Sign-In ──
     const GOOGLE_CLIENT_ID = '773409037736-gqh3gr2ja3agsp9vgte4rfdovig5pmp3.apps.googleusercontent.com';
+    const GOOGLE_IOS_CLIENT_ID = '773409037736-sifllu8gjg73hbb224eu1gont89lfm9e.apps.googleusercontent.com';
+    let nativeGoogleSignInInitialized = false;
+    let nativeAppleSignInInitialized = false;
 
-    function handleGoogleSignIn() {
+    async function handleGoogleSignIn() {
       const btn = document.getElementById('googleSignInBtn');
+      const originalBtnHtml = btn?.innerHTML;
       if (btn) { btn.disabled = true; btn.textContent = '正在连接 Google…'; }
+
+      if (window.Capacitor?.isNativePlatform?.()) {
+        try {
+          // client ID is now configured; this guard is no longer needed but kept for safety
+          if (!GOOGLE_IOS_CLIENT_ID) {
+            throw new Error('尚未配置 iOS Google Client ID');
+          }
+
+          const SocialLogin = window.Capacitor?.Plugins?.SocialLogin;
+          if (!SocialLogin?.initialize || !SocialLogin?.login) {
+            throw new Error('原生 Google 登录插件未就绪');
+          }
+
+          if (!nativeGoogleSignInInitialized) {
+            await SocialLogin.initialize({
+              google: {
+                iOSClientId: GOOGLE_IOS_CLIENT_ID,
+                mode: 'online',
+              },
+            });
+            nativeGoogleSignInInitialized = true;
+          }
+
+          const result = await SocialLogin.login({
+            provider: 'google',
+            options: {
+              scopes: ['email', 'profile'],
+            },
+          });
+          const idToken = result?.result?.idToken || result?.idToken;
+          if (!idToken) throw new Error('Google 登录未返回 ID Token');
+
+          await handleGoogleCredential({ credential: idToken });
+        } catch (e) {
+          const msg = e.message || 'Google 登录失败，请重试';
+          showToast(msg);
+          if (btn) {
+            btn.disabled = false;
+            btn.innerHTML = originalBtnHtml || '使用 Google 登录';
+          }
+        }
+        return;
+      }
 
       if (typeof google === 'undefined' || !google.accounts) {
         showToast('Google 登录服务加载失败，请刷新重试');
@@ -4347,6 +4859,75 @@ ${list.map(b => `<tr>
       });
     }
 
+    async function handleAppleSignIn() {
+      const btn = document.getElementById('appleSignInBtn');
+      const originalBtnHtml = btn?.innerHTML;
+      if (btn) { btn.disabled = true; btn.textContent = '正在连接 Apple…'; }
+
+      if (!window.Capacitor?.isNativePlatform?.()) {
+        showToast('Apple 登录仅在 iOS App 内可用');
+        if (btn) { btn.disabled = false; btn.innerHTML = originalBtnHtml; }
+        return;
+      }
+
+      try {
+        const SocialLogin = window.Capacitor?.Plugins?.SocialLogin;
+        if (!SocialLogin?.initialize || !SocialLogin?.login) {
+          throw new Error('原生登录插件未就绪');
+        }
+
+        if (!nativeAppleSignInInitialized) {
+          await SocialLogin.initialize({
+            apple: {
+              // iOS 原生不需要 clientId / redirectUrl；插件使用 Bundle ID
+            },
+          });
+          nativeAppleSignInInitialized = true;
+        }
+
+        const result = await SocialLogin.login({
+          provider: 'apple',
+          options: {
+            scopes: ['email', 'name'],
+          },
+        });
+
+        const identityToken = result?.result?.identityToken || result?.identityToken;
+        const profile = result?.result?.profile || result?.profile || {};
+        if (!identityToken) throw new Error('Apple 登录未返回 identity token');
+
+        await handleAppleCredential({ identityToken, fullName: profile });
+      } catch (e) {
+        const msg = e.message || 'Apple 登录失败，请重试';
+        showToast(msg);
+        if (btn) { btn.disabled = false; btn.innerHTML = originalBtnHtml; }
+      }
+    }
+
+    async function handleAppleCredential({ identityToken, fullName }) {
+      const errorEl = document.getElementById('authError');
+      const btn = document.getElementById('appleSignInBtn');
+      if (btn) { btn.disabled = true; btn.textContent = '登录中…'; }
+      if (errorEl) errorEl.style.display = 'none';
+
+      try {
+        const data = await apiFetch('/auth/apple', {
+          method: 'POST',
+          body: JSON.stringify({ identityToken, fullName }),
+        });
+        await completeAuthSession(data, 'Apple 登录成功 🎉');
+      } catch (e) {
+        const msg = e.message || 'Apple 登录失败，请重试';
+        if (errorEl) { errorEl.textContent = msg; errorEl.style.display = 'block'; }
+        showToast(msg);
+      } finally {
+        if (btn) {
+          btn.disabled = false;
+          btn.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M17.05 20.28c-.98.95-2.05.8-3.08.35-1.09-.46-2.09-.48-3.24 0-1.44.62-2.2.44-3.06-.35C2.79 15.25 3.51 7.59 9.05 7.31c1.35.07 2.29.74 3.08.8 1.18-.24 2.31-.93 3.57-.84 1.51.12 2.65.72 3.4 1.8-3.12 1.87-2.38 5.98.48 7.13-.57 1.5-1.31 2.99-2.54 4.09zM12.03 7.25c-.15-2.23 1.66-4.07 3.74-4.25.29 2.58-2.34 4.5-3.74 4.25z"/></svg> 使用 Apple 登录';
+        }
+      }
+    }
+
     async function handleGoogleCredential(response) {
       // Remove temp popup if present
       document.getElementById('g_id_temp')?.remove();
@@ -4356,19 +4937,43 @@ ${list.map(b => `<tr>
       if (btn) { btn.disabled = true; btn.textContent = '登录中…'; }
       if (errorEl) errorEl.style.display = 'none';
 
+      let tokenAud = '(unknown)';
       try {
+        const idToken = response.credential;
+        console.log('[Google Auth] Received token:', idToken?.substring(0, 50) + '...');
+
+        // Decode token to see what's in it (for debugging)
+        if (idToken) {
+          const parts = idToken.split('.');
+          if (parts.length === 3) {
+            try {
+              // base64url decode (replace -_ with +/, add padding)
+              const b64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+              const padded = b64 + '=='.substring(0, (4 - b64.length % 4) % 4);
+              const payload = JSON.parse(atob(padded));
+              tokenAud = payload.aud || '(no aud)';
+              console.log('[Google Auth] Token payload:', { aud: payload.aud, iss: payload.iss, email: payload.email, sub: payload.sub });
+            } catch (e) {
+              console.error('[Google Auth] Failed to decode token:', e);
+              tokenAud = 'decode-error';
+            }
+          }
+        }
+
         const data = await apiFetch('/auth/google', {
           method: 'POST',
-          body: JSON.stringify({ idToken: response.credential }),
+          body: JSON.stringify({ idToken }),
         });
-        auth.setSession(data.token, data.user);
-        showToast('Google 登录成功 🎉');
-        await syncManager.initialSync();
-        render();
+        await completeAuthSession(data, 'Google 登录成功 🎉');
       } catch (e) {
-        const msg = e.message || 'Google 登录失败，请重试';
+        console.error('[Google Auth] Error:', e);
+        const msg = `${e.message || 'Google 登录失败'} (aud=${tokenAud.substring(0, 20)}...)`;
         if (errorEl) { errorEl.textContent = msg; errorEl.style.display = 'block'; }
         showToast(msg);
+        // Also show in alert for native apps where console isn't easily accessible
+        if (window.Capacitor?.isNativePlatform?.()) {
+          alert(`Google 登录失败:\n${e.message}\n\nToken aud: ${tokenAud}`);
+        }
       } finally {
         if (btn) {
           btn.disabled = false;
@@ -4387,11 +4992,35 @@ ${list.map(b => `<tr>
         syncManager.initialSync().catch(e => console.warn('Initial sync failed:', e));
       }
     }
+
+    // ── Native Scan Intent (Action Button / Shortcuts) ──
+    window.handleNativeScanIntent = () => {
+      // 如果当前不在录入页，先跳到录入页
+      if (typeof setPage === 'function') {
+        setPage('home', { mode: 'entry' });
+      }
+      // 等下一个 tick 启动扫描器（确保 DOM 切换完成）
+      setTimeout(() => {
+        if (typeof startScanner === 'function') {
+          startScanner().catch(e => console.warn('Scan intent failed:', e));
+        }
+      }, 200);
+    };
+
+    // 启动时检查一次（覆盖冷启动场景：UserDefaults 标记已被 AppDelegate 立即注入，但 evaluateJavaScript 可能在 webview 就绪前调用过了）
+    if (window.Capacitor?.isNativePlatform?.()) {
+      // 给 native AppDelegate 0.5s 时间触发 evaluateJavaScript
+      setTimeout(() => {
+        // 如果 webview 已经被通知过 handleNativeScanIntent，这里就不会重复触发
+        // （AppDelegate 触发后会清掉 UserDefaults 标记）
+      }, 500);
+    }
     // ── End Auth form handlers ──────────────────────────────────────────
 
     // ── Scanner ──────────────────────────────────────────────────────────────
     let scannerStream = null;
     let scannerAnimFrame = null;
+    let scannerAnimFrameType = null;
     let scannerActive = false;
     let zxingReader = null;
     let zxingScanControl = null;
@@ -4410,14 +5039,27 @@ ${list.map(b => `<tr>
     let _gridObserver = null;
     let _gridIdCounter = 0;
 
+    function cancelScannerFrame() {
+      if (scannerAnimFrame == null) return;
+      const video = els.scannerVideo;
+      if (scannerAnimFrameType === 'video' && typeof video.cancelVideoFrameCallback === 'function') {
+        video.cancelVideoFrameCallback(scannerAnimFrame);
+      } else {
+        cancelAnimationFrame(scannerAnimFrame);
+      }
+      scannerAnimFrame = null;
+      scannerAnimFrameType = null;
+    }
+
     function stopScanner() {
       scannerActive = false;
       torchOn = false;
       // Clean up freeze-frame state
       els.scannerVideo.classList.remove('freeze');
       els.scannerFlash.classList.remove('active');
+      els.scannerSuccess?.classList.remove('active');
       if (els.formFields) els.formFields.style.display = '';
-      if (scannerAnimFrame) { cancelAnimationFrame(scannerAnimFrame); scannerAnimFrame = null; }
+      cancelScannerFrame();
       if (zxingScanControl) {
         try { zxingScanControl.stop(); } catch (_) {}
         zxingScanControl = null;
@@ -4433,6 +5075,14 @@ ${list.map(b => `<tr>
       els.proBtn.classList.remove('active');
       proVisible = false;
       render();
+      // Best-effort stop native scanner (no-op if not running)
+      if (window.Capacitor?.isNativePlatform?.()) {
+        import('@capacitor-mlkit/barcode-scanning')
+          .then(m => m.BarcodeScanner?.stopScan?.())
+          .catch(() => {
+            try { window.Capacitor?.Plugins?.BarcodeScanner?.stopScan?.(); } catch (_) {}
+          });
+      }
     }
 
     // English → Chinese category mapping (applied to ALL books)
@@ -5094,69 +5744,20 @@ ${list.map(b => `<tr>
     let torchOn = false;
     const BEST_CAM_KEY = 'lib:best-camera:v1';
 
-    // Select the best camera for barcode scanning (prefer macro/shortest focus distance)
-    // Caches result in localStorage so subsequent scans are instant.
+    // Use cached camera when available; otherwise let facingMode pick the rear camera.
     async function pickBestCamera() {
-      // Return cached camera if available
       const cached = localStorage.getItem(BEST_CAM_KEY);
-      if (cached) {
-        try {
-          const { deviceId } = JSON.parse(cached);
-          // Verify it still exists
-          const devices = await navigator.mediaDevices.enumerateDevices();
-          if (devices.some(d => d.deviceId === deviceId)) return { deviceId, fromCache: true };
-        } catch (_) {}
-        localStorage.removeItem(BEST_CAM_KEY);
-      }
-
+      if (!cached) return { deviceId: null, fromCache: false };
       try {
-        // First get permission with any rear camera
-        const tempStream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: { ideal: 'environment' } }
-        });
-        tempStream.getTracks().forEach(t => t.stop());
-
+        const { deviceId } = JSON.parse(cached);
+        if (!deviceId) throw new Error('Invalid cached camera');
         const devices = await navigator.mediaDevices.enumerateDevices();
-        const videoCams = devices.filter(d => d.kind === 'videoinput');
-        if (videoCams.length <= 1) {
-          const id = videoCams[0]?.deviceId || null;
-          if (id) localStorage.setItem(BEST_CAM_KEY, JSON.stringify({ deviceId: id }));
-          return { deviceId: id, fromCache: false };
+        if (devices.some(d => d.kind === 'videoinput' && d.deviceId === deviceId)) {
+          return { deviceId, fromCache: true };
         }
-
-        // Probe each camera for capabilities (focus distance, torch, etc.)
-        let best = null;
-        let bestScore = -Infinity;
-        for (const cam of videoCams) {
-          try {
-            const probe = await navigator.mediaDevices.getUserMedia({ video: { deviceId: { exact: cam.deviceId } } });
-            const track = probe.getVideoTracks()[0];
-            const caps = track.getCapabilities ? track.getCapabilities() : {};
-            probe.getTracks().forEach(t => t.stop());
-
-            const label = (cam.label || '').toLowerCase();
-            const facing = caps.facingMode || [];
-
-            // Skip front-facing cameras
-            if (facing.includes('user') || label.includes('front') || label.includes('facetime')) continue;
-
-            let score = 0;
-            if (caps.focusDistance && caps.focusDistance.min !== undefined) {
-              score += Math.max(0, 100 - (caps.focusDistance.min * 500));
-            }
-            if (label.includes('ultra') || label.includes('wide') || label.includes('macro') || label.includes('0.5')) score += 50;
-            if (caps.torch) score += 10;
-            if (caps.width && caps.width.max) score += caps.width.max / 10000;
-            if (facing.includes('environment') || label.includes('back') || label.includes('rear')) score += 20;
-
-            if (score > bestScore) { bestScore = score; best = cam.deviceId; }
-          } catch (_) {}
-        }
-        if (best) localStorage.setItem(BEST_CAM_KEY, JSON.stringify({ deviceId: best }));
-        return { deviceId: best, fromCache: false };
-      } catch (_) {
-        return { deviceId: null, fromCache: false };
-      }
+      } catch (_) {}
+      localStorage.removeItem(BEST_CAM_KEY);
+      return { deviceId: null, fromCache: false };
     }
 
     // Toggle flashlight
@@ -5254,7 +5855,69 @@ ${list.map(b => `<tr>
       if (overlay) overlay.remove();
     }
 
+    async function loadNativeBarcodeScanner() {
+      try {
+        const { BarcodeScanner } = await import('@capacitor-mlkit/barcode-scanning');
+        if (BarcodeScanner) return BarcodeScanner;
+      } catch (_) {}
+      return window.Capacitor?.Plugins?.BarcodeScanner || null;
+    }
+
+    // ── Path 0: iOS native MLKit (Capacitor) ──
+    async function tryNativeScanner() {
+      if (!window.Capacitor?.isNativePlatform?.()) return false;
+      try {
+        const BarcodeScanner = await loadNativeBarcodeScanner();
+        if (!BarcodeScanner) return false;
+
+        // Check whether MLKit is supported.
+        const { supported } = await BarcodeScanner.isSupported();
+        if (!supported) return false;
+
+        // Check camera permission.
+        let permState = await BarcodeScanner.checkPermissions();
+        if (permState.camera === 'prompt' || permState.camera === 'prompt-with-rationale') {
+          permState = await BarcodeScanner.requestPermissions();
+        }
+        if (permState.camera !== 'granted') {
+          els.scanNotice.innerHTML = makeNotice('err', '相机权限被拒绝，请在系统设置中允许。');
+          return true;
+        }
+
+        // Hide WebView scanner UI because MLKit presents a native fullscreen UI.
+        els.scannerBox.style.display = 'none';
+        els.formFields.style.display = 'none';
+        scannerActive = true;
+        render();
+
+        const { barcodes } = await BarcodeScanner.scan({
+          formats: ['EAN_13', 'EAN_8', 'UPC_A', 'UPC_E', 'CODE_128', 'CODE_39', 'ITF', 'QR_CODE'],
+        });
+
+        scannerActive = false;
+        if (els.formFields) els.formFields.style.display = '';
+        render();
+
+        if (barcodes && barcodes.length > 0) {
+          const rawValue = barcodes[0].rawValue || barcodes[0].displayValue;
+          if (rawValue) {
+            hapticScan();
+            handleScanResult(rawValue);
+          }
+        }
+        return true;
+      } catch (e) {
+        console.warn('Native MLKit scanner failed, falling back:', e);
+        scannerActive = false;
+        if (els.formFields) els.formFields.style.display = '';
+        return false;
+      }
+    }
+
     async function startScanner() {
+      // Try native MLKit first (iOS Capacitor)
+      if (await tryNativeScanner()) return;
+
       if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
         els.scanNotice.innerHTML = makeNotice('err', '该浏览器不支持摄像头访问（需要 HTTPS 或本地环境）。请手动录入 ISBN。');
         return;
@@ -5263,17 +5926,14 @@ ${list.map(b => `<tr>
       torchOn = false;
       els.torchBtn.textContent = '🔦 关';
       els.torchBtn.classList.remove('active');
+      els.scannerSuccess?.classList.remove('active');
 
-      // Check if we need first-time camera detection
-      const hasCachedCam = !!localStorage.getItem(BEST_CAM_KEY);
-      if (!hasCachedCam) {
-        showCameraDetectAnim();
-        render();
-      }
+      // Camera selection is instant now; skip the first-run detection animation.
+      // showCameraDetectAnim();
 
-      // Smart camera selection — prefer macro/shortest focus distance (cached after first use)
-      const { deviceId: bestDeviceId, fromCache } = await pickBestCamera();
-      if (!hasCachedCam) hideCameraDetectAnim();
+      // Use cached camera if present; otherwise let facingMode choose the best rear camera.
+      const { deviceId: bestDeviceId } = await pickBestCamera();
+      // hideCameraDetectAnim();
 
       const videoConstraints = bestDeviceId
         ? { deviceId: { exact: bestDeviceId }, width: { ideal: 1920 }, height: { ideal: 1080 } }
@@ -5315,6 +5975,15 @@ ${list.map(b => `<tr>
               els.scanNotice.innerHTML = makeNotice('warn', '💡 条码识别较慢？试试对准书背面的 ISBN 数字（978 开头），或手动输入。');
             }
           }, 6000);
+          const scheduleNextFrame = () => {
+            if (typeof video.requestVideoFrameCallback === 'function') {
+              scannerAnimFrame = video.requestVideoFrameCallback(scan);
+              scannerAnimFrameType = 'video';
+            } else {
+              scannerAnimFrame = requestAnimationFrame(scan);
+              scannerAnimFrameType = 'raf';
+            }
+          };
 
           const scan = async () => {
             if (!scannerActive) return;
@@ -5335,10 +6004,13 @@ ${list.map(b => `<tr>
                 }
                 scanFlip = !scanFlip;
                 if (barcodes.length > 0) {
+                  scannerActive = false;
+                  clearTimeout(scanHintTimer);
                   hapticScan();
                   // Freeze-frame effect: pause video visually + flash
                   video.classList.add('freeze');
                   els.scannerFlash.classList.add('active');
+                  els.scannerSuccess?.classList.add('active');
                   video.pause();
                   // Hold the freeze briefly, then process
                   setTimeout(() => {
@@ -5346,14 +6018,15 @@ ${list.map(b => `<tr>
                     // Clean up freeze state (stopScanner or next startScanner will also reset)
                     video.classList.remove('freeze');
                     els.scannerFlash.classList.remove('active');
-                  }, 350);
+                    els.scannerSuccess?.classList.remove('active');
+                  }, 150);
                   return;
                 }
               }
             } catch (_) {}
-            scannerAnimFrame = requestAnimationFrame(scan);
+            if (scannerActive) scheduleNextFrame();
           };
-          scan();
+          scheduleNextFrame();
           return;
         } catch (e) {
           const msg = e.name === 'NotAllowedError' ? '摄像头权限被拒绝，请在浏览器设置中允许访问摄像头后重试。'
@@ -5389,17 +6062,21 @@ ${list.map(b => `<tr>
           bestDeviceId || null, els.scannerVideo,
           (result, err) => {
             if (result && result.text) {
+              if (!scannerActive) return;
+              scannerActive = false;
               hapticScan();
               // Freeze-frame effect for ZXing path
               const vid = els.scannerVideo;
               vid.classList.add('freeze');
               els.scannerFlash.classList.add('active');
+              els.scannerSuccess?.classList.add('active');
               vid.pause();
               setTimeout(() => {
                 handleScanResult(result.text);
                 vid.classList.remove('freeze');
                 els.scannerFlash.classList.remove('active');
-              }, 350);
+                els.scannerSuccess?.classList.remove('active');
+              }, 150);
             }
           }
         );
@@ -5691,9 +6368,11 @@ ${list.map(b => `<tr>
         const endX = e.changedTouches[0].clientX;
         const dx = endX - touchStartX;
         if (Math.abs(dx) < SWIPE_THRESHOLD) return;
+        e.preventDefault();
+        e.stopPropagation();
         if (dx < 0) nextWander();   // swipe left → next
         else        prevWander();   // swipe right → prev
-      }, { passive: true });
+      }, { passive: false });
     }
 
     // ── Dirty-flag sync: re-render wander only when displayed book changed ──
@@ -5801,10 +6480,68 @@ ${list.map(b => `<tr>
       localStorage.setItem(MIGRATION_KEY, Date.now().toString());
     })();
 
+    const bootParams = new URLSearchParams(window.location.search);
+    const hasResetParam = bootParams.has('reset');
+    const hasShareParam = bootParams.has('share');
+
+    // ── Password reset view: if ?reset=TOKEN, show reset form ──
+    (async function checkResetMode() {
+      const resetToken = bootParams.get('reset');
+      if (!resetToken) return;
+
+      const appRoot = document.querySelector('.app') || document.body;
+      document.querySelector('.ghost-nav')?.remove();
+      document.getElementById('navFab')?.remove();
+      document.querySelector('.topbar')?.remove();
+      appRoot.innerHTML = `
+        <div style="max-width:380px;margin:48px auto;padding:24px">
+          <div class="card" style="padding:24px;border-radius:12px">
+            <h2 style="font-size:20px;margin:0 0 8px;text-align:center">重置密码</h2>
+            <p style="font-size:13px;color:var(--muted);margin:0 0 20px;text-align:center">请输入你的新密码</p>
+            <div class="auth-field">
+              <label>新密码</label>
+              <input type="password" id="resetNewPassword" placeholder="至少 8 位，包含字母和数字" autocomplete="new-password">
+            </div>
+            <div class="auth-field" style="margin-top:12px">
+              <label>确认新密码</label>
+              <input type="password" id="resetConfirmPassword" placeholder="再输入一次" autocomplete="new-password">
+            </div>
+            <button class="auth-btn primary" id="resetSubmitBtn" style="margin-top:16px;width:100%">提交</button>
+            <div id="resetMsg" style="margin-top:12px;font-size:13px;text-align:center"></div>
+          </div>
+        </div>
+      `;
+
+      document.getElementById('resetSubmitBtn').onclick = async () => {
+        const newPw = document.getElementById('resetNewPassword').value;
+        const confirmPw = document.getElementById('resetConfirmPassword').value;
+        const msg = document.getElementById('resetMsg');
+        if (!newPw || newPw.length < 8) { msg.innerHTML = '<span style="color:var(--danger)">密码至少 8 位</span>'; return; }
+        if (!/^(?=.*[a-zA-Z])(?=.*\d).+$/.test(newPw)) { msg.innerHTML = '<span style="color:var(--danger)">需包含字母和数字</span>'; return; }
+        if (newPw !== confirmPw) { msg.innerHTML = '<span style="color:var(--danger)">两次输入不一致</span>'; return; }
+
+        const btn = document.getElementById('resetSubmitBtn');
+        btn.disabled = true; btn.textContent = '提交中…';
+        try {
+          await apiFetch('/auth/reset-password', {
+            method: 'POST',
+            body: JSON.stringify({ token: resetToken, password: newPw }),
+          });
+          msg.innerHTML = '<span style="color:var(--ok)">密码已重置！3 秒后跳转登录…</span>';
+          setTimeout(() => {
+            window.location.href = window.location.origin + window.location.pathname;
+          }, 3000);
+        } catch (e) {
+          btn.disabled = false; btn.textContent = '提交';
+          msg.innerHTML = `<span style="color:var(--danger)">${escapeHtml(e.message || '重置失败，请重试')}</span>`;
+        }
+      };
+    })();
+
     // ── Share view: if ?share=TOKEN, show read-only bookshelf ──
     (async function checkShareView() {
-      const params = new URLSearchParams(window.location.search);
-      const shareToken = params.get('share');
+      if (hasResetParam) return;
+      const shareToken = bootParams.get('share');
       if (!shareToken) return;
 
       const appRoot = document.getElementById('app');
@@ -5851,11 +6588,11 @@ ${list.map(b => `<tr>
       return; // Don't proceed with normal init
     })();
 
-    if (!new URLSearchParams(window.location.search).get('share')) render();
+    if (!hasShareParam && !hasResetParam) render();
 
     // One-time migration: safely recover clearly dirty/missing stored covers
     (async function migrateCovers() {
-      if (new URLSearchParams(window.location.search).get('share')) return;
+      if (hasShareParam || hasResetParam) return;
       const COVER_MIG_KEY = 'lib:cover-migration:v4';
       if (localStorage.getItem(COVER_MIG_KEY)) return;
       const books = loadBooks();

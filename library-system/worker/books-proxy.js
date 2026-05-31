@@ -30,13 +30,24 @@ const ALLOWED_ORIGINS = new Set([
   'http://localhost:3000',
   'http://127.0.0.1:5173',
   'http://127.0.0.1:8080',
+  // Native app WebView origins (Capacitor iOS / Android)
+  'capacitor://localhost',
+  'ionic://localhost',
+  'https://localhost',
 ]);
 
 const DEFAULT_ORIGIN = 'https://horancheng.github.io';
 
+function isJwtSecretConfigured(env) {
+  return typeof env.JWT_SECRET === 'string' && env.JWT_SECRET.length >= 32;
+}
+
 /** Parse and strictly match origin against allowlist */
 export function isAllowedOrigin(origin) {
   if (!origin) return false;
+  // Native WebView schemes (capacitor://, ionic://) have no parsable
+  // URL.origin, so match the raw header string first.
+  if (ALLOWED_ORIGINS.has(origin)) return true;
   try {
     const parsed = new URL(origin);
     return ALLOWED_ORIGINS.has(parsed.origin);
@@ -84,6 +95,16 @@ export default {
 
     const url = new URL(request.url);
     const path = url.pathname;
+
+    if (
+      (path.startsWith('/auth/') || path.startsWith('/sync/') || path.startsWith('/share/')) &&
+      !isJwtSecretConfigured(env)
+    ) {
+      return new Response(JSON.stringify({ error: 'SERVER_MISCONFIGURED', message: '服务端配置错误' }), {
+        status: 500,
+        headers: { ...cors, 'Content-Type': 'application/json' },
+      });
+    }
 
     try {
       let response;
@@ -152,8 +173,41 @@ export default {
         }
       }
     } catch (err) {
-      return new Response(JSON.stringify({ error: 'INTERNAL_ERROR', message: 'Internal server error' }), {
-        status: 500,
+      // Log full detail for Worker tail; classify common DB errors so the client
+      // can guide the user (not just show "同步失败").
+      const errMsg = String(err?.message || err || 'unknown');
+      console.error('[Worker] Uncaught error on', path, '-', errMsg, err?.stack);
+
+      let errorCode = 'INTERNAL_ERROR';
+      let userMessage = '服务器开了个小差，请稍后重试';
+      let status = 500;
+
+      // D1 schema problems (missing column/table after partial migration)
+      if (/no such column|no such table|has no column/i.test(errMsg)) {
+        errorCode = 'SCHEMA_MISMATCH';
+        userMessage = '服务端数据库需要升级，请联系管理员（schema 不匹配）';
+      } else if (/UNIQUE constraint|FOREIGN KEY constraint/i.test(errMsg)) {
+        errorCode = 'CONSTRAINT_VIOLATION';
+        userMessage = '数据冲突，请刷新后重试';
+        status = 409;
+      } else if (/D1_/i.test(errMsg)) {
+        errorCode = 'DATABASE_ERROR';
+        userMessage = '数据库暂时不可用，请稍后重试';
+        status = 503;
+      } else if (errMsg.toLowerCase().includes('timeout')) {
+        errorCode = 'TIMEOUT';
+        userMessage = '请求超时，请检查网络后重试';
+        status = 504;
+      }
+
+      return new Response(JSON.stringify({
+        error: errorCode,
+        message: userMessage,
+        // Only expose detail in non-production or for debugging; safe because it
+        // doesn't leak secrets — just SQL/runtime error text.
+        detail: errMsg.slice(0, 200),
+      }), {
+        status,
         headers: { ...cors, 'Content-Type': 'application/json' },
       });
     }

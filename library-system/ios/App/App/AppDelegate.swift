@@ -1,5 +1,7 @@
 import UIKit
 import Capacitor
+import GoogleSignIn
+import WebKit
 
 @UIApplicationMain
 class AppDelegate: UIResponder, UIApplicationDelegate {
@@ -26,7 +28,35 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     }
 
     func applicationDidBecomeActive(_ application: UIApplication) {
-        // Restart any tasks that were paused (or not yet started) while the application was inactive. If the application was previously in the background, optionally refresh the user interface.
+        // 检查是否有待执行的 Scan Intent
+        let defaults = UserDefaults.standard
+        if defaults.bool(forKey: "pendingScanIntent") {
+            defaults.removeObject(forKey: "pendingScanIntent")
+            defaults.removeObject(forKey: "pendingScanIntentAt")
+            // 通过 NotificationCenter 通知 WebView
+            NotificationCenter.default.post(name: NSNotification.Name("LibraryScanIntentTriggered"), object: nil)
+            // WebView 启动后可能还没准备好接收 notification，所以再用 JS evaluate 兜底（延迟 0.3s）
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                self.triggerScanInWebView()
+            }
+        }
+    }
+
+    private func triggerScanInWebView() {
+        // 找到 Capacitor 的 WKWebView，调用 window.handleNativeScanIntent()
+        guard let scene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+              let rootVC = scene.windows.first?.rootViewController else { return }
+        findWebView(in: rootVC)?.evaluateJavaScript("window.handleNativeScanIntent && window.handleNativeScanIntent()", completionHandler: nil)
+    }
+
+    private func findWebView(in vc: UIViewController) -> WKWebView? {
+        if let webView = vc.view.subviews.compactMap({ $0 as? WKWebView }).first {
+            return webView
+        }
+        for child in vc.children {
+            if let w = findWebView(in: child) { return w }
+        }
+        return nil
     }
 
     func applicationWillTerminate(_ application: UIApplication) {
@@ -36,6 +66,10 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     func application(_ app: UIApplication, open url: URL, options: [UIApplication.OpenURLOptionsKey: Any] = [:]) -> Bool {
         // Called when the app was launched with a url. Feel free to add additional processing here,
         // but if you want the App API to support tracking app url opens, make sure to keep this call
+        if GIDSignIn.sharedInstance.handle(url) {
+            return true
+        }
+
         return ApplicationDelegateProxy.shared.application(app, open: url, options: options)
     }
 
