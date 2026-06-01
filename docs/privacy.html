@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>毛毛书房隐私政策</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --ink: #1f2933;
+      --muted: #5f6c7b;
+      --line: #d9e2ec;
+      --accent: #2f7d6d;
+      --bg: #f7f8f5;
+      --paper: #ffffff;
+    }
+    * {
+      box-sizing: border-box;
+    }
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      line-height: 1.7;
+      background: var(--bg);
+      color: var(--ink);
+    }
+    main {
+      width: min(880px, calc(100% - 32px));
+      margin: 0 auto;
+      padding: 48px 0 64px;
+    }
+    article {
+      background: var(--paper);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: clamp(24px, 5vw, 48px);
+    }
+    h1 {
+      margin: 0 0 8px;
+      font-size: clamp(28px, 5vw, 40px);
+      line-height: 1.2;
+      letter-spacing: 0;
+    }
+    h2 {
+      margin: 32px 0 8px;
+      font-size: 20px;
+      letter-spacing: 0;
+    }
+    p, li {
+      font-size: 16px;
+    }
+    p {
+      margin: 0 0 14px;
+    }
+    ul {
+      margin: 8px 0 0;
+      padding-left: 22px;
+    }
+    a {
+      color: var(--accent);
+      font-weight: 600;
+    }
+    .meta {
+      color: var(--muted);
+      margin-bottom: 28px;
+    }
+    .note {
+      border-left: 4px solid var(--accent);
+      padding-left: 14px;
+      color: var(--muted);
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <article>
+      <h1>毛毛书房隐私政策</h1>
+      <p class="meta">生效日期：2026 年 6 月 1 日</p>
+
+      <p>毛毛书房是一款个人藏书管理应用。我们尊重并保护你的隐私，本政策说明应用会收集哪些数据、如何使用这些数据，以及你可以如何管理自己的数据。</p>
+
+      <h2>我们收集的数据</h2>
+      <p>为了提供账号登录、数据同步、备份和应用功能，毛毛书房可能会收集以下数据：</p>
+      <ul>
+        <li>账号信息：电子邮箱、用户 ID、显示名称和头像。</li>
+        <li>藏书数据：你录入或同步的书名、作者、ISBN、分类、阅读状态、存放位置、备注、封面链接等图书管理内容。</li>
+        <li>客服与反馈内容：你主动提交的问题、反馈或支持请求。</li>
+      </ul>
+
+      <h2>相机和扫码</h2>
+      <p>应用会请求相机权限用于扫描 ISBN 条码。扫码画面仅用于在设备上识别条码，不会因为扫码功能而上传照片或视频。</p>
+
+      <h2>数据用途</h2>
+      <p>我们使用收集到的数据来提供、维护和改进以下功能：</p>
+      <ul>
+        <li>账号登录、身份验证和账号管理。</li>
+        <li>跨设备同步、云端备份和数据恢复。</li>
+        <li>图书信息补全、搜索、筛选、导入和导出。</li>
+        <li>处理反馈、排查问题并提供支持。</li>
+      </ul>
+
+      <h2>第三方服务</h2>
+      <p>为了补全图书信息，应用可能会请求第三方图书数据源或封面服务，例如公开图书资料 API。请求通常包含 ISBN、书名或作者等查询信息。应用的数据同步服务部署在 Cloudflare Workers 上，用于处理账号登录和藏书同步。</p>
+
+      <h2>我们不会做的事</h2>
+      <ul>
+        <li>不会出售你的个人数据。</li>
+        <li>不会把你的数据用于跨 App 或跨网站追踪。</li>
+        <li>不会在应用内投放第三方广告。</li>
+      </ul>
+
+      <h2>数据保留与删除</h2>
+      <p>本地数据保存在你的设备或浏览器存储中。登录后同步的数据会保存在云端，用于备份和多设备同步。你可以在应用内退出登录，或通过“删除账号”功能删除账号及云端数据。本地数据也可以通过应用内的数据管理功能自行清理或导出备份。</p>
+
+      <h2>儿童隐私</h2>
+      <p>毛毛书房面向普通个人藏书管理场景，并不专门面向儿童。我们不会有意收集儿童的个人信息。</p>
+
+      <h2>政策更新</h2>
+      <p>如果应用的数据实践发生变化，我们会更新本隐私政策，并在页面中调整生效日期。</p>
+
+      <h2>联系我们</h2>
+      <p class="note">如需隐私、账号或数据删除相关帮助，请通过 <a href="https://github.com/HoranCheng/home-library-system/issues">GitHub Issues</a> 联系我们。</p>
+    </article>
+  </main>
+</body>
+</html>
